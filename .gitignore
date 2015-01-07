@@ -1,0 +1,7 @@
+obj/
+dobj/
+tobj/
+*.o
+pokgame
+pokgame-debug
+pokgame-test
