@@ -35,10 +35,12 @@ struct thread_exception_item
 {
     int id; /* key */
     struct stack exceptions;
+    struct pok_exception* last;
 };
 static void thread_exception_item_dstor(struct thread_exception_item* item)
 {
     stack_delete_ex(&item->exceptions,free);
+    free(item->last);
     free(item);
 }
 
@@ -64,19 +66,85 @@ struct pok_exception* pok_exception_new()
     if (list == NULL) {
         list = malloc(sizeof(struct thread_exception_item));
         list->id = tid;
+        list->last = NULL;
         stack_init(&list->exceptions);
         hashmap_insert(&exceptions,list);
     }
     stack_push(&list->exceptions,ex);
     return ex;
 }
-const struct pok_exception* pok_exception_pop()
+struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
+{
+    int tid;
+    struct thread_exception_item* list;
+    struct pok_exception* ex = malloc(sizeof(struct pok_exception));
+    ex->exID = id;
+    ex->category = kind;
+    ex->message = NULL;
+    /* place exceptions in data structure */
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list == NULL) {
+        list = malloc(sizeof(struct thread_exception_item));
+        list->id = tid;
+        stack_init(&list->exceptions);
+        hashmap_insert(&exceptions,list);
+    }
+    stack_push(&list->exceptions,ex);
+    return ex;
+}
+bool_t pok_exception_check()
 {
     int tid;
     struct thread_exception_item* list;
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
     if (list==NULL || stack_is_empty(&list->exceptions))
-        pok_error(pok_error_fatal,"no exception was available when requested");
-    return stack_pop(&list->exceptions);
+        return FALSE;
+    return TRUE;
+}
+bool_t pok_exception_check_ex(enum pok_ex_kind kind)
+{
+    int i;
+    int tid;
+    void** buf;
+    struct thread_exception_item* list;
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list!=NULL && !stack_is_empty(&list->exceptions))
+        for (i = 0,buf = stack_getbuffer(&list->exceptions);i < stack_getsize(&list->exceptions);++i)
+            if (((struct pok_exception*)buf[i])->category == kind)
+                return TRUE;
+    return FALSE;
+}
+const struct pok_exception* pok_exception_pop()
+{
+    int tid;
+    struct pok_exception* ex;
+    struct thread_exception_item* list;
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list==NULL || stack_is_empty(&list->exceptions))
+        return NULL;
+    ex = stack_pop(&list->exceptions);
+    if (list->last != NULL)
+        free(list->last);
+    list->last = ex;
+    return ex;
+}
+const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind)
+{
+    int tid;
+    struct pok_exception* ex;
+    struct thread_exception_item* list;
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list==NULL || stack_is_empty(&list->exceptions) || 
+        ((struct pok_exception*)stack_top(&list->exceptions))->category!=kind)
+        return NULL;
+    ex = stack_pop(&list->exceptions);
+    if (list->last != NULL)
+        free(list->last);
+    list->last = ex;
+    return ex;
 }

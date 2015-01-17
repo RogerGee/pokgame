@@ -1,6 +1,7 @@
 /* error.h - pokgame */
 #ifndef POKGAME_ERROR_H
 #define POKGAME_ERROR_H
+#include "types.h"
 
 /* this error functionality is used to report errors to the process's
    stderr channel; they are used primarily to test assertions */
@@ -17,7 +18,8 @@ enum pok_ex_kind
 {
     pok_ex_default,
     pok_ex_net,
-    pok_ex_graphics
+    pok_ex_graphics,
+    pok_ex_image
 };
 
 /* an exception is used by one module to report a runtime exception to another; each
@@ -32,6 +34,10 @@ struct pok_exception
 void pok_exception_load();
 void pok_exception_unload();
 struct pok_exception* pok_exception_new();
+struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id);
+bool_t pok_exception_check();
+bool_t pok_exception_check_ex(enum pok_ex_kind kind);
 const struct pok_exception* pok_exception_pop();
+const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind);
 
 #endif

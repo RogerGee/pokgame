@@ -46,11 +46,13 @@ endif
 
 # header file dependencies
 TYPES_H = src/types.h
+ERROR_H = src/error.h $(TYPES_H)
 GRAPHICS_H = src/graphics.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
+IMAGE_H = src/image.h $(NET_H)
 
 # object code files
-OBJECTS = graphics.o net.o error.o
+OBJECTS = types.o graphics.o net.o error.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 ifdef MAKE_TEST
 TEST_OBJECTS = main.o
@@ -67,10 +69,14 @@ $(BINARY): $(OBJECTS)
 	$(LINK) $(OUT)$(BINARY) $(OBJECTS) $(LIB)
 
 # src targets
+$(OBJDIR)/types.o: src/types.c $(TYPES_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/types.o src/types.c
 $(OBJDIR)/graphics.o: src/graphics.c $(GRAPHICS_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
-$(OBJDIR)/net.o: src/net.c $(NET_H)
+$(OBJDIR)/net.o: src/net.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/net.o src/net.c
+$(OBJDIR)/image.o: src/image.c $(IMAGE_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/image.o src/image.c
 $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/error.o src/error.c
 
