@@ -6,6 +6,10 @@
 #include <sys/un.h>
 #include <errno.h>
 
+/* pok_network_address */
+
+
+/* pok_data_source */
 enum pok_data_source_mode_flag
 {
     DS_MODE_DEFAULT = 0x0,
@@ -41,7 +45,8 @@ struct pok_data_source
 
 static void pok_data_source_init(struct pok_data_source* dsrc,enum pok_iomode iomode)
 {
-    dsrc->mode |= (byte_t)(iomode & 0x3);
+    /* turn on output buffering by default */
+    dsrc->mode |= (byte_t)(iomode & 0x3) | DS_MODE_BUFFER_OUTPUT;
     dsrc->szRead = 0;
     dsrc->itRead = 0;
     dsrc->szWrite = 0;
@@ -51,9 +56,13 @@ struct pok_data_source* pok_data_source_new_local_named(const char* name)
 {
     struct sockaddr_un addr;
     struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
     dsrc->fd[0] = socket(AF_UNIX,SOCK_STREAM,0);
     if (dsrc->fd[0] == -1)
-        pok_error(pok_error_fatal,"cannot allocate socket resource");
+        pok_error(pok_error_fatal,"cannot create socket resource");
     /* attempt connect to socket name */
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path,name,sizeof(addr.sun_path));
@@ -68,8 +77,16 @@ struct pok_data_source* pok_data_source_new_local_named(const char* name)
 }
 struct pok_data_source* pok_data_source_new_local_anon()
 {
-    struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
-    int r = pipe(dsrc->fd);
+    int r;
+    struct pok_data_source* dsrc;
+    dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    r = pipe(dsrc->fd);
+    if (r == -1)
+        pok_error(pok_error_fatal,"cannot create pipe resource");
     dsrc->mode = DS_MODE_FD_BOTH;
     pok_data_source_init(dsrc,pok_iomode_full_duplex);
     return dsrc;
@@ -77,6 +94,10 @@ struct pok_data_source* pok_data_source_new_local_anon()
 struct pok_data_source* pok_data_source_new_network(struct pok_network_address* address)
 {
     struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
     dsrc->fd[0] = socket(AF_INET,SOCK_STREAM,0);
     (void)(address);
     dsrc->mode = DS_MODE_DEFAULT;
@@ -85,9 +106,41 @@ struct pok_data_source* pok_data_source_new_network(struct pok_network_address* 
 }
 struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_filemode mode,enum pok_iomode access)
 {
+    int flags; mode_t perms;
     struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
-    (void)(filename);
-    (void)(mode);
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    flags = 0;
+    perms = 0666;
+    if (mode == pok_filemode_create_new)
+        flags |= O_CREAT | O_EXCL;
+    else if (mode == pok_filemode_create_always)
+        flags |= O_CREAT | O_TRUNC;
+    if (access == pok_iomode_read)
+        flags |= O_RDONLY;
+    else if (access == pok_iomode_write)
+        flags |= O_WRONLY;
+    else if (access == pok_iomode_full_duplex)
+        flags |= O_RDWR;
+    dsrc->fd[0] = open(filename,flags,perms);
+    if (dsrc->fd[0] == -1) {
+        if (errno == EACCES)
+            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_permission_denied);
+        else if (errno == EEXIST)
+            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_already_exist);
+        else if (errno == EINTR)
+            pok_exception_new_ex(pok_ex_net,pok_ex_net_interrupt);
+        else if (errno==ENAMETOOLONG || errno==ENOTDIR || errno==EISDIR)
+            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_bad_path);
+        else if (errno == ENOENT)
+            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_does_not_exist);
+        else
+            pok_exception_new_ex(pok_ex_default,pok_ex_default_undocumented);
+        free(dsrc);
+        return NULL;
+    }
     dsrc->mode = DS_MODE_DEFAULT;
     pok_data_source_init(dsrc,access);
     return dsrc;
@@ -127,13 +180,13 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
             if (r == -1) {
                 /* read error */
                 ex = pok_exception_new();
-                ex->category = pok_ex_net;
+                ex->kind = pok_ex_net;
                 if (errno==EAGAIN || errno==EWOULDBLOCK)
-                    ex->exID = pok_ex_net_wouldblock;
+                    ex->id = pok_ex_net_wouldblock;
                 else if (errno == EINTR)
-                    ex->exID = pok_ex_net_interrupt;
+                    ex->id = pok_ex_net_interrupt;
                 else
-                    ex->exID = pok_ex_net_unspec;
+                    ex->id = pok_ex_net_unspec;
                 *bytesRead = 0;
                 return NULL;
             }
@@ -150,7 +203,7 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
     dsrc->szRead -= *bytesRead;
     return dsrc->bufferRead + it;
 }
-static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t size,size_t* bytesWritten)
+static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t size,size_t* bytesWritten,bool_t flagError)
 {
     /* utilizes a system-call to write data to the specified descriptor; if an exception was generated, FALSE
        is returned and no bytes would have been written */
@@ -162,17 +215,19 @@ static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t
     r = write(fd,buffer,size);
     if (r == -1) {
         /* write error */
-        struct pok_exception* ex;
-        ex = pok_exception_new();
-        ex->category = pok_ex_net;
-        if (errno==EAGAIN || errno==EWOULDBLOCK)
-            ex->exID = pok_ex_net_wouldblock;
-        else if (errno == EINTR)
-            ex->exID = pok_ex_net_interrupt;
-        else if (errno == EPIPE)
-            ex->exID = pok_ex_net_brokenpipe;
-        else
-            ex->exID = pok_ex_net_unspec;
+        if (flagError) {
+            struct pok_exception* ex;
+            ex = pok_exception_new();
+            ex->kind = pok_ex_net;
+            if (errno==EAGAIN || errno==EWOULDBLOCK)
+                ex->id = pok_ex_net_wouldblock;
+            else if (errno == EINTR)
+                ex->id = pok_ex_net_interrupt;
+            else if (errno == EPIPE)
+                ex->id = pok_ex_net_brokenpipe;
+            else
+                ex->id = pok_ex_net_unspec;
+        }
         *bytesWritten = 0;
         return FALSE;
     }
@@ -225,7 +280,7 @@ bool_t pok_data_source_write(struct pok_data_source* dsrc,const byte_t* buffer,s
         }
     }
     /* attempt to write the supplied buffer to the output device */
-    result = pok_data_source_write_primative(dsrc->mode & DS_MODE_FD_BOTH ? dsrc->fd[1] : dsrc->fd[0],buffer,size,bytesWritten);
+    result = pok_data_source_write_primative(dsrc->mode & DS_MODE_FD_BOTH ? dsrc->fd[1] : dsrc->fd[0],buffer,size,bytesWritten,TRUE);
     return result;
 }
 void pok_data_source_buffering(struct pok_data_source* dsrc,bool_t on)
@@ -243,7 +298,7 @@ bool_t pok_data_source_flush(struct pok_data_source* dsrc)
     bool_t result;
     size_t bytesOut;
     result = pok_data_source_write_primative(dsrc->mode & DS_MODE_FD_BOTH ? dsrc->fd[1] : dsrc->fd[0],
-        dsrc->bufferWrite+dsrc->itWrite,dsrc->szWrite,&bytesOut);
+        dsrc->bufferWrite+dsrc->itWrite,dsrc->szWrite,&bytesOut,TRUE);
     if (result) {
         dsrc->itWrite += bytesOut;
         dsrc->szWrite -= bytesOut;
@@ -258,21 +313,31 @@ enum pok_iomode pok_data_source_getmode(struct pok_data_source* dsrc)
     /* the first two mode bits correspond to the io-mode */
     return (enum pok_iomode) (dsrc->mode & 0x3);
 }
-void pok_data_source_delete(struct pok_data_source* dsrc)
+void pok_data_source_free(struct pok_data_source* dsrc)
 {
-    pok_data_source_flush(dsrc);
+    size_t dummy;
+    /* write any remaining bytes in buffer; don't add error to error stack if failure */
+    pok_data_source_write_primative(dsrc->mode & DS_MODE_FD_BOTH ? dsrc->fd[1] : dsrc->fd[0],
+        dsrc->bufferWrite+dsrc->itWrite,dsrc->szWrite,&dummy,FALSE);
+    /* call shutdown syscall if device is socket */
     if (dsrc->mode & DS_MODE_IS_SOCKET)
         shutdown(dsrc->fd[0],SHUT_RDWR);
+    /* close file descriptions */
     close(dsrc->fd[0]);
     if (dsrc->mode & DS_MODE_FD_BOTH)
         close(dsrc->fd[1]);
     free(dsrc);
 }
-inline void pok_data_source_unread(struct pok_data_source* dsrc,size_t size)
+void pok_data_source_unread(struct pok_data_source* dsrc,size_t size)
 {
-    /* this function places unreads the last bytes read by advancing the internal buffer
-       iterator by the specified number of spaces */
+    /* this function places unreads the last bytes read by advancing/retreating
+       the internal buffer iterators by the specified number of spaces */
+    size_t tmp;
+    tmp = dsrc->itRead;
+    dsrc->itRead -= size;
     dsrc->szRead += size;
+    if (dsrc->itRead > tmp) /* overflow on unsigned integer variable */
+        dsrc->itRead = 0;
     if (dsrc->szRead > sizeof(dsrc->bufferRead))
         dsrc->szRead = sizeof(dsrc->bufferRead);
 }

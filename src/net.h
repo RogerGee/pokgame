@@ -9,11 +9,37 @@ enum pok_ex_net
     pok_ex_net_unspec, /* unspecified error */
     pok_ex_net_interrupt, /* read/write interruption */
     pok_ex_net_wouldblock, /* asynchronous call returned/sent no data */
-    pok_ex_net_pending, /* call did not return/send enough data */
+    pok_ex_net_pending, /* call did not return/send enough data (some data was still received) */
     pok_ex_net_brokenpipe, /* write to unconnected pipe */
     pok_ex_net_endofcomms, /* end of communication sent on IO device */
-    pok_ex_net_noroom /* the data source attempted to buffer bytes left over from a write operation but there was no room */
+    pok_ex_net_noroom, /* the data source attempted to buffer bytes left over from a write operation but there was no room */
+
+    /* these are flagged when 'pok_data_source_new_file' fails */
+    pok_ex_net_file_does_not_exist,
+    pok_ex_net_file_already_exist,
+    pok_ex_net_file_permission_denied,
+    pok_ex_net_file_bad_path
 };
+
+/* flags for the sending/receiving of a network object */
+enum pok_network_result
+{
+    pok_net_completed, /* object was successfully sent/received */
+    pok_net_incomplete, /* object was not completely sent/received */
+    pok_net_failed /* object failed to send/be received; exception is generated */
+};
+
+/* network object information structure; defines the progress 
+   of sending a network object */
+struct pok_netobj_info
+{
+    uint16_t fieldCnt; /* total number of fields */
+    uint16_t fieldProg; /* field progress */
+    size_t depth[2]; /* progress within current field; 2 variables allow multiple dimensions to the field */
+};
+void pok_netobj_info_init(struct pok_netobj_info* info);
+enum pok_network_result pok_netobj_info_process(struct pok_netobj_info* info);
+enum pok_network_result pok_netobj_info_process_depth(struct pok_netobj_info* info);
 
 /* IPv4 network address information */
 struct pok_network_address
@@ -27,7 +53,7 @@ void pok_network_address_init(struct pok_network_address* addr,const char* host,
 enum pok_filemode
 {
     pok_filemode_create_new, /* file must be new */
-    pok_filemode_create_always, /* file can preexist but is truncated and overwritten */
+    pok_filemode_create_always, /* create new file; file can preexist but is truncated and overwritten */
     pok_filemode_open_existing /* file must preexist */
 };
 
@@ -51,9 +77,11 @@ struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_f
 byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,size_t* bytesRead);
 bool_t pok_data_source_write(struct pok_data_source* dsrc,const byte_t* buffer,size_t size,size_t* bytesWritten);
 void pok_data_source_buffering(struct pok_data_source* dsrc,bool_t on);
+void pok_data_source_unread(struct pok_data_source* dsrc,size_t size);
+bool_t pok_data_source_save(struct pok_data_source* dsrc,const byte_t* buffer,size_t size);
 bool_t pok_data_source_flush(struct pok_data_source* dsrc);
 enum pok_iomode pok_data_source_getmode(struct pok_data_source* dsrc);
-void pok_data_source_delete(struct pok_data_source* dsrc);
+void pok_data_source_free(struct pok_data_source* dsrc);
 
 /* higher-level data-stream operations */
 bool_t pok_data_stream_fread(struct pok_data_source* dsrc,int* cnt,const char* format, ...);

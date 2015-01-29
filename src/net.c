@@ -6,8 +6,6 @@
 #include <stdarg.h>
 #include <ctype.h>
 
-static inline void pok_data_source_unread(struct pok_data_source* dsrc,size_t size);
-static bool_t pok_data_source_save(struct pok_data_source* dsrc,const byte_t* buffer,size_t size);
 static inline bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc);
 static inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
 
@@ -19,6 +17,47 @@ static inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
 #endif
 
 /* target-independent code */
+
+/* pok_network_object_info */
+void pok_netobj_info_init(struct pok_netobj_info* info)
+{
+    info->fieldCnt = 0;
+    info->fieldProg = 0;
+    info->depth[0] = 0;
+    info->depth[1] = 0;
+}
+enum pok_network_result pok_netobj_info_process(struct pok_netobj_info* info)
+{
+    const struct pok_exception* ex;
+    ex = pok_exception_peek();
+    if (ex != NULL) {
+        if (ex->kind==pok_ex_net && (ex->id==pok_ex_net_wouldblock || ex->id==pok_ex_net_pending)) {
+            /* remove exception since it was processed here */
+            pok_exception_pop();
+            return pok_net_incomplete;
+        }
+        /* leave the exception for the calling context */
+        return pok_net_failed;
+    }
+    ++info->fieldProg;
+    return pok_net_completed;
+}
+enum pok_network_result pok_netobj_info_process_depth(struct pok_netobj_info* info)
+{
+    const struct pok_exception* ex;
+    ex = pok_exception_peek();
+    if (ex != NULL) {
+        if (ex->kind==pok_ex_net && (ex->id==pok_ex_net_wouldblock || ex->id==pok_ex_net_pending)) {
+            /* remove exception since it was processed here */
+            pok_exception_pop();
+            return pok_net_incomplete;
+        }
+        /* leave the exception for the calling context */
+        return pok_net_failed;
+    }
+    ++info->depth[0];
+    return pok_net_completed;
+}
 
 /* these functions convert between byte streams and binary integer
    variables; to ensure the correct endianness, bitwise operations

@@ -1,5 +1,6 @@
 ################################################################################
 # Makefile for 'pokgame' #######################################################
+## targets: X11, POSIX, and OpenGL #############################################
 ################################################################################
 .PHONY: debug test clean install uninstall
 
@@ -25,7 +26,7 @@ OBJECT_DIRECTORY_TEST = tobj
 LIB = -lGL -lX11 -lpthread -ldstructs
 INC = -Isrc
 OUT = -o
-MACROS = -DPOKGAME_POSIX -DPOKGAME_X11
+MACROS = -DPOKGAME_POSIX -DPOKGAME_X11 -DPOKGAME_GRAPHICS_OPENGL
 ifneq "$(or $(MAKE_DEBUG),$(MAKE_TEST))" ""
 MACROS_DEBUG = -DPOKGAME_DEBUG
 COMPILE = gcc -c -g -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors -Wno-unused-variable $(MACROS) $(MACROS_DEBUG)
@@ -52,10 +53,10 @@ NET_H = src/net.h $(TYPES_H)
 IMAGE_H = src/image.h $(NET_H)
 
 # object code files
-OBJECTS = types.o graphics.o net.o error.o
+OBJECTS = types.o graphics.o net.o image.o error.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 ifdef MAKE_TEST
-TEST_OBJECTS = main.o
+TEST_OBJECTS = main.o nettest.o
 OBJECTS := $(OBJECTS) $(addprefix $(OBJECT_DIRECTORY_TEST)/,$(TEST_OBJECTS))
 endif
 
@@ -73,9 +74,9 @@ $(OBJDIR)/types.o: src/types.c $(TYPES_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/types.o src/types.c
 $(OBJDIR)/graphics.o: src/graphics.c $(GRAPHICS_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
-$(OBJDIR)/net.o: src/net.c $(NET_H) $(ERROR_H)
+$(OBJDIR)/net.o: src/net.c src/net-posix.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/net.o src/net.c
-$(OBJDIR)/image.o: src/image.c $(IMAGE_H)
+$(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/image.o src/image.c
 $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/error.o src/error.c
@@ -83,6 +84,8 @@ $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 # test targets
 $(OBJECT_DIRECTORY_TEST)/main.o: test/main.c
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
+$(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
+	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
 
 # other targets
 $(OBJDIR):
