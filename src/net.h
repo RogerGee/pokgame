@@ -26,7 +26,9 @@ enum pok_network_result
 {
     pok_net_completed, /* object was successfully sent/received */
     pok_net_incomplete, /* object was not completely sent/received */
-    pok_net_failed /* object failed to send/be received; exception is generated */
+    pok_net_failed, /* object failed to send/be received; exception is generated */
+    pok_net_failed_internal, /* object failed to send/be received but due to another reason; exception is generated */
+    pok_net_already /* object was marked as already sent */
 };
 
 /* network object information structure; defines the progress 

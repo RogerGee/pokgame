@@ -8,6 +8,7 @@ const char* POKGAME_NAME;
 const char* TMPDIR;
 
 extern int net_test1();
+extern int graphics_main_test();
 
 void halt()
 {
@@ -38,6 +39,9 @@ int main(int argc,const char* argv[])
             assert(net_test1() == 0);
         }
     }
+    else
+        /* else do the main application test */
+        graphics_main_test();
 
     /* unload modules */
     pok_exception_unload();

@@ -137,7 +137,7 @@ bool_t pok_data_stream_fread(struct pok_data_source* dsrc,int* cnt,const char* f
     while (*format) {
         int c = *format++;
         byte_t* data;
-        size_t bytesRead, bytesNeeded;
+        size_t bytesRead = 0, bytesNeeded = 0;
         if ( isspace(c) )
             continue;
         if (c == 'b') {
