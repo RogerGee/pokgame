@@ -19,7 +19,7 @@ struct pok_string* pok_string_new_ex(size_t initialCapacity)
 void pok_string_init(struct pok_string* str)
 {
     str->len = 0;
-    str->cap = 16;
+    str->cap = sizeof(dummyBuffer);
     str->buf = malloc(str->cap);
     if (str->buf == NULL) {
         pok_error(pok_error_warning,"failed memory allocation: pok_string");
@@ -40,7 +40,8 @@ void pok_string_init_ex(struct pok_string* str,size_t initialCapacity)
 }
 void pok_string_delete(struct pok_string* str)
 {
-    free(str->buf);
+    if (str->buf != dummyBuffer)
+        free(str->buf);
     str->len = 0;
     str->cap = 0;
 }
@@ -48,6 +49,8 @@ static bool_t pok_string_realloc(struct pok_string* str,size_t hint)
 {
     char* newbuf;
     size_t newcap;
+    if (str->buf == dummyBuffer)
+        return FALSE;
     /* find a new capacity for the buffer; it should be a multiple of two */
     newcap = str->cap;
     do {
@@ -56,7 +59,7 @@ static bool_t pok_string_realloc(struct pok_string* str,size_t hint)
     newbuf = realloc(str->buf,newcap);
     if (newbuf == NULL) {
         /* treat a failed allocation as a non-fatal error; the string will silently
-           fail its operations and the program will have undefined, yet sound behavior */
+           fail its operations and the program will have undefined behavior */
         pok_error(pok_error_warning,"failed memory allocation: pok_string");
         return FALSE;
     }

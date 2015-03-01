@@ -19,14 +19,36 @@ static inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
 /* target-independent code */
 
 /* pok_network_object_info */
-void pok_netobj_info_init(struct pok_netobj_info* info)
+struct pok_netobj_readinfo* pok_netobj_readinfo_new()
+{
+    struct pok_netobj_readinfo* info;
+    info = malloc(sizeof(struct pok_netobj_readinfo));
+    if (info == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    pok_netobj_readinfo_init(info);
+    return info;
+}
+void pok_netobj_readinfo_free(struct pok_netobj_readinfo* info)
+{
+    pok_netobj_readinfo_delete(info);
+    free(info);
+}
+void pok_netobj_readinfo_init(struct pok_netobj_readinfo* info)
 {
     info->fieldCnt = 0;
     info->fieldProg = 0;
     info->depth[0] = 0;
     info->depth[1] = 0;
+    info->next = NULL;
 }
-enum pok_network_result pok_netobj_info_process(struct pok_netobj_info* info)
+void pok_netobj_readinfo_delete(struct pok_netobj_readinfo* info)
+{
+    if (info->next != NULL)
+        pok_netobj_readinfo_free(info->next);
+}
+enum pok_network_result pok_netobj_readinfo_process(struct pok_netobj_readinfo* info)
 {
     const struct pok_exception* ex;
     ex = pok_exception_peek();
@@ -42,7 +64,7 @@ enum pok_network_result pok_netobj_info_process(struct pok_netobj_info* info)
     ++info->fieldProg;
     return pok_net_completed;
 }
-enum pok_network_result pok_netobj_info_process_depth(struct pok_netobj_info* info)
+enum pok_network_result pok_netobj_readinfo_process_depth(struct pok_netobj_readinfo* info)
 {
     const struct pok_exception* ex;
     ex = pok_exception_peek();
@@ -304,14 +326,20 @@ bool_t pok_data_stream_read_string(struct pok_data_source* dsrc,char* dst,size_t
 }
 bool_t pok_data_stream_read_string_ex(struct pok_data_source* dsrc,struct pok_string* dst)
 {
+    /* reads a null-terminated string from the data source; if data is pending (no null byte
+       has been received yet and the stream has not received the end of comms) then the function
+       returns FALSE with a pending exception pushed on the exception stack; as a consequence,
+       this function must solely concatenate the bytes, and the user must be responsible for
+       clearing a non-empty string */
     static const size_t ATTEMPT_SIZE = 1024;
     size_t iter;
     byte_t* data;
     size_t bytesIn;
-    pok_string_clear(dst);
     data = pok_data_source_read(dsrc,ATTEMPT_SIZE,&bytesIn);
     if (data == NULL)
+        /* exception is inherited from above function call */
         return FALSE;
+    /* read until null-terminator */
     for (iter = 0;iter < bytesIn;++iter)
         if (data[iter] == 0)
             break;

@@ -16,6 +16,44 @@ struct pok_image* pok_image_new()
     img->pixels.dataRGB = NULL;
     return img;
 }
+struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pixel fillPixel)
+{
+    size_t i, d, n;
+    struct pok_image* img;
+    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return NULL;
+    }
+    img = malloc(sizeof(struct pok_image));
+    d = width*height;
+    n = d * sizeof(union pixel);
+    img->width = width;
+    img->height = height;
+    img->flags = pok_image_flag_none;
+    img->pixels.dataRGB = malloc(n);
+    for (i = 0;i < d;++i)
+        img->pixels.dataRGB[i] = fillPixel;
+    return img;
+}
+struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union alpha_pixel fillPixel)
+{
+    size_t i, d, n;
+    struct pok_image* img;
+    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return NULL;
+    }
+    img = malloc(sizeof(struct pok_image));
+    d = width * height;
+    n = d * sizeof(union alpha_pixel);
+    img->width = width;
+    img->height = height;
+    img->flags = pok_image_flag_none;
+    img->pixels.dataRGBA = malloc(n);
+    for (i = 0;i < d;++i)
+        img->pixels.dataRGBA[i] = fillPixel;
+    return img;
+}
 struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,byte_t* dataRGB)
 {
     /* copy pixel data into structure; each pixel is 3-bytes long and can be cast to a
@@ -137,20 +175,20 @@ struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32
             pok_exception_flag_memory_error();
             return NULL;
         }
-        for (i = 0,r = 0,j = y*src->height+x;r < height;++r,j+=src->height) {
+        for (i = 0,r = 0,j = y*src->width+x;r < height;++r,j+=src->width) {
             uint32_t k = j; /* j refers to start of subimage row */
             for (c = 0;c < width;++c,++i,++k)
                 img->pixels.dataRGBA[i] = src->pixels.dataRGBA[k];
         }
     }
     else {
-        img->pixels.dataRGB = malloc(sizeof(union alpha_pixel) * width * height);
+        img->pixels.dataRGB = malloc(sizeof(union pixel) * width * height);
         if (img->pixels.dataRGB == NULL) {
             free(img);
             pok_exception_flag_memory_error();
             return NULL;
         }
-        for (i = 0,r = 0,j = y*src->height+x;r < height;++r,j+=src->height) {
+        for (i = 0,r = 0,j = y*src->width+x;r < height;++r,j+=src->width) {
             uint32_t k = j; /* j refers to start of subimage row */
             for (c = 0;c < width;++c,++i,++k)
                 img->pixels.dataRGB[i] = src->pixels.dataRGB[k];
@@ -164,9 +202,9 @@ void pok_image_free(struct pok_image* img)
         free(img->pixels.data);
     free(img);
 }
-enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_source* dsrc,struct pok_netobj_info* info)
+enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
 {
-    /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_info' object
+    /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_readinfo' object
        to re-call this function to attempt to read the remaining data
         - data structure sent over network: 
            [4 bytes] flags
@@ -177,15 +215,15 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
     /* read flags, width and height */
     if (info->fieldProg == 0) {
         pok_data_stream_read_uint16(dsrc,&img->flags);
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 1) {
         pok_data_stream_read_uint32(dsrc,&img->width);
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 2) {
         pok_data_stream_read_uint32(dsrc,&img->height);
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 3) {
         byte_t* pixdata;
@@ -211,21 +249,21 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
                 for (;amount > 0;--amount)
                     *pixdata++ = *recv++;
             }
-            if ((result = pok_netobj_info_process_depth(info)) != pok_net_completed)
+            if ((result = pok_netobj_readinfo_process_depth(info)) != pok_net_completed)
                 break;
             if (info->depth[0] >= img->width) {
                 ++info->depth[1];
                 info->depth[0] = 0;
             }
         }
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     return result;
 }
 enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t width,uint32_t height,struct pok_data_source* dsrc,
-    struct pok_netobj_info* info)
+    struct pok_netobj_readinfo* info)
 {
-    /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_info' object
+    /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_readinfo' object
        to re-call this function to attempt to read the remaining data; this varient assumes the specified width and height
        and should be used when the image dimension is implied between peers
         - data structure sent over network: 
@@ -235,7 +273,7 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
     /* read flags */
     if (info->fieldProg == 0) {
         pok_data_stream_read_uint16(dsrc,&img->flags);
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 1) {
         byte_t* pixdata;
@@ -261,14 +299,14 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
                 for (;amount > 0;--amount)
                     *pixdata++ = *recv++;
             }
-            if ((result = pok_netobj_info_process_depth(info)) != pok_net_completed)
+            if ((result = pok_netobj_readinfo_process_depth(info)) != pok_net_completed)
                 break;
             if (info->depth[0] >= img->width) {
                 ++info->depth[1];
                 info->depth[0] = 0;
             }
         }
-        result = pok_netobj_info_process(info);
+        result = pok_netobj_readinfo_process(info);
     }
     return result;
 }

@@ -27,21 +27,28 @@ enum pok_network_result
     pok_net_completed, /* object was successfully sent/received */
     pok_net_incomplete, /* object was not completely sent/received */
     pok_net_failed, /* object failed to send/be received; exception is generated */
+    pok_net_failed_protocol, /* peer did not adhere to protocol; exception is generated */
     pok_net_failed_internal, /* object failed to send/be received but due to another reason; exception is generated */
     pok_net_already /* object was marked as already sent */
 };
 
 /* network object information structure; defines the progress 
    of sending a network object */
-struct pok_netobj_info
+struct pok_netobj_readinfo
 {
-    uint16_t fieldCnt; /* total number of fields */
+    uint16_t fieldCnt; /* field counter */
     uint16_t fieldProg; /* field progress */
     size_t depth[2]; /* progress within current field; 2 variables allow multiple dimensions to the field */
+
+    /* form a linked list to represent netobj info for potential substructures */
+    struct pok_netobj_readinfo* next;
 };
-void pok_netobj_info_init(struct pok_netobj_info* info);
-enum pok_network_result pok_netobj_info_process(struct pok_netobj_info* info);
-enum pok_network_result pok_netobj_info_process_depth(struct pok_netobj_info* info);
+struct pok_netobj_readinfo* pok_netobj_readinfo_new();
+void pok_netobj_readinfo_free(struct pok_netobj_readinfo* info);
+void pok_netobj_readinfo_init(struct pok_netobj_readinfo* info);
+void pok_netobj_readinfo_delete(struct pok_netobj_readinfo* info);
+enum pok_network_result pok_netobj_readinfo_process(struct pok_netobj_readinfo* info);
+enum pok_network_result pok_netobj_readinfo_process_depth(struct pok_netobj_readinfo* info);
 
 /* IPv4 network address information */
 struct pok_network_address

@@ -164,7 +164,7 @@ bool_t pok_exception_check()
 }
 bool_t pok_exception_check_ex(enum pok_ex_kind kind)
 {
-    int i;
+    size_t i;
     int tid;
     void** buf;
     struct thread_exception_item* list;

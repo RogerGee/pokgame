@@ -11,12 +11,15 @@
       tilemaker init <image-dimension>                // create new database in current directory
       tilemaker compile <compiled-output-raw-image>   // build tileset image from database
       tilemaker add <source-raw-image> <cols> <rows>  // update database with tiles from source
+      tilemaker rm <position-index> ...               // remove tiles at specified positions
+      tilemaker pass <position-index> ...             // marks tiles as passable (put at end of list)
 */
 #include "dstructs/dynarray.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -45,10 +48,13 @@ static struct dynamic_array* get_tile_files(int* highest);
 static void load_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput);
 static void save_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput);
 static int image_compar(uint8_t* imgA,uint8_t* imgB,size_t bytec);
+static int int_fn_compar(const char** left,const char** right);
 
 static void init(size_t dimension);
 static void compile(const char* outputFile,int option);
 static void add(const char* sourceFile,size_t columns,size_t rows);
+static void rm(const char* argv[],int number);
+static void pass(const char* argv[],int number);
 
 int main(int argc,const char* argv[])
 {
@@ -100,6 +106,22 @@ int main(int argc,const char* argv[])
         r = atoi(argv[4]);
         read_config();
         add(argv[2],c,r);
+    }
+    else if (strcmp(argv[1],"rm") == 0) {
+        if (argc < 3) {
+            fprintf(stderr,"%s: rm position-index ...\n",argv[0]);
+            return 1;
+        }
+        read_config();
+        rm(argv+2,argc-2);
+    }
+    else if (strcmp(argv[1],"pass") == 0) {
+        if (argc < 3) {
+            fprintf(stderr,"%s: pass position-index ...\n",argv[0]);
+            return 1;
+        }
+        read_config();
+        pass(argv+2,argc-2);
     }
     else {
         fprintf(stderr,"%s: the command '%s' was not recognized\n",argv[0],argv[1]);
@@ -164,7 +186,7 @@ struct dynamic_array* get_tile_files(int* highest)
         fprintf(stderr,"%s: could not open database: %s; is this a tilemaker directory?\n",programName,strerror(errno));
         exit(EXIT_FAILURE);
     }
-    *highest = 1;
+    *highest = 0;
     /* grab all the file names in the tiles directory */
     while (1) {
         int a;
@@ -174,7 +196,7 @@ struct dynamic_array* get_tile_files(int* highest)
         if (entry == NULL)
             break;
         if (entry->d_type == DT_REG) {
-            a = atoi(entry->d_name);
+            a = atoi(isalpha(entry->d_name[0]) ? entry->d_name+1 : entry->d_name);
             if (a > *highest)
                 *highest = a;
             fn = malloc(sizeof(entry->d_name));
@@ -186,6 +208,9 @@ struct dynamic_array* get_tile_files(int* highest)
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
     }
+    /* sort file names to maintain stability */
+    qsort(arry->da_data,arry->da_top,sizeof(char*),(int (*)(const void*,const void*))int_fn_compar);
+    *highest += 1;
     closedir(tiledir);
     return arry;
 }
@@ -233,6 +258,28 @@ int image_compar(uint8_t* imgA,uint8_t* imgB,size_t bytec)
             return 0;
     return 1;
 }
+int int_fn_compar(const char** left,const char** right)
+{
+    char c[2];
+    const char* l, *r;
+    l = *left; r = *right;
+    c[0] = *l; c[1] = *r;
+    if ( isalpha(c[0]) ) {
+        if ( isdigit(c[1]) ) {
+            if (c[0] == 'p') /* passable tiles */
+                return 1;
+        }
+        ++l;
+    }
+    if ( isalpha(c[1]) ) {
+        if ( isdigit(c[0]) ) {
+            if (c[1] == 'p') /* passable tiles */
+                return -1;
+        }
+        ++r;
+    }
+    return atoi(l) - atoi(r);
+}
 
 void init(size_t dimension)
 {
@@ -244,6 +291,7 @@ void init(size_t dimension)
         exit(EXIT_FAILURE);
     }
     config.dimension = dimension;
+    config.modified = 1;
 }
 
 static uint8_t* compile_rectangle(struct dynamic_array* arry,size_t* sz)
@@ -418,13 +466,13 @@ void add(const char* sourceFile,size_t columns,size_t rows)
             uint8_t* tile;
             size_t m, n, off = offset;
             off += config.dimension * x * 3;
-
+            /* allocate tile structure */
             tile = malloc(tilebytes);
             if (tile == NULL) {
                 fprintf(stderr,"%s: could not allocate enough memory for operation\n",programName);
                 exit(EXIT_FAILURE);
             }
-
+            /* copy tile data */
             i = 0;
             for (m = 0;m < config.dimension;++m) {
                 size_t cpy = off;
@@ -432,7 +480,6 @@ void add(const char* sourceFile,size_t columns,size_t rows)
                     tile[i++] = src[cpy++];
                 off += widthbytes;
             }
-
             /* check tile against all the other tiles */
             m = 1;
             for (i = 0;i < arry->da_top;++i) {
@@ -441,7 +488,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
                     break;
                 }
             }
-
+            /* save and add the tile or else free it */
             if (m) {
                 char name[16];
                 snprintf(name,sizeof(name),"%d",a++);
@@ -464,4 +511,65 @@ void add(const char* sourceFile,size_t columns,size_t rows)
     printf("ignored %d tiles\n",d);
     dynamic_array_free_ex(arry,free);
     free(src);
+}
+
+void rm(const char* argv[],int number)
+{
+    int i, dum;
+    struct dynamic_array* arry;
+    arry = get_tile_files(&dum);
+    if (chdir(TILEDIR) != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    for (i = 0;i < number;++i) {
+        size_t pos = atoi(argv[i]) - 1;
+        if (pos < arry->da_top) {
+            if (unlink((const char*)arry->da_data[pos]) == -1)
+                fprintf(stderr,"%s: could not remove '%s': %s\n",programName,(char*)arry->da_data[pos],strerror(errno));
+            else
+                printf("removed tile file '%s' at position %zu\n",(char*)arry->da_data[pos],pos+1);
+        }
+        else
+            fprintf(stderr,"%s: incorrect position '%zu'\n",programName,pos+1);
+    }
+    if (chdir("..") != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+}
+
+void pass(const char* argv[],int number)
+{
+    int i, next;
+    struct dynamic_array* arry;
+    arry = get_tile_files(&next);
+    if (chdir(TILEDIR) != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    for (i = 0;i < number;++i) {
+        size_t pos = atoi(argv[i]) - 1;
+        if (pos < arry->da_top) {
+            /* rename file name to have special 'p' prefix for passable */
+            char name[16];
+            const char* oldName;
+            oldName = (const char*)arry->da_data[pos];
+            if ( isalpha(oldName[0]) ) {
+                fprintf(stderr,"%s: file '%s' at position %zu is already special\n",programName,oldName,pos+1);
+                continue;
+            }
+            snprintf(name,sizeof(name),"p%s",oldName);
+            if (rename(oldName,name) == -1)
+                fprintf(stderr,"%s: could not rename '%s': %s\n",programName,oldName,strerror(errno));
+            else
+                printf("marked tile file '%s' at position %zu as passable\n",oldName,pos+1);
+        }
+        else
+            fprintf(stderr,"%s: incorrect position '%zu'\n",programName,pos+1);
+    }
+    if (chdir("..") != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
 }

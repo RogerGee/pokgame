@@ -10,6 +10,7 @@
 static void do_x_init();
 static void do_x_close();
 static void make_frame(struct pok_graphics_subsystem* sys);
+static void edit_frame(struct pok_graphics_subsystem* sys);
 static void close_frame(struct pok_graphics_subsystem* sys);
 static void* graphics_loop(struct pok_graphics_subsystem* sys);
 
@@ -30,9 +31,11 @@ struct _pok_graphics_subsystem_impl
     pthread_mutex_t mutex;
 
     /* shared variable flags */
-    volatile bool_t rendering;
-    volatile bool_t doMap;
-    volatile bool_t doUnmap;
+    volatile bool_t rendering;     /* is the system rendering the window frame? */
+    volatile bool_t gameRendering; /* is the system invoking game rendering? */
+    volatile bool_t editFrame;     /* request to reinitialize frame */
+    volatile bool_t doMap;         /* request that the window frame be mapped to screen */
+    volatile bool_t doUnmap;       /* request that the window frame be unmapped from screen */
 };
 
 bool_t impl_new(struct pok_graphics_subsystem* sys)
@@ -44,12 +47,20 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     }
     /* prepare the rendering thread */
     sys->impl->rendering = TRUE;
+    sys->impl->gameRendering = TRUE;
+    sys->impl->editFrame = FALSE;
     sys->impl->doMap = FALSE;
     sys->impl->doUnmap = FALSE;
     pthread_mutex_init(&sys->impl->mutex,NULL);
     if (pthread_create(&sys->impl->tid,NULL,(void*(*)(void*))graphics_loop,sys) != 0)
         pok_error(pok_error_fatal,"fail pthread_create()");
     return TRUE;
+}
+
+inline void impl_set_game_state(struct pok_graphics_subsystem* sys,bool_t state)
+{
+    /* this allows the subsystem to effectively pause/resume the game rendering */
+    sys->impl->gameRendering = state;
 }
 
 void impl_free(struct pok_graphics_subsystem* sys)
@@ -63,26 +74,28 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl = NULL;
 }
 
-void impl_map_window(struct pok_graphics_subsystem* sys)
+inline void impl_reload(struct pok_graphics_subsystem* sys)
 {
-    pthread_mutex_lock(&sys->impl->mutex);
+    sys->impl->editFrame = TRUE;
+}
+
+inline void impl_map_window(struct pok_graphics_subsystem* sys)
+{
+    /* flag that we want the frame to be mapped to screen */
     sys->impl->doMap = TRUE;
-    pthread_mutex_unlock(&sys->impl->mutex);
 }
 
-void impl_unmap_window(struct pok_graphics_subsystem* sys)
+inline void impl_unmap_window(struct pok_graphics_subsystem* sys)
 {
-    pthread_mutex_lock(&sys->impl->mutex);
     sys->impl->doUnmap = TRUE;
-    pthread_mutex_unlock(&sys->impl->mutex);
 }
 
-void impl_lock(struct pok_graphics_subsystem* sys)
+inline void impl_lock(struct pok_graphics_subsystem* sys)
 {
     pthread_mutex_lock(&sys->impl->mutex);
 }
 
-void impl_unlock(struct pok_graphics_subsystem* sys)
+inline void impl_unlock(struct pok_graphics_subsystem* sys)
 {
     pthread_mutex_unlock(&sys->impl->mutex);
 }
@@ -135,7 +148,6 @@ void do_x_init()
         /* connect to the X server (now it gets real) */
         int dum;
         static int GLX_VISUAL[] = {GLX_RGBA,GLX_DEPTH_SIZE,24,GLX_DOUBLEBUFFER,None};
-        XInitThreads();
         display = XOpenDisplay(NULL);
         screen = DefaultScreen(display);
         if ( !glXQueryExtension(display,&dum,&dum) )
@@ -181,11 +193,20 @@ void make_frame(struct pok_graphics_subsystem* sys)
     sys->impl->del = XInternAtom(display,"WM_DELETE_WINDOW",False);
     XSetWMProtocols(display,sys->impl->window,&sys->impl->del,1);
     /* set title bar text */
-    XStoreName(display,sys->impl->window,"pokgame");
+    XStoreName(display,sys->impl->window,sys->title.buf);
     /* create the GL rendering context */
     sys->impl->context = glXCreateContext(display,visual,None,True);
     if (sys->impl->context == NULL)
         pok_error(pok_error_fatal,"cannot create OpenGL context");
+}
+void edit_frame(struct pok_graphics_subsystem* sys)
+{
+    /* edit the frame size */
+    XResizeWindow(display,
+        sys->impl->window,
+        sys->dimension * sys->windowSize.columns,
+        sys->dimension * sys->windowSize.rows);
+    XStoreName(display,sys->impl->window,sys->title.buf);
 }
 void close_frame(struct pok_graphics_subsystem* sys)
 {
@@ -231,6 +252,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         }
 
         /* check for event notifications from another thread */
+        if (sys->impl->editFrame) {
+            edit_frame(sys);
+            sys->impl->editFrame = FALSE;
+        }
         if (sys->impl->doMap) {
             XMapWindow(display,sys->impl->window);
             sys->impl->doMap = FALSE;
@@ -243,22 +268,24 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         glClearColor(12,12,12,0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        /* test */
-        glBegin(GL_QUADS);
-        glColor3b(0,0,127);
-        glVertex2i(10,10);
-        glVertex2i(10,40);
-        glVertex2i(40,40);
-        glVertex2i(40,10);
-        glEnd();
+        if (sys->impl->gameRendering) {
+            /* test */
+            glBegin(GL_QUADS);
+            glColor3b(0,0,127);
+            glVertex2i(10,10);
+            glVertex2i(10,40);
+            glVertex2i(40,40);
+            glVertex2i(40,10);
+            glEnd();
 
-        glBegin(GL_QUADS);
-        glColor3b(127,0,127);
-        glVertex2i(100,100);
-        glVertex2i(100,280);
-        glVertex2i(280,280);
-        glVertex2i(280,100);
-        glEnd();
+            glBegin(GL_QUADS);
+            glColor3b(127,0,127);
+            glVertex2i(100,100);
+            glVertex2i(100,280);
+            glVertex2i(280,280);
+            glVertex2i(280,100);
+            glEnd();
+        }
 
         /* expose the backbuffer */
         glXSwapBuffers(display,sys->impl->window);

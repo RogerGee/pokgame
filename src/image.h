@@ -52,15 +52,17 @@ struct pok_image
     } pixels;
 };
 struct pok_image* pok_image_new(); /* new empty image */
+struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pixel fillPixel);
+struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union alpha_pixel fillPixel);
 struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,byte_t* dataRGB);
 struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,byte_t* dataRGBA);
 struct pok_image* pok_image_new_byref_rgb(uint32_t width,uint32_t height,byte_t* dataRGB);
 struct pok_image* pok_image_new_byref_rgba(uint32_t width,uint32_t height,byte_t* dataRGBA);
 struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32_t y,uint32_t width,uint32_t height);
 void pok_image_free(struct pok_image* img);
-enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_source* dsrc,struct pok_netobj_info* info);
+enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
 enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t width,uint32_t height,struct pok_data_source* dsrc,
-    struct pok_netobj_info* info);
+    struct pok_netobj_readinfo* info);
 
 /* these image constructors provide alternate input formats for image data; they are destroyed
    like any 'pok_image' using 'pok_image_free' */
