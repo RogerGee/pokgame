@@ -229,7 +229,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     /* setup OpenGL */
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0.0,sys->dimension*sys->windowSize.columns,0.0,sys->dimension*sys->windowSize.rows,-1.0,1.0);
+    glOrtho(0.0,sys->dimension*sys->windowSize.columns,sys->dimension*sys->windowSize.rows,0.0,-1.0,1.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     /* begin rendering loop */
@@ -265,25 +265,17 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
             sys->impl->doUnmap = FALSE;
         }
 
-        glClearColor(12,12,12,0);
+        glClearColor(24,24,24,0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (sys->impl->gameRendering) {
             /* test */
+            glColor3b(127,127,0);
             glBegin(GL_QUADS);
-            glColor3b(0,0,127);
             glVertex2i(10,10);
-            glVertex2i(10,40);
-            glVertex2i(40,40);
-            glVertex2i(40,10);
-            glEnd();
-
-            glBegin(GL_QUADS);
-            glColor3b(127,0,127);
-            glVertex2i(100,100);
-            glVertex2i(100,280);
-            glVertex2i(280,280);
-            glVertex2i(280,100);
+            glVertex2i(278,10);
+            glVertex2i(278,100);
+            glVertex2i(10,100);
             glEnd();
         }
 

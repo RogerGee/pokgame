@@ -23,7 +23,7 @@ static void pok_sprite_manager_assoc(struct pok_sprite_manager* sman)
     /* configure the sprite association */
     
 }
-void pok_sprite_manager_load_sprites(struct pok_sprite_manager* sman,uint16_t imgc,byte_t* data,bool_t byRef)
+void pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t imgc,byte_t* data,bool_t byRef)
 {
     /* read sprite data from memory; since sprite images must match the 'sman->sys->dimension' value, the data is
        assumed to be of the correct length for the given value of 'imgc' */
@@ -33,7 +33,7 @@ void pok_sprite_manager_load_sprites(struct pok_sprite_manager* sman,uint16_t im
         pok_error(pok_error_fatal,"spriteset is already loaded in pok_sprite_manager_load_sprites()");
 #endif
     r = imgc % 8;
-    sman->spritecnt = r==0 ? imgc : imgc+r;
+    sman->spritecnt = r==0 ? imgc : imgc+r; /* nearest multiple of 8 >= 'imgc' */
     sman->spriteset = malloc(sman->spritecnt * sizeof(struct pok_image*));
     for (i = 0;i < imgc;++i) {
         struct pok_image* img;
@@ -46,10 +46,10 @@ void pok_sprite_manager_load_sprites(struct pok_sprite_manager* sman,uint16_t im
     }
     for (;i < sman->spritecnt;++i) {
         /* refer to the black tile image provided globally */
-
+        sman->spriteset[i] = sman->sys->blacktile;
     }
 }
-enum pok_network_result pok_sprite_manager_netread_sprites(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
+enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
 {
     /* read sprite info substructure from data source:
@@ -79,13 +79,7 @@ enum pok_network_result pok_sprite_manager_netread_sprites(struct pok_sprite_man
             imgp = sman->spriteset + (sman->spritecnt - info->fieldCnt); /* grab ptr to image substructure */
             if (*imgp == NULL) {
                 *imgp = pok_image_new();
-                if (info->next == NULL)
-                    info->next = pok_netobj_readinfo_new();
-                else {
-                    /* for correctness, delete the netobj_readinfo first */
-                    pok_netobj_readinfo_delete(info->next);
-                    pok_netobj_readinfo_init(info->next);
-                }
+                pok_netobj_readinfo_alloc_next(info);
             }
             /* attempt to read from network; assume dimension */
             result = pok_image_netread_ex(*imgp,sman->sys->dimension,sman->sys->dimension,dsrc,info->next);

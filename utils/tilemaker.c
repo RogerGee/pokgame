@@ -13,6 +13,7 @@
       tilemaker add <source-raw-image> <cols> <rows>  // update database with tiles from source
       tilemaker rm <position-index> ...               // remove tiles at specified positions
       tilemaker pass <position-index> ...             // marks tiles as passable (put at end of list)
+      tilemaker mv <source-index> <dest-index>        // reorders tiles such that source is at dest position
 */
 #include "dstructs/dynarray.h"
 #include <stdlib.h>
@@ -49,12 +50,14 @@ static void load_image(const char* file,uint8_t* pix,size_t width,size_t height,
 static void save_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput);
 static int image_compar(uint8_t* imgA,uint8_t* imgB,size_t bytec);
 static int int_fn_compar(const char** left,const char** right);
+static inline int from_tile_name(const char* name);
 
 static void init(size_t dimension);
 static void compile(const char* outputFile,int option);
 static void add(const char* sourceFile,size_t columns,size_t rows);
 static void rm(const char* argv[],int number);
 static void pass(const char* argv[],int number);
+static void mv(const char* source,const char* destination);
 
 int main(int argc,const char* argv[])
 {
@@ -122,6 +125,14 @@ int main(int argc,const char* argv[])
         }
         read_config();
         pass(argv+2,argc-2);
+    }
+    else if (strcmp(argv[1],"mv") == 0) {
+        if (argc < 4) {
+            fprintf(stderr,"%s: mv src-index dst-index\n",argv[0]);
+            return 1;
+        }
+        read_config();
+        mv(argv[2],argv[3]);
     }
     else {
         fprintf(stderr,"%s: the command '%s' was not recognized\n",argv[0],argv[1]);
@@ -196,7 +207,7 @@ struct dynamic_array* get_tile_files(int* highest)
         if (entry == NULL)
             break;
         if (entry->d_type == DT_REG) {
-            a = atoi(isalpha(entry->d_name[0]) ? entry->d_name+1 : entry->d_name);
+            a = from_tile_name(entry->d_name);
             if (a > *highest)
                 *highest = a;
             fn = malloc(sizeof(entry->d_name));
@@ -279,6 +290,10 @@ int int_fn_compar(const char** left,const char** right)
         ++r;
     }
     return atoi(l) - atoi(r);
+}
+inline int from_tile_name(const char* name)
+{
+    return atoi(isalpha(name[0]) ? name+1 : name);
 }
 
 void init(size_t dimension)
@@ -537,6 +552,7 @@ void rm(const char* argv[],int number)
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
     }
+    dynamic_array_free_ex(arry,free);
 }
 
 void pass(const char* argv[],int number)
@@ -572,4 +588,77 @@ void pass(const char* argv[],int number)
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
     }
+    dynamic_array_free_ex(arry,free);
+}
+
+static void mv_recursive(const char* src,const char* dst)
+{ /* recursively insert 'src' to 'dst' */
+    static struct stat st;
+    if (stat(dst,&st) == 0) {
+        /* destination exists; move the destination to the next available space
+           by renaming it recursively */
+        int a;
+        char name[16];
+        a = from_tile_name(dst) + 1;
+        if (isalpha(dst[0]))
+            snprintf(name,sizeof(name),"%c%d",dst[0],a);
+        else
+            snprintf(name,sizeof(name),"%d",a);
+        mv_recursive(dst,name);
+        /* fall through to rename 'src' to 'dst' */
+    }
+    else if (errno != ENOENT) {
+        fprintf(stderr,"%s: could not stat file '%s'\n",programName,dst);
+        exit(EXIT_FAILURE);
+    }
+    /* else: file doesn't exist; control will fall through to move the file */
+    if (rename(src,dst) == -1)
+        fprintf(stderr,"%s: couldnot rename '%s' to '%s': %s\n",programName,src,dst,strerror(errno));
+    printf("%s -> %s\n",src,dst);
+}
+void mv(const char* source,const char* destination)
+{
+    int top;
+    int src, dst;
+    const char* srcName;
+    const char* dstName;
+    struct dynamic_array* arry;
+    arry = get_tile_files(&top);
+    src = atoi(source)-1;
+    dst = atoi(destination)-1;
+    if (chdir(TILEDIR) != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    if (src<0 || dst<0 || src>=arry->da_top || dst>=arry->da_top) {
+        fprintf(stderr,"%s: bad src./dest. positions\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    if (src == dst) {
+        fprintf(stderr,"%s: src. and dest. are the same\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    srcName = (const char*)arry->da_data[src];
+    dstName = (const char*)arry->da_data[dst];
+    if (isalpha(srcName[0]) && !isalpha(dstName[0])) {
+        fprintf(stderr,"%s: cannot move passable tile to impassable section\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    else if (!isalpha(srcName[0]) && isalpha(dstName[0])) {
+        fprintf(stderr,"%s: cannot move impassable tile to passable section\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    /* rename source name to 'trans' so that it can be recycled */
+    if (rename(srcName,"trans") == -1) {
+        fprintf(stderr,"%s: fail rename()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    /* recursively rename 'trans' to dest. */
+    mv_recursive("trans",dstName);
+    if (chdir("..") != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    puts("tile moved");
+    dynamic_array_free_ex(arry,free);
 }

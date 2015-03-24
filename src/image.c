@@ -207,15 +207,18 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
     /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_readinfo' object
        to re-call this function to attempt to read the remaining data
         - data structure sent over network: 
-           [4 bytes] flags
+           [1 byte] hasAlpha (true if non-zero)
            [4 bytes] width
            [4 bytes] height
            [n bytes] pixel-data, where n = widht*height * (4 if alpha channel, else 3) */
     enum pok_network_result result = pok_net_already;
     /* read flags, width and height */
     if (info->fieldProg == 0) {
-        pok_data_stream_read_uint16(dsrc,&img->flags);
+        uint8_t alpha;
+        pok_data_stream_read_byte(dsrc,&alpha);
         result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed)
+            img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     }
     if (info->fieldProg == 1) {
         pok_data_stream_read_uint32(dsrc,&img->width);
@@ -229,14 +232,13 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (info->depth==0 && img->pixels.data==NULL) {
-            allocation *= img->width * img->height;
-            img->pixels.data = malloc(allocation);
+            img->pixels.data = malloc(allocation * img->width * img->height);
             if (img->pixels.data == NULL) {
                 pok_exception_flag_memory_error();
                 return pok_net_failed;
             }
         }
-        pixdata = img->pixels.data;
+        pixdata = (byte_t*)img->pixels.data + allocation * (info->depth[1]*img->width + info->depth[0]);
         while (info->depth[1] < img->height) {
             byte_t* recv;
             size_t amount;
@@ -249,7 +251,7 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
                 for (;amount > 0;--amount)
                     *pixdata++ = *recv++;
             }
-            if ((result = pok_netobj_readinfo_process_depth(info)) != pok_net_completed)
+            if ((result = pok_netobj_readinfo_process_depth(info,0)) != pok_net_completed)
                 break;
             if (info->depth[0] >= img->width) {
                 ++info->depth[1];
@@ -267,27 +269,31 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
        to re-call this function to attempt to read the remaining data; this varient assumes the specified width and height
        and should be used when the image dimension is implied between peers
         - data structure sent over network: 
-           [4 bytes] flags
+           [1 byte] alpha
            [n bytes] pixel-data, where n = widht*height * (4 if alpha channel, else 3) */
     enum pok_network_result result = pok_net_already;
     /* read flags */
     if (info->fieldProg == 0) {
-        pok_data_stream_read_uint16(dsrc,&img->flags);
+        uint8_t alpha;
+        img->width = width;
+        img->height = height;
+        pok_data_stream_read_byte(dsrc,&alpha);
         result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed)
+            img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     }
     if (info->fieldProg == 1) {
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (info->depth==0 && img->pixels.data==NULL) {
-            allocation *= img->width * img->height;
-            img->pixels.data = malloc(allocation);
+            img->pixels.data = malloc(allocation * width * height);
             if (img->pixels.data == NULL) {
                 pok_exception_flag_memory_error();
                 return pok_net_failed;
             }
         }
-        pixdata = img->pixels.data;
-        while (info->depth[1] < img->height) {
+        pixdata = (byte_t*)img->pixels.data + allocation * (info->depth[1]*width + info->depth[0]);
+        while (info->depth[1] < height) {
             byte_t* recv;
             size_t amount;
             recv = pok_data_source_read(dsrc,allocation,&amount);
@@ -299,9 +305,9 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
                 for (;amount > 0;--amount)
                     *pixdata++ = *recv++;
             }
-            if ((result = pok_netobj_readinfo_process_depth(info)) != pok_net_completed)
+            if ((result = pok_netobj_readinfo_process_depth(info,0)) != pok_net_completed)
                 break;
-            if (info->depth[0] >= img->width) {
+            if (info->depth[0] >= width) {
                 ++info->depth[1];
                 info->depth[0] = 0;
             }

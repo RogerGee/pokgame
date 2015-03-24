@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <dstructs/treemap.h>
 
 static inline bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc);
 static inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
@@ -42,6 +43,18 @@ void pok_netobj_readinfo_init(struct pok_netobj_readinfo* info)
     info->depth[0] = 0;
     info->depth[1] = 0;
     info->next = NULL;
+    info->aux = NULL;
+}
+void pok_netobj_readinfo_reset(struct pok_netobj_readinfo* info)
+{
+    info->fieldCnt = 0;
+    info->fieldProg = 0;
+    info->depth[0] = 0;
+    info->depth[1] = 0;
+    if (info->aux != NULL) {
+        free(info->aux);
+        info->aux = NULL;
+    }
 }
 void pok_netobj_readinfo_delete(struct pok_netobj_readinfo* info)
 {
@@ -64,7 +77,7 @@ enum pok_network_result pok_netobj_readinfo_process(struct pok_netobj_readinfo* 
     ++info->fieldProg;
     return pok_net_completed;
 }
-enum pok_network_result pok_netobj_readinfo_process_depth(struct pok_netobj_readinfo* info)
+enum pok_network_result pok_netobj_readinfo_process_depth(struct pok_netobj_readinfo* info,int index)
 {
     const struct pok_exception* ex;
     ex = pok_exception_peek();
@@ -77,8 +90,71 @@ enum pok_network_result pok_netobj_readinfo_process_depth(struct pok_netobj_read
         /* leave the exception for the calling context */
         return pok_net_failed;
     }
-    ++info->depth[0];
+    ++info->depth[index%2];
     return pok_net_completed;
+}
+bool_t pok_netobj_readinfo_alloc_next(struct pok_netobj_readinfo* info)
+{
+    if (info->next == NULL) {
+        info->next = pok_netobj_readinfo_new();
+        if (info->next == NULL)
+            return FALSE;
+    }
+    else
+        pok_netobj_readinfo_reset(info->next);
+    return TRUE;
+}
+
+static struct treemap netobjs;
+static inline int network_object_compar(struct pok_netobj* left,struct pok_netobj* right)
+{
+    return left->id - right->id;
+}
+void network_object_load()
+{
+    treemap_init(&netobjs,(key_comparator)network_object_compar,NULL);
+}
+void network_object_unload()
+{
+    treemap_delete(&netobjs);
+}
+struct pok_netobj* network_object_lookup(uint32_t id)
+{
+    /* create a dummy object for comparison */
+    struct pok_netobj dummy;
+    dummy.id = id;
+    return treemap_lookup(&netobjs,&dummy);
+}
+
+/* netobj */
+void pok_netobj_default(struct pok_netobj* netobj)
+{
+    netobj->id = UNUSED_NETOBJ_ID;
+    netobj->kind = pok_netobj_unknown;
+}
+void pok_netobj_default_ex(struct pok_netobj* netobj,enum pok_netobj_kind kind)
+{
+    netobj->id = UNUSED_NETOBJ_ID;
+    netobj->kind = kind;
+}
+void pok_netobj_delete(struct pok_netobj* netobj)
+{
+    if (netobj->id != UNUSED_NETOBJ_ID)
+        treemap_remove(&netobjs,netobj);
+}
+enum pok_network_result pok_netobj_netread(struct pok_netobj* netobj,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
+{
+    enum pok_network_result result = pok_net_already;
+    if (info->fieldProg == 0) {
+        pok_data_stream_read_uint32(dsrc,&netobj->id);
+        result = pok_netobj_readinfo_process(info);
+        /* if successful, add the network object to the system */
+        if (result == pok_net_completed) {
+            treemap_insert(&netobjs,netobj);
+            netobj->kind = pok_netobj_unknown;
+        }
+    }
+    return result;
 }
 
 /* these functions convert between byte streams and binary integer

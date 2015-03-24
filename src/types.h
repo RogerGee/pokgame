@@ -29,4 +29,34 @@ void pok_string_concat_char(struct pok_string* str,char c);
 void pok_string_clear(struct pok_string* str);
 void pok_string_reset(struct pok_string* str);
 
+/* define size by number of columns and rows */
+struct pok_size
+{
+    uint16_t columns; /* width */
+    uint16_t rows; /* height */
+};
+
+/* define location by column and row position:
+    columns are numbered from [0..n] left-to-right; rows
+    are numbered from [0..n] from top-to-bottom */
+struct pok_location
+{
+    uint16_t column; /* x */
+    uint16_t row; /* y */
+};
+
+#define pok_unsigned_diff(a,b) (a>b ? a-b : b-a)
+
+/* define fundamental direction */
+enum pok_direction
+{
+    pok_direction_up,
+    pok_direction_down,
+    pok_direction_left,
+    pok_direction_right,
+    pok_direction_none
+};
+
+#define pok_direction_opposite(dir) (dir==pok_direction_none ? (int)pok_direction_none : ((int)dir + ((int)dir%2==0 ? 1 : -1)))
+
 #endif

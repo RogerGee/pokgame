@@ -42,7 +42,7 @@ enum pok_image_flags
    be able to be) modified by another context */
 struct pok_image
 {
-    uint16_t flags;
+    uint8_t flags;
     uint32_t width;
     uint32_t height;
     union { /* pixel data stored row by row */

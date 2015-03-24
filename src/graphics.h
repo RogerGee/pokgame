@@ -42,31 +42,6 @@ enum pok_input_key
     pok_input_key_RIGHT
 };
 
-/* define fundamental direction */
-enum pok_direction
-{
-    up,
-    down,
-    left,
-    right
-};
-
-/* define size by number of columns and rows */
-struct pok_size
-{
-    uint16_t columns; /* width */
-    uint16_t rows; /* height */
-};
-
-/* define location by column and row position:
-    columns are numbered from [0..n] left-to-right; rows
-    are numbered from [0..n] from top-to-bottom */
-struct pok_location
-{
-    uint16_t column; /* x */
-    uint16_t row; /* y */
-};
-
 /* graphics routine: every graphics routine is passed two parameters, the graphics
    subsystem and a context; the context generally is the object that stores the game's
    render state for a particular module (note: this is not a graphics library context; that

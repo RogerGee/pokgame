@@ -3,6 +3,10 @@
 #include "error.h"
 #include <stdlib.h>
 
+/* we cache the last created tile manager so that we can use it to configure
+   new tiles automatically */
+static struct pok_tile_manager* currentTileManager = NULL;
+
 void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphics_subsystem* sys)
 {
     tman->flags = pok_tile_manager_flag_none;
@@ -11,6 +15,7 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
     tman->impassability = 1; /* black tile is impassable, everything else passable */
     tman->tileset = NULL;
     tman->tileani = NULL;
+    currentTileManager = tman;
 }
 void pok_tile_manager_delete(struct pok_tile_manager* tman)
 {
@@ -22,6 +27,7 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
     }
     if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref))
         free(tman->tileani);
+    currentTileManager = NULL;
 }
 bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,byte_t* data,bool_t byRef)
 {
@@ -80,13 +86,80 @@ bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,str
     }
     return TRUE;
 }
-enum pok_network_result pok_tile_manager_netread_tiles(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
+static enum pok_network_result pok_tile_ani_data_netread(struct pok_tile_ani_data* ani,struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info)
+{
+    /* fields: [byte] ticks, [byte] indirections, [2-bytes] tile ID */
+    enum pok_network_result result = pok_net_already;
+    if (info->fieldProg == 0) {
+        pok_data_stream_read_byte(dsrc,&ani->ticks);
+        result = pok_netobj_readinfo_process(info);
+    }
+    if (info->fieldProg == 1) {
+        pok_data_stream_read_byte(dsrc,&ani->indirc);
+        result = pok_netobj_readinfo_process(info);
+    }
+    if (info->fieldProg == 2) {
+        pok_data_stream_read_uint16(dsrc,&ani->tileid);
+        result = pok_netobj_readinfo_process(info);
+    }
+    return result;
+}
+static enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info)
+{
+    /* read tile animation data substructure from data source:
+        [2-bytes] animation data item count
+        [4*n bytes] animation data items */
+    enum pok_network_result result = pok_net_already;
+    if (info->fieldProg == 0) {
+        /* note: we read this just to ensure that the peer will send the
+           correct number of substructures since that number is implied and
+           also to determine if the peer wants to send animation data */
+        pok_data_stream_read_uint16(dsrc,&info->fieldCnt);
+        result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed) {
+            if (info->fieldCnt == 0) {
+                /* this means that the animation data is not to be specified */
+                info->fieldProg = 2;
+                return pok_net_completed;
+            }
+            if (info->fieldCnt != tman->tilecnt) {
+                /* not enough animation substructures were specified */
+                pok_exception_new_ex(pok_ex_tile,pok_ex_tile_domain_error);
+                return pok_net_failed_protocol;
+            }
+            tman->tileani = malloc(sizeof(struct pok_tile_ani_data) * info->fieldCnt);
+            if (tman->tileani == NULL) {
+                pok_exception_flag_memory_error();
+                return pok_net_failed_internal;
+            }
+            info->depth[0] = 0; /* use this to iterate through fields */
+        }
+    }
+    if (info->fieldProg == 1) {
+        do {
+            if ( !pok_netobj_readinfo_alloc_next(info) )
+                return pok_net_failed_internal;
+            result = pok_tile_ani_data_netread(tman->tileani+info->depth[0],dsrc,info->next);
+            if (result != pok_net_completed)
+                break;
+            ++info->depth[0];
+            --info->fieldCnt;
+        } while (info->fieldCnt > 0);
+        if (info->fieldCnt == 0)
+            ++info->fieldProg;
+    }
+    return result;
+}
+enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
 {
     /* read tile info substructure from data source:
         [2 bytes] number of tiles
         [2 bytes] impassability cutoff
-        [n bytes] 'dimension x dimension' sized 'pok_image' structures */
+        [n bytes] 'dimension x dimension' sized 'pok_image' structures
+        [n bytes] tile animation data (optional if user sends zero as first field) */
     size_t i;
     enum pok_network_result result = pok_net_already;
     if (info->fieldProg == 0) {
@@ -117,14 +190,8 @@ enum pok_network_result pok_tile_manager_netread_tiles(struct pok_tile_manager* 
             imgp = tman->tileset + (tman->tilecnt - info->fieldCnt); /* grab ptr to image substructure */
             if (*imgp == NULL) { /* we have not attempted netread on this tile yet */
                 *imgp = pok_image_new();
-                if (info->next == NULL) {
-                    if ((info->next = pok_netobj_readinfo_new()) == NULL)
-                        return pok_net_failed_internal;
-                }
-                else {
-                    pok_netobj_readinfo_delete(info->next); /* for correctness, we must call delete */
-                    pok_netobj_readinfo_init(info->next);
-                }
+                if ( !pok_netobj_readinfo_alloc_next(info) )
+                    return pok_net_failed_internal;
             }
             /* attempt to read from network; assume 'sys->dimension' is the image width/height */
             result = pok_image_netread_ex(*imgp,tman->sys->dimension,tman->sys->dimension,dsrc,info->next);
@@ -135,66 +202,10 @@ enum pok_network_result pok_tile_manager_netread_tiles(struct pok_tile_manager* 
         if (info->fieldCnt == 0)
             ++info->fieldProg;
     }
-    return result;
-}
-static enum pok_network_result pok_tile_ani_data_netread(struct pok_tile_ani_data* ani,struct pok_data_source* dsrc,
-    struct pok_netobj_readinfo* info)
-{
-    /* fields: [byte] ticks, [byte] indirections, [2-bytes] tile ID */
-    enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
-        pok_data_stream_read_byte(dsrc,&ani->ticks);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 1) {
-        pok_data_stream_read_byte(dsrc,&ani->indirc);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 2) {
-        pok_data_stream_read_uint16(dsrc,&ani->tileid);
-        result = pok_netobj_readinfo_process(info);
-    }
-    return result;
-}
-enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_manager* tman,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
-{
-    /* read tile animation data substructure from data source:
-        [2-bytes] animation data item count
-        [4*n bytes] animation data items */
-    enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
-        /* note: we read this just to ensure that the peer will send the
-           correct number of substructures since that number is implied */
-        pok_data_stream_read_uint16(dsrc,&info->fieldCnt);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed) {
-            if (info->fieldCnt < tman->tilecnt) {
-                pok_exception_new_ex(pok_ex_tile,pok_ex_tile_domain_error);
-                return pok_net_failed_protocol;
-            }
-            if ((info->next = pok_netobj_readinfo_new()) == NULL)
-                return pok_net_failed_internal;
-            tman->tileani = malloc(sizeof(struct pok_tile_ani_data) * info->fieldCnt);
-            if (tman->tileani == NULL) {
-                pok_exception_flag_memory_error();
-                return pok_net_failed_internal;
-            }
-            info->depth[0] = 0; /* use this to iterate through fields */
-        }
-    }
-    if (info->fieldProg == 1) {
-        do {
-            result = pok_tile_ani_data_netread(tman->tileani+info->depth[0],dsrc,info->next);
-            if (result != pok_net_completed)
-                break;
-            ++info->depth[0];
-            --info->fieldCnt;
-            /* reset readinfo */
-            pok_netobj_readinfo_delete(info->next);
-            pok_netobj_readinfo_init(info->next);
-        } while (info->fieldCnt > 0);
-        if (info->fieldCnt == 0)
-            ++info->fieldProg;
+    if (info->fieldProg == 3) {
+        if ( !pok_netobj_readinfo_alloc_next(info) )
+            return pok_net_failed_internal;
+        result = pok_tile_manager_netread_ani(tman,dsrc,info->next);
     }
     return result;
 }
@@ -227,4 +238,73 @@ struct pok_image* pok_tile_manager_get_tile(struct pok_tile_manager* tman,uint16
     else
         img = tman->tileset[tileid];
     return img;
+}
+
+/* pok_tile */
+void pok_tile_init(struct pok_tile* tile,uint16_t tileid)
+{
+    tile->data.tileid = tileid;
+    tile->data.warpMap = 0; /* this field doesn't matter if warpKind==pok_tile_warp_none */
+    tile->data.warpLocation.column = 0;
+    tile->data.warpLocation.row = 0;
+    tile->data.warpKind = pok_tile_warp_none;
+    if (currentTileManager == NULL)
+        tile->impass = FALSE;
+    else
+        tile->impass = tileid <= currentTileManager->impassability;
+}
+void pok_tile_init_ex(struct pok_tile* tile,const struct pok_tile_data* tiledata)
+{
+    tile->data = *tiledata;
+    if (currentTileManager == NULL)
+        tile->impass = FALSE;
+    else
+        tile->impass = tile->data.tileid <= currentTileManager->impassability;
+}
+enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
+{
+    /* fields:
+        [2 bytes] id
+        [1 byte]  warp kind
+        (the remaining fields are only expected if warp kind != none)
+        [2 bytes] warp map
+        [2 bytes] warp column
+        [2 bytes] warp row */
+    enum pok_network_result result = pok_net_already;
+    if (info->fieldProg == 0) {
+        pok_data_stream_read_uint16(dsrc,&tile->data.tileid);
+        result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed) /* assign impassable status based on tile manager */
+            tile->impass = currentTileManager!=NULL ? tile->data.tileid<=currentTileManager->impassability : FALSE;
+    }
+    if (info->fieldProg == 1) {
+        pok_data_stream_read_byte(dsrc,&tile->data.warpKind);
+        result = pok_netobj_readinfo_process(info);
+        if (result==pok_net_completed && tile->data.warpKind>=pok_tile_warp_BOUND) {
+            pok_exception_new_ex(pok_ex_tile,pok_ex_tile_domain_error);
+            return pok_net_failed_protocol;
+        }
+    }
+    if (info->fieldProg == 2) {
+        if (tile->data.warpKind != pok_tile_warp_none) {
+            pok_data_stream_read_uint16(dsrc,&tile->data.warpMap);
+            result = pok_netobj_readinfo_process(info);
+        }
+        else {
+            tile->data.warpMap = 0; /* value doesn't matter since tile->warpKind==none */
+            tile->data.warpLocation.column = 0;
+            tile->data.warpLocation.row = 0;
+            info->fieldProg = 5; /* skip other fields */
+            return pok_net_completed;
+        }
+    }
+    if (info->fieldProg == 3) {
+        pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.column);
+        result = pok_netobj_readinfo_process(info);
+    }
+    if (info->fieldProg == 4) {
+        pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.row);
+        result = pok_netobj_readinfo_process(info);
+    }
+    return result;
 }
