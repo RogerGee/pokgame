@@ -29,6 +29,11 @@ enum pok_ex_default
     pok_ex_default_memory_allocation_fail
 };
 
+/* module functions */
+void pok_exception_load_module();
+void pok_exception_flag_memory_error();
+void pok_exception_unload_module();
+
 /* an exception is used by one module to report a runtime exception to another; each
    thread maintains its own stack of exceptions; an exception is popped off and 
    remains in memory until the next exception is popped off */
@@ -38,9 +43,6 @@ struct pok_exception
     enum pok_ex_kind kind;
     const char* message;
 };
-void pok_exception_load();
-void pok_exception_flag_memory_error();
-void pok_exception_unload();
 struct pok_exception* pok_exception_new();
 struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id);
 bool_t pok_exception_check();

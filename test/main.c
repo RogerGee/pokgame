@@ -6,6 +6,7 @@
 
 const char* POKGAME_NAME;
 const char* TMPDIR;
+const char* HOME;
 
 extern int net_test1();
 extern int graphics_main_test();
@@ -26,11 +27,17 @@ int main(int argc,const char* argv[])
     puts("\"");
 
     /* load modules */
-    pok_exception_load();
+    pok_exception_load_module();
 
     /* find a temporary directory */
     if ((TMPDIR = getenv("TEMPDIR")) == NULL && (TMPDIR = getenv("TMPDIR")) == NULL && (TMPDIR = getenv("TMP")) == NULL) {
         fprintf(stderr,"%s: couldn't find temporary directory in program environment\n",argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    /* find home directory */
+    if ((HOME = getenv("HOME")) == NULL) {
+        fprintf(stderr,"%s: couldn't find home directory\n",argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -44,7 +51,7 @@ int main(int argc,const char* argv[])
         graphics_main_test();
 
     /* unload modules */
-    pok_exception_unload();
+    pok_exception_unload_module();
 
     return 0;
 }

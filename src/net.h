@@ -61,6 +61,7 @@ struct pok_data_source* pok_data_source_new_local_anon();
 struct pok_data_source* pok_data_source_new_network(struct pok_network_address* address);
 struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_filemode mode,enum pok_iomode access);
 byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,size_t* bytesRead);
+bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead);
 bool_t pok_data_source_write(struct pok_data_source* dsrc,const byte_t* buffer,size_t size,size_t* bytesWritten);
 void pok_data_source_buffering(struct pok_data_source* dsrc,bool_t on);
 void pok_data_source_unread(struct pok_data_source* dsrc,size_t size);

@@ -203,6 +203,31 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
     dsrc->szRead -= *bytesRead;
     return dsrc->bufferRead + it;
 }
+bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead)
+{
+    /* perform a simpler read into a user-provided buffer (this just wraps the underlying system call) */
+    ssize_t r;
+    r = read(dsrc->fd[0],buffer,bytesRequested);
+    if (r == -1) {
+        /* read error */
+        struct pok_exception* ex;
+        ex = pok_exception_new();
+        ex->kind = pok_ex_net;
+        if (errno==EAGAIN || errno==EWOULDBLOCK)
+            ex->id = pok_ex_net_wouldblock;
+        else if (errno == EINTR)
+            ex->id = pok_ex_net_interrupt;
+        else
+            ex->id = pok_ex_net_unspec;
+        *bytesRead = 0;
+        return FALSE;
+    }
+    if (r == 0)
+        /* set EOF mode bit */
+        dsrc->mode |= DS_MODE_REACH_EOF;
+    *bytesRead = r;
+    return TRUE;
+}
 static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t size,size_t* bytesWritten,bool_t flagError)
 {
     /* utilizes a system-call to write data to the specified descriptor; if an exception was generated, FALSE

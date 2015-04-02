@@ -56,5 +56,6 @@ bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],ui
 enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
 bool_t pok_map_center_on(struct pok_map* map,const struct pok_location* location);
 bool_t pok_map_check_for_chunks(struct pok_map* map,const struct pok_location* location);
+void pok_map_render(struct pok_map* map,const struct pok_graphics_subsystem* sys,const struct pok_tile_manager* tman);
 
 #endif

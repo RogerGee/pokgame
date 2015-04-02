@@ -100,7 +100,7 @@ $(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map.o src/map.c
 
 # src targets for the library
-$(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H)
+$(OBJDIR)/image.o: src/image.c src/image-gl.c $(IMAGE_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/image.o src/image.c
 $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/error.o src/error.c

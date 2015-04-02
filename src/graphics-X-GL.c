@@ -74,29 +74,57 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl = NULL;
 }
 
+#ifdef POKGAME_DEBUG
+static void check_impl(struct pok_graphics_subsystem* sys)
+{
+    if (sys->impl == NULL)
+        pok_error(pok_error_fatal,"graphics_subsystem was not configured properly");
+}
+#endif
+
 inline void impl_reload(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     sys->impl->editFrame = TRUE;
 }
 
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     /* flag that we want the frame to be mapped to screen */
     sys->impl->doMap = TRUE;
 }
 
 inline void impl_unmap_window(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     sys->impl->doUnmap = TRUE;
 }
 
 inline void impl_lock(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     pthread_mutex_lock(&sys->impl->mutex);
 }
 
 inline void impl_unlock(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 
@@ -125,6 +153,10 @@ static int pok_input_key_to_keycode(enum pok_input_key key)
 }
 bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,enum pok_input_key key,bool_t refresh)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     if (display != NULL) {
         /* asynchronously get the state of the keyboard from the X server; return TRUE if the specified
            normal input key was pressed in this instance; only grab the keyboard state if the user specified
@@ -219,6 +251,7 @@ void close_frame(struct pok_graphics_subsystem* sys)
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
+    uint32_t wwidth, wheight;
     /* initialize global X11 connection */
     do_x_init();
     /* make the frame */
@@ -227,11 +260,15 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
         pok_error(pok_error_fatal,"fail glkMakeCurrent()");
     /* setup OpenGL */
+    wwidth = sys->dimension * sys->windowSize.columns;
+    wheight = sys->dimension * sys->windowSize.rows;
+    glPixelZoom(1,-1);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0.0,sys->dimension*sys->windowSize.columns,sys->dimension*sys->windowSize.rows,0.0,-1.0,1.0);
+    glOrtho(0.0,wwidth,wheight,0.0,-1.0,1.0);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    glViewport(0,0,wwidth,wheight);
     /* begin rendering loop */
     while (sys->impl->rendering) {
         /* check for events from the XServer */
@@ -247,7 +284,9 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
             }
             else if (evnt.type == ConfigureNotify) {
-
+                wwidth = evnt.xconfigure.width;
+                wheight = evnt.xconfigure.height;
+                glViewport(0,0,wwidth,wheight);
             }
         }
 
@@ -269,14 +308,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (sys->impl->gameRendering) {
-            /* test */
-            glColor3b(127,127,0);
-            glBegin(GL_QUADS);
-            glVertex2i(10,10);
-            glVertex2i(278,10);
-            glVertex2i(278,100);
-            glVertex2i(10,100);
-            glEnd();
+            uint16_t index;
+            /* go through and call each render function */
+            for (index = 0;index < sys->routinetop;++index)
+                (*sys->routines[index])(sys,sys->contexts[index]);
         }
 
         /* expose the backbuffer */

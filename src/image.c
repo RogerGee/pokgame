@@ -3,6 +3,10 @@
 #include "error.h"
 #include <stdlib.h>
 
+#if defined(POKGAME_OPENGL)
+#include "image-gl.c"
+#endif
+
 struct pok_image* pok_image_new()
 {
     struct pok_image* img;
@@ -14,6 +18,7 @@ struct pok_image* pok_image_new()
     img->width = 0;
     img->height = 0;
     img->pixels.dataRGB = NULL;
+    img->flags = pok_image_flag_none;
     return img;
 }
 struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pixel fillPixel)
@@ -201,6 +206,36 @@ void pok_image_free(struct pok_image* img)
     if ((img->flags&pok_image_flag_byref) == 0)
         free(img->pixels.data);
     free(img);
+}
+bool_t pok_image_load_rgb_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
+{
+    size_t bytesout;
+    size_t bytecnt;
+    struct pok_data_source* fin;
+    if (img->pixels.data != NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
+        return FALSE;
+    }
+    fin = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
+    if (fin == NULL)
+        return FALSE;
+    bytecnt = width*height * sizeof(union pixel);
+    img->pixels.dataRGB = malloc(bytecnt);
+    if (img->pixels.dataRGB == NULL) {
+        pok_exception_flag_memory_error();
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    if ( !pok_data_source_read_to_buffer(fin,img->pixels.dataRGB,bytecnt,&bytesout) ) {
+        free(img->pixels.dataRGB);
+        img->pixels.dataRGB = NULL;
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    img->width = width;
+    img->height = height;
+    pok_data_source_free(fin);
+    return TRUE;
 }
 enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
 {

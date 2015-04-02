@@ -7,6 +7,30 @@
    new tiles automatically */
 static struct pok_tile_manager* currentTileManager = NULL;
 
+void pok_tile_load_module(struct pok_tile_manager* tman)
+{
+    currentTileManager = tman;
+}
+void pok_tile_unload_module()
+{
+    currentTileManager = NULL;
+}
+
+struct pok_tile_manager* pok_tile_manager_new(const struct pok_graphics_subsystem* sys)
+{
+    struct pok_tile_manager* tman = malloc(sizeof(struct pok_tile_manager));
+    if (tman == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    pok_tile_manager_init(tman,sys);
+    return tman;
+}
+void pok_tile_manager_free(struct pok_tile_manager* tman)
+{
+    pok_tile_manager_delete(tman);
+    free(tman);
+}
 void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphics_subsystem* sys)
 {
     tman->flags = pok_tile_manager_flag_none;
@@ -15,13 +39,14 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
     tman->impassability = 1; /* black tile is impassable, everything else passable */
     tman->tileset = NULL;
     tman->tileani = NULL;
-    currentTileManager = tman;
 }
 void pok_tile_manager_delete(struct pok_tile_manager* tman)
 {
     if (tman->tilecnt > 0) {
         uint16_t i;
-        for (i = 0;i < tman->tilecnt;++i)
+        /* start at index 1 since the first tile is not owned by this manager; it is
+           the black tile owned by the graphics subsystem */
+        for (i = 1;i < tman->tilecnt;++i)
             pok_image_free(tman->tileset[i]);
         free(tman->tileset);
     }

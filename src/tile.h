@@ -50,6 +50,8 @@ struct pok_tile_manager
        tileset[tileani[id]] */
     struct pok_tile_ani_data* tileani;
 };
+struct pok_tile_manager* pok_tile_manager_new(const struct pok_graphics_subsystem* sys);
+void pok_tile_manager_free(struct pok_tile_manager* tman);
 void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphics_subsystem* sys);
 void pok_tile_manager_delete(struct pok_tile_manager* tman);
 bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,byte_t* data,bool_t byRef);
@@ -57,6 +59,10 @@ bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,str
 enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 struct pok_image* pok_tile_manager_get_tile(struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks);
+
+/* module functions */
+void pok_tile_load_module(struct pok_tile_manager* tman);
+void pok_tile_unload_module();
 
 /* static tile representation */
 struct pok_tile_data
