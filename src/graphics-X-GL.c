@@ -201,9 +201,11 @@ void do_x_close()
 }
 void make_frame(struct pok_graphics_subsystem* sys)
 {
+    int width, height;
     unsigned int vmask;
     XSetWindowAttributes attrs;
     Colormap cmap;
+    XSizeHints hints;
     /* prepare X window parameters */
     cmap = XCreateColormap(display,RootWindow(display,visual->screen),visual->visual,AllocNone);
     vmask = CWBorderPixel | CWColormap | CWEventMask;
@@ -211,11 +213,13 @@ void make_frame(struct pok_graphics_subsystem* sys)
     attrs.colormap = cmap;
     attrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask;
     /* create the X Window */
+    width = sys->dimension * sys->windowSize.columns;
+    height = sys->dimension * sys->windowSize.rows;
     sys->impl->window = XCreateWindow(display,
         RootWindow(display,visual->screen),
         0, 0,
-        sys->dimension * sys->windowSize.columns,
-        sys->dimension * sys->windowSize.rows,
+        width,
+        height,
         5, visual->depth,
         InputOutput,
         visual->visual,
@@ -224,6 +228,11 @@ void make_frame(struct pok_graphics_subsystem* sys)
     /* catch delete messages (enable X button) */
     sys->impl->del = XInternAtom(display,"WM_DELETE_WINDOW",False);
     XSetWMProtocols(display,sys->impl->window,&sys->impl->del,1);
+    /* make the frame non-resizable */
+    hints.flags = PMaxSize | PMinSize;
+    hints.min_width = width; hints.max_width = width;
+    hints.min_height = height; hints.max_height = height;
+    XSetWMNormalHints(display,sys->impl->window,&hints);
     /* set title bar text */
     XStoreName(display,sys->impl->window,sys->title.buf);
     /* create the GL rendering context */
@@ -233,11 +242,20 @@ void make_frame(struct pok_graphics_subsystem* sys)
 }
 void edit_frame(struct pok_graphics_subsystem* sys)
 {
-    /* edit the frame size */
+    int width, height;
+    XSizeHints hints;
+    width = sys->dimension * sys->windowSize.columns;
+    height = sys->dimension * sys->windowSize.rows;
+    /* respecify window limits */
+    hints.flags = PMaxSize | PMinSize;
+    hints.min_width = width; hints.max_width = width;
+    hints.min_height = height; hints.max_height = height;
+    XSetWMNormalHints(display,sys->impl->window,&hints);
+    /* edit the frame size and title */
     XResizeWindow(display,
         sys->impl->window,
-        sys->dimension * sys->windowSize.columns,
-        sys->dimension * sys->windowSize.rows);
+        width,
+        height);
     XStoreName(display,sys->impl->window,sys->title.buf);
 }
 void close_frame(struct pok_graphics_subsystem* sys)
@@ -266,6 +284,8 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0.0,wwidth,wheight,0.0,-1.0,1.0);
+    /* set the modelview matrix to identity; this may be adjusted by any graphics routine
+       during the game loop; assume that the routines play nice and reset it */
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glViewport(0,0,wwidth,wheight);
@@ -304,7 +324,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
             sys->impl->doUnmap = FALSE;
         }
 
-        glClearColor(24,24,24,0);
+        glClearColor(0,0,0,0); /* we need this to be black */
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (sys->impl->gameRendering) {
@@ -325,4 +345,16 @@ done:
     close_frame(sys);
     do_x_close();
     return NULL;
+}
+
+/* misc graphics routines */
+
+void pok_image_render(struct pok_image* img,uint32_t x,uint32_t y)
+{
+    /* raster graphic rendering routine implemented with OpenGL */
+    glRasterPos2i(x,y);
+    if (img->flags & pok_image_flag_alpha)
+        glDrawPixels(img->width,img->height,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
+    else
+        glDrawPixels(img->width,img->height,GL_RGB,GL_UNSIGNED_BYTE,img->pixels.data);
 }

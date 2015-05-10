@@ -1,6 +1,7 @@
 /* graphics.c - pokgame */
 #include "graphics.h"
 #include "error.h"
+#include "protocol.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,6 +45,8 @@ static void pok_graphics_subsystem_zeroset_parameters(struct pok_graphics_subsys
     sys->windowSize.rows = 0;
     sys->playerLocation.column = 0;
     sys->playerLocation.row = 0;
+    sys->_playerLocationInv.column = 0;
+    sys->_playerLocationInv.row = 0;
     sys->playerOffsetX = 0;
     sys->playerOffsetY = 0;
 }
@@ -61,6 +64,15 @@ void pok_graphics_subsystem_delete(struct pok_graphics_subsystem* sys)
     pok_graphics_subsystem_end(sys);
     pok_string_delete(&sys->title);
     pok_image_free(sys->blacktile);
+}
+static void pok_graphics_subsystem_after_assign(struct pok_graphics_subsystem* sys)
+{
+    /* computed inverted player location; these metrics are cached for the implementation
+       so they do not have to be recomputed every time a rendering routine requires them;
+       sys->playerLocation tells how many columns/rows are to the left/above the player; the
+       sys->_playerLocationInv field tells how many columns/rows are to the right/below the player */
+    sys->_playerLocationInv.column = sys->windowSize.columns - sys->playerLocation.column - 1;
+    sys->_playerLocationInv.row = sys->windowSize.rows - sys->playerLocation.row - 1;
 }
 void pok_graphics_subsystem_reset(struct pok_graphics_subsystem* sys)
 {
@@ -82,6 +94,7 @@ bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys)
     sys->playerLocation.row = DEFAULT_PLAYER_LOCATION_Y;
     sys->playerOffsetX = DEFAULT_PLAYER_OFFSET_X;
     sys->playerOffsetY = DEFAULT_PLAYER_OFFSET_Y;
+    pok_graphics_subsystem_after_assign(sys);
     pok_string_concat(&sys->title,"default");
     if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,blackPixel)) == NULL)
         return FALSE;
@@ -162,6 +175,8 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
     if (info->fieldProg == 7) {
         pok_data_stream_read_string_ex(dsrc,&sys->title);
         result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed)
+            pok_graphics_subsystem_after_assign(sys);
     }
     return result;
 }

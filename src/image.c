@@ -1,11 +1,8 @@
 /* image.c - pokgame */
 #include "image.h"
 #include "error.h"
+#include "protocol.h"
 #include <stdlib.h>
-
-#if defined(POKGAME_OPENGL)
-#include "image-gl.c"
-#endif
 
 struct pok_image* pok_image_new()
 {

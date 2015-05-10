@@ -1,7 +1,9 @@
 /* sprite.h - pokgame */
 #ifndef POKGAME_SPRITE_H
 #define POKGAME_SPRITE_H
-#include "graphics.h" /* gets 'net' and 'image' */
+#include "net.h"
+#include "image.h"
+#include "graphics.h"
 
 /* the elements in this enum will map directory to indeces for
    sprite frames */

@@ -1,6 +1,7 @@
 /* tile.c - pokgame */
 #include "tile.h"
 #include "error.h"
+#include "protocol.h"
 #include <stdlib.h>
 
 /* we cache the last created tile manager so that we can use it to configure
@@ -234,7 +235,7 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
     }
     return result;
 }
-struct pok_image* pok_tile_manager_get_tile(struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks)
+struct pok_image* pok_tile_manager_get_tile(const struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks)
 {
     struct pok_image* img;
     if (tileid >= tman->tilecnt)

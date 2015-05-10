@@ -59,10 +59,10 @@ POK_H = src/pok.h $(PROTOCOL_H) $(TYPES_H)
 ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
 IMAGE_H = src/image.h $(NET_H)
-GRAPHICS_H = src/graphics.h $(IMAGE_H)
-TILE_H = src/tile.h $(GRAPHICS_H)
-SPRITE_H = src/sprite.h $(GRAPHICS_H)
-MAP_H = src/map.h $(TILE_H)
+GRAPHICS_H = src/graphics.h $(NET_H) $(IMAGE_H)
+TILE_H = src/tile.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
+SPRITE_H = src/sprite.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
+MAP_H = src/map.h $(NET_H) $(TILE_H) $(GRAPHICS_H)
 
 # object code files: library objects are used both by clients and 
 OBJECTS = graphics.o tile.o sprite.o map.o
@@ -90,17 +90,17 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB)
 
 # src targets (only for the game client)
-$(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c $(GRAPHICS_H) $(ERROR_H)
+$(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
-$(OBJDIR)/tile.o: src/tile.c $(TILE_H) $(ERROR_H)
+$(OBJDIR)/tile.o: src/tile.c $(TILE_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tile.o src/tile.c
 $(OBJDIR)/sprite.o: src/sprite.c $(SPRITE_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/sprite.o src/sprite.c
-$(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H)
+$(OBJDIR)/map.o: src/map.c src/map-gl.c $(MAP_H) $(ERROR_H) $(POK_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map.o src/map.c
 
 # src targets for the library
-$(OBJDIR)/image.o: src/image.c src/image-gl.c $(IMAGE_H) $(ERROR_H)
+$(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/image.o src/image.c
 $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/error.o src/error.c

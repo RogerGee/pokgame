@@ -60,6 +60,8 @@ void pok_netobj_readinfo_delete(struct pok_netobj_readinfo* info)
 {
     if (info->next != NULL)
         pok_netobj_readinfo_free(info->next);
+    if (info->aux != NULL)
+        free(info->aux);
 }
 enum pok_network_result pok_netobj_readinfo_process(struct pok_netobj_readinfo* info)
 {
@@ -144,13 +146,18 @@ void pok_netobj_delete(struct pok_netobj* netobj)
 }
 enum pok_network_result pok_netobj_netread(struct pok_netobj* netobj,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
 {
+    /* fields
+       [4 bytes] id
+     */
     enum pok_network_result result = pok_net_already;
     if (info->fieldProg == 0) {
         pok_data_stream_read_uint32(dsrc,&netobj->id);
         result = pok_netobj_readinfo_process(info);
         /* if successful, add the network object to the system */
         if (result == pok_net_completed) {
-            treemap_insert(&netobjs,netobj);
+            if (treemap_insert(&netobjs,netobj) != 0)
+                /* id should be unique */
+                return pok_net_failed_protocol;
             netobj->kind = pok_netobj_unknown;
         }
     }

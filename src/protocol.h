@@ -30,5 +30,16 @@ enum pok_map_flags
     pok_map_flag_dynamic = 0x01 /* make requests to obtain more chunks */
 };
 
+/* protocol limits */
+
+enum pok_limits
+{
+    MAX_TILE_IMAGES = 1024,
+
+    MAX_DIMENSION = 128,
+    MIN_DIMENSION = 8,
+    MAX_IMAGE_DIMENSION = 1024,
+    MAX_MAP_CHUNK_DIMENSION = 128
+};
 
 #endif

@@ -1,14 +1,13 @@
 /* graphics.h - pokgame */
 #ifndef POKGAME_GRAPHICS_H
 #define POKGAME_GRAPHICS_H
-#include "image.h" /* gets net.h */
+#include "net.h"
+#include "image.h"
 
 /* constants */
 enum pok_graphics_constants
 {
     MAX_GRAPHICS_ROUTINES = 32,
-    MAX_DIMENSION = 128,
-    MIN_DIMENSION = 8,
     MAX_WINDOW_PIXEL_WIDTH = 1280,
     MAX_WINDOW_PIXEL_HEIGHT = 768,
     DEFAULT_DIMENSION = 32,
@@ -55,8 +54,9 @@ struct pok_graphics_subsystem
 {
     /* init info: this information is set by default or sent by a game server */
     uint16_t dimension; /* tile and sprite dimension */
-    struct pok_size windowSize; /* size of viewable window */
-    struct pok_location playerLocation; /* window location of player sprite (must be within 'windowSize') */
+    struct pok_size windowSize; /* dimensionalized size of viewable window */
+    struct pok_location playerLocation; /* dimensionalized window location of player sprite (must be within 'windowSize') */
+    struct pok_location _playerLocationInv; /* (used by the implementation) */
     uint16_t playerOffsetX, playerOffsetY; /* pixel offset for player sprite (must be within 'dimension') */
 
     /* graphics routines called by the subsystem */
@@ -65,7 +65,7 @@ struct pok_graphics_subsystem
     void* contexts[MAX_GRAPHICS_ROUTINES];
 
     /* misc info used by rendering contexts */
-    struct pok_image* blacktile;
+    struct pok_image* blacktile; /* solid black tile image */
 
     /* implementation-specific information */
     struct _pok_graphics_subsystem_impl* impl;
@@ -87,5 +87,8 @@ void pok_graphics_subsystem_end(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_register(struct pok_graphics_subsystem* sys,graphics_routine_t routine,void* context);
 void pok_graphics_subsystem_unregister(struct pok_graphics_subsystem* sys,graphics_routine_t routine);
 bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,enum pok_input_key key,bool_t refresh);
+
+/* other graphics-related routines */
+void pok_image_render(struct pok_image* img,uint32_t x,uint32_t y);
 
 #endif
