@@ -33,7 +33,7 @@ ifneq "$(or $(MAKE_DEBUG),$(MAKE_TEST))" ""
 LIB = -lGL -lX11 -lpthread -ldstructs
 MACROS_DEBUG = -DPOKGAME_DEBUG
 COMPILE = gcc -c -g -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors -Wno-unused-parameter -Wno-unused-variable\
-		-Wno-unused-function $(MACROS) $(MACROS_DEBUG)
+		-Wno-unused-function -std=gnu99 $(MACROS) $(MACROS_DEBUG)
 COMPILE_SHARED = $(COMPILE)
 LINK = gcc
 OBJDIR = $(OBJECT_DIRECTORY_DEBUG)
@@ -45,7 +45,7 @@ endif
 else
 LIB = -lGL -lX11 -lpthread -lpokgame
 #MACROS_RELEASE =
-COMPILE = gcc -c -O3 -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors $(MACROS)#$(MACROS_RELEASE)
+COMPILE = gcc -c -O3 -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors -std=gnu99 $(MACROS)#$(MACROS_RELEASE)
 COMPILE_SHARED = $(COMPILE) -fPIC
 LINK = gcc -s
 OBJDIR = $(OBJECT_DIRECTORY)
@@ -70,7 +70,7 @@ OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o types.o pok-util.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
 ifdef MAKE_TEST
-TEST_OBJECTS = main.o nettest.o graphicstest.o
+TEST_OBJECTS = main.o nettest.o graphicstest1.o
 OBJECTS := $(OBJECTS) $(addprefix $(OBJECT_DIRECTORY_TEST)/,$(TEST_OBJECTS))
 endif
 
@@ -116,8 +116,8 @@ $(OBJECT_DIRECTORY_TEST)/main.o: test/main.c
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
 $(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
-$(OBJECT_DIRECTORY_TEST)/graphicstest.o: test/graphicstest.c $(GRAPHICS_H) $(ERROR_H)
-	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/graphicstest.o test/graphicstest.c
+$(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILE_H) $(MAP_H) $(ERROR_H)
+	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/graphicstest1.o test/graphicstest1.c
 
 # other targets
 $(OBJDIR):

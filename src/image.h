@@ -7,7 +7,6 @@
 enum pok_ex_image
 {
     pok_ex_image_unrecognized_format, /* image data format was unrecognized */
-    pok_ex_image_protocol_error, /* network data did not adhere to the image protocol */
     pok_ex_image_too_big, /* image resolution was too big */
     pok_ex_image_invalid_subimage, /* subimage does not exist */
     pok_ex_image_already_loaded /* image was already initialized */
@@ -49,10 +48,10 @@ struct pok_image
 struct pok_image* pok_image_new(); /* new empty image */
 struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pixel fillPixel);
 struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union alpha_pixel fillPixel);
-struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,byte_t* dataRGB);
-struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,byte_t* dataRGBA);
-struct pok_image* pok_image_new_byref_rgb(uint32_t width,uint32_t height,byte_t* dataRGB);
-struct pok_image* pok_image_new_byref_rgba(uint32_t width,uint32_t height,byte_t* dataRGBA);
+struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const byte_t* dataRGB);
+struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const byte_t* dataRGBA);
+struct pok_image* pok_image_new_byref_rgb(uint32_t width,uint32_t height,const byte_t* dataRGB);
+struct pok_image* pok_image_new_byref_rgba(uint32_t width,uint32_t height,const byte_t* dataRGBA);
 struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32_t y,uint32_t width,uint32_t height);
 void pok_image_free(struct pok_image* img);
 bool_t pok_image_load_rgb(struct pok_image* img,const char* file);

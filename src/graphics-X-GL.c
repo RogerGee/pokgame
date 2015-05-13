@@ -148,8 +148,32 @@ static int pok_input_key_to_keycode(enum pok_input_key key)
         return XK_Left;
     case pok_input_key_RIGHT:
         return XK_Right;
+    default:
+        return -1;
     }
     return -1;
+}
+static enum pok_input_key pok_input_key_from_keycode(int keycode)
+{
+    switch (keycode) {
+    case XK_Z:
+        return pok_input_key_ABUTTON;
+    case XK_X:
+        return pok_input_key_BBUTTON;
+    case XK_Return:
+        return pok_input_key_ENTER;
+    case XK_BackSpace:        
+        return pok_input_key_ALT;
+    case XK_Up:
+        return pok_input_key_UP;
+    case XK_Down:
+        return pok_input_key_DOWN;
+    case XK_Left:
+        return pok_input_key_LEFT;
+    case XK_Right:
+        return pok_input_key_RIGHT;
+    }
+    return pok_input_key_unknown;
 }
 bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,enum pok_input_key key,bool_t refresh)
 {
@@ -211,7 +235,7 @@ void make_frame(struct pok_graphics_subsystem* sys)
     vmask = CWBorderPixel | CWColormap | CWEventMask;
     attrs.border_pixel = 0;
     attrs.colormap = cmap;
-    attrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask;
+    attrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask;
     /* create the X Window */
     width = sys->dimension * sys->windowSize.columns;
     height = sys->dimension * sys->windowSize.rows;
@@ -307,6 +331,11 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
                 wwidth = evnt.xconfigure.width;
                 wheight = evnt.xconfigure.height;
                 glViewport(0,0,wwidth,wheight);
+            }
+            else if (evnt.type == KeyRelease) {
+                KeySym sym = XLookupKeysym(&evnt.xkey,0);
+                if (sys->keyup != NULL)
+                    (*sys->keyup)( pok_input_key_from_keycode(sym) );
             }
         }
 

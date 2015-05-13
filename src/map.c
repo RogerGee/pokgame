@@ -12,7 +12,7 @@ struct chunk_render_info
     struct pok_location loc;
     struct pok_map_chunk* chunk;
 };
-static void compute_chunk_render_info(struct chunk_render_info* chunks,
+void compute_chunk_render_info(struct chunk_render_info* chunks, /* this is 'extern' for debugging */
     const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
 
 #if defined(POKGAME_OPENGL)
@@ -37,6 +37,13 @@ static void chunk_insert_hint_init(struct chunk_insert_hint* hint,uint16_t cCnt,
     hint->column = NULL;
     hint->row = NULL;
 }
+
+struct chunk_recursive_info
+{
+    struct pok_data_source* dsrc;
+    struct pok_size* chunkSize;
+    bool_t complexTiles;
+};
 
 /* pok_map_chunk */
 
@@ -67,8 +74,8 @@ static struct pok_map_chunk* pok_map_chunk_new(const struct pok_size* size)
     }
     for (i = 0;i < 4;++i)
         chunk->adjacent[i] = NULL;
-    chunk->counter = 0;
     chunk->flags = pok_map_chunk_flag_none;
+    chunk->discov = FALSE;
     pok_netobj_default_ex(&chunk->_base,pok_netobj_mapchunk);
     return chunk;
 }
@@ -90,29 +97,94 @@ static struct pok_map_chunk* pok_map_chunk_new_ex(uint16_t rows,bool_t byref)
         chunk->data[i] = NULL;
     for (i = 0;i < 4;++i)
         chunk->adjacent[i] = NULL;
-    chunk->counter = 0;
     chunk->flags = byref ? pok_map_chunk_flag_byref : pok_map_chunk_flag_none;
+    chunk->discov = FALSE;
     pok_netobj_default_ex(&chunk->_base,pok_netobj_mapchunk);
     return chunk;    
 }
 static void pok_map_chunk_free(struct pok_map_chunk* chunk,uint16_t rows)
 {
     uint16_t i;
-    if ((chunk->flags&pok_map_chunk_flag_byref) == 0)
+    if ((chunk->flags&pok_map_chunk_flag_byref) == 0 && chunk->data != NULL)
         for (i = 0;i < rows;++i)
             free(chunk->data[i]);
     free(chunk->data);
     pok_netobj_delete(&chunk->_base);
-    /* free adjacent chunks as well */
+    /* recursively delete adjacent chunks */
+    chunk->discov = TRUE;
     for (i = 0;i < 4;++i) {
         if (chunk->adjacent[i] != NULL) {
-            /* stop the chunk from trying to recursively free this chunk (we are already
-               being freed in this context) */
-            chunk->adjacent[i]->adjacent[pok_direction_opposite(i)] = NULL;
-            pok_map_chunk_free(chunk->adjacent[i],rows);
+            /* destroy the reverse adjacency information */
+            chunk->adjacent[i]->adjacent[ pok_direction_opposite(i) ] = NULL;
+            if (!chunk->adjacent[i]->discov)
+                pok_map_chunk_free(chunk->adjacent[i],rows);
         }
     }
     free(chunk);
+}
+static bool_t pok_map_chunk_save(struct pok_map_chunk* chunk,struct chunk_recursive_info* info)
+{
+    int i;
+    uint8_t mask = 0x00;
+    /* compute adjacency mask */
+    for (i = 0;i < 4;++i)
+        if (chunk->adjacent[i] != NULL)
+            mask |= 1 << i;
+    return FALSE;
+}
+static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recursive_info* info)
+{
+    /* fields:
+        [byte] bitmask specifying adjacencies to load (use 'enum pok_direction'+1 to mask)
+        (recursively read the adjacencies)
+        [chunk-width * chunk-height * n bytes] tile data
+    */
+    int i;
+    byte_t adj;
+    uint16_t c, r;
+    /* read adjacency bitmask */
+    if ( !pok_data_stream_read_byte(info->dsrc,&adj) )
+        return FALSE;
+    /* recursively create adjacencies */
+    for (i = 0;i < 4;++i) {
+        if ((adj & 1<<i) != 0) {
+            int op = pok_direction_opposite(i),
+                orthog1 = pok_direction_orthog1(i),
+                orthog2 = pok_direction_orthog2(i);
+            /* diagonals could imply existing adjacencies; for example:
+                 X | Y
+                 -----  if this is chunk X, then chunk Y or Z could already exist as they
+                 Z | W  could have been created by W
+            */
+            if (chunk->adjacent[orthog1] != NULL && chunk->adjacent[orthog1]->adjacent[i] != NULL
+                && chunk->adjacent[orthog1]->adjacent[i]->adjacent[orthog2] != NULL)
+                chunk->adjacent[i] = chunk->adjacent[orthog1]->adjacent[i]->adjacent[orthog2];
+            if (chunk->adjacent[orthog2] != NULL && chunk->adjacent[orthog2]->adjacent[i] != NULL
+                    && chunk->adjacent[orthog2]->adjacent[i]->adjacent[orthog1] != NULL)
+                chunk->adjacent[i] = chunk->adjacent[orthog2]->adjacent[i]->adjacent[orthog1];
+            if (chunk->adjacent[i] == NULL) {
+                chunk->adjacent[i] = pok_map_chunk_new(info->chunkSize);
+                chunk->adjacent[i]->adjacent[op] = chunk;
+                pok_map_chunk_open(chunk->adjacent[i],info);
+            }
+            else
+                chunk->adjacent[i]->adjacent[op] = chunk;
+        }
+    }
+    /* base case: read chunk data */
+    for (r = 0;r < info->chunkSize->rows;++r) {
+        for (c = 0;c < info->chunkSize->columns;++c) {
+            if (!info->complexTiles) {
+                uint16_t id;
+                if ( !pok_data_stream_read_uint16(info->dsrc,&id) )
+                    return FALSE;
+                pok_tile_init(chunk->data[r]+c,id);
+            }
+            else if ( !pok_tile_open(chunk->data[r]+c,info->dsrc) )
+                return FALSE;
+        }
+    }
+    return TRUE;
 }
 static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info,struct pok_size* size)
@@ -186,11 +258,20 @@ void pok_map_init(struct pok_map* map)
 void pok_map_delete(struct pok_map* map)
 {
     map->chunk = NULL;
-    pok_map_chunk_free(map->origin,map->chunkSize.rows);
-    map->origin = NULL;
+    if (map->origin != NULL) {
+        pok_map_chunk_free(map->origin,map->chunkSize.rows);
+        map->origin = NULL;
+    }
 }
-bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc)
+bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t complex)
 {
+    /* write the map representation to a file
+        format:
+        [1 byte] if non-zero then complex tile data is stored; otherwise simple
+        [2 bytes] chunk width
+        [2 bytes] chunk height
+        [n bytes] origin chunk (and its adjacencies)
+    */
     if (map->origin == NULL) {
 
     }
@@ -198,8 +279,37 @@ bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc)
 }
 bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
 {
+    /* read the map representation from a file (the representation produced by 'pok_map_save')
+        format:
+         [1 byte] if non-zero, then complex tile data is stored; otherwise simple tile data
+         [2 bytes] chunk width
+         [2 bytes] chunk height
+         [n bytes] read origin chunk (and its adjacencies)
+    */
     if (map->origin == NULL) {
-
+        struct chunk_recursive_info info;
+        if ( !pok_data_stream_read_byte(dsrc,&info.complexTiles) )
+            return FALSE;
+        /* read chunk dimensions */
+        if (!pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns) || !pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows))
+            return FALSE;
+        /* ensure chunk dimensions are correct */
+        if (map->chunkSize.columns == 0 || map->chunkSize.columns > MAX_MAP_CHUNK_DIMENSION
+            || map->chunkSize.rows == 0 || map->chunkSize.rows > MAX_MAP_CHUNK_DIMENSION) {
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
+            return FALSE;
+        }
+        /* read origin chunk; this will recursively read all chunks in the map */
+        map->origin = pok_map_chunk_new(&map->chunkSize);
+        if (map->origin == NULL)
+            return FALSE;
+        info.dsrc = dsrc;
+        info.chunkSize = &map->chunkSize;
+        if ( pok_map_chunk_open(map->origin,&info) ) {
+            map->chunk = map->origin;
+            /* measure the map by traversing from the origin */
+            return TRUE;
+        }
     }
     return FALSE;
 }
@@ -238,18 +348,20 @@ static void pok_map_insert_chunk(struct pok_map* map,struct pok_map_chunk* chunk
 }
 bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],uint32_t columns,uint32_t rows)
 {
+    /* load a map based on a rectangular tile configuration */
     if (map->origin == NULL) {
         uint16_t i, j;
+        struct pok_size mapArea;
         struct pok_size lefttop, rightbottom;
         const struct pok_tile_data* td[3];
         struct chunk_insert_hint hint;
-        map->mapSize = pok_util_compute_chunk_size(columns,rows,MAX_MAP_CHUNK_DIMENSION,&map->chunkSize,&lefttop,&rightbottom);
-        chunk_insert_hint_init(&hint,map->mapSize.columns,map->mapSize.rows);
+        mapArea = pok_util_compute_chunk_size(columns,rows,MAX_MAP_CHUNK_DIMENSION,&map->chunkSize,&lefttop,&rightbottom);
+        chunk_insert_hint_init(&hint,mapArea.columns,mapArea.rows);
         td[0] = tiledata;
-        for (i = 0;i < map->mapSize.rows;++i) {
+        for (i = 0;i < mapArea.rows;++i) {
             struct pok_size size;
             td[1] = td[0];
-            for (j = 0;j < map->mapSize.columns;++j) {
+            for (j = 0;j < mapArea.columns;++j) {
                 uint16_t k, l, m, n, o;
                 struct pok_map_chunk* chunk = pok_map_chunk_new(&map->chunkSize);
                 if (chunk == NULL)
@@ -264,7 +376,7 @@ bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],ui
                             pok_tile_init(chunk->data[m]+k,0);
                     size.rows -= lefttop.rows;
                 }
-                if (i+1 == map->mapSize.rows) {
+                if (i+1 == mapArea.rows) {
                     for (l = map->chunkSize.rows-rightbottom.rows;l < map->chunkSize.rows;++l)
                         for (k = 0;k < map->chunkSize.columns;++k)
                             pok_tile_init(chunk->data[l]+k,0);
@@ -279,7 +391,7 @@ bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],ui
                             pok_tile_init(chunk->data[k]+n,0);
                     size.columns -= lefttop.columns;
                 }
-                if (j+1 == map->mapSize.columns) {
+                if (j+1 == mapArea.columns) {
                     for (o = map->chunkSize.columns-rightbottom.columns;o < map->chunkSize.rows;++o)
                         /* we have already blacked-out all the columns in the last 'l' rows */
                         for (k = 0;k < l;++k)
@@ -322,7 +434,8 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
           [...] netread chunk
 
         The peer is expected to send map chunks in row-major order corresponding to the
-        dimensions sent in the fields before the map chunks.
+        dimensions sent in the fields before the map chunks. A map may have an irregular
+        size, however the initial chunks sent by 'netread' must form a rectangular grid.
     */
     uint16_t i;
     enum pok_network_result result = pok_net_already;
@@ -333,10 +446,20 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
     if (info->fieldProg == 1) {
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns);
         result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed && 
+            (map->chunkSize.columns == 0 || map->chunkSize.columns > MAX_MAP_CHUNK_DIMENSION)) {
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
+            return pok_net_failed_protocol;
+        }
     }
     if (info->fieldProg == 2) {
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows);
         result = pok_netobj_readinfo_process(info);
+        if (result == pok_net_completed && 
+            (map->chunkSize.rows == 0 || map->chunkSize.rows > MAX_MAP_CHUNK_DIMENSION)) {
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
+            return pok_net_failed_protocol;
+        }
     }
     if (info->fieldProg == 3) {
         pok_data_stream_read_uint16(dsrc,&info->depth[0]);
@@ -444,7 +567,6 @@ void pok_map_render_context_align(struct pok_map_render_context* context,bool_t 
 bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_location* location)
 {
     int d[2];
-    bool_t flag;
     enum pok_direction dirs[2];
     struct pok_location pos;
     struct pok_map_chunk* chunk;
@@ -457,22 +579,37 @@ bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,c
         ? (dirs[0] = pok_direction_left, -context->map->chunkSize.columns) : (dirs[0] = pok_direction_right, context->map->chunkSize.columns);
     d[1] = pos.row > location->row
         ? (dirs[1] = pok_direction_up, -context->map->chunkSize.rows) : (dirs[1] = pok_direction_down, context->map->chunkSize.rows);
+    /* locate the chunk that contains the desired location; note that the map can be irregular (e.g. not rectangular) */
     do {
-        flag = FALSE;
+        bool_t fA, fB;
+        struct pok_map_chunk* A, *B;
+        fA = FALSE; A = NULL;
+        fB = FALSE; B = NULL;
+        /* advance along the width of the map if needed */
         if (pok_unsigned_diff(location->column,pos.column) >= context->map->chunkSize.columns) {
             pos.column += d[0];
-            chunk = chunk->adjacent[dirs[0]];
-            flag = TRUE;
+            A = chunk->adjacent[dirs[0]];
+            fA = TRUE;
         }
+        /* advance along the height of the map if needed */
         if (pok_unsigned_diff(location->row,pos.row) >= context->map->chunkSize.rows) {
             pos.row += d[1];
-            chunk = chunk->adjacent[dirs[1]];
-            flag = TRUE;
+            B = chunk->adjacent[dirs[1]];
+            fB = TRUE;
         }
-        /* we pushed outside the map */
-        if (chunk == NULL)
-            return FALSE;
-    } while (flag);
+        if (!fA && !fB)
+            break; /* we found it! */
+        if ((fA && A == NULL) || (fB && B == NULL))
+            return FALSE; /* we pushed outside the map */
+        if (A != NULL && B != NULL) /* choose the diagonal (column and row were not yet sufficient) */
+            chunk = A->adjacent[dirs[1]]; /* equivilent to B->adjacent[dirs[0]] (they are orthogonal) */
+        else if (A != NULL)
+            chunk = A;
+        else
+            chunk = B;
+    } while (chunk != NULL);
+    if (chunk == NULL)
+        return FALSE;
     context->map->pos = *location;
     context->map->chunk = chunk;
     /* align the context on the new position */
@@ -484,36 +621,45 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,enum
     /* change the map position by 1 position unit in the specified direction; if this is not possible,
        then leave the map (and the render context) unchanged and return FALSE; otherwise update the relative
        position; if we leave the current chunk then update the context; if we walk into an area close to the
-       edge of the 3x3 chunk grid, then re-align the grid around the edge chunk */
+       edge of the 3x3 chunk grid, then re-align the grid around the edge chunk; note that maps can have an
+       irregular size, so for the south and east directions the absence of a chunk bounds the map */
     if (dir == pok_direction_up) {
         if (context->map->pos.row == 0)
             return FALSE;
+        --context->map->pos.row;
         if (context->relpos.row > 0) {
-            --context->map->pos.row;
+            --context->relpos.row;
             if (context->focus[1] == 0 && context->relpos.row <= context->map->chunkSize.rows/2)
                 pok_map_render_context_align(context,FALSE);
         }
         else {
             context->relpos.row = context->map->chunkSize.rows-1;
             --context->focus[1]; /* this will always be in range (focus[1] > 0 before the operation) */
+            context->map->chunk = context->map->chunk->adjacent[dir];
         }
     }
     else if (dir == pok_direction_down) {
-        if (context->map->pos.row+1 >= context->map->mapSize.rows)
-            return FALSE;
         if (context->relpos.row < context->map->chunkSize.rows-1) {
             ++context->relpos.row;
+            ++context->map->pos.row;
             if (context->focus[1] == 2 && context->relpos.row >= context->map->chunkSize.rows/2)
                 pok_map_render_context_align(context,FALSE);
         }
+        /* focus[1] will always be in range (focus[1] <= 1 before the operation) */
+        else if (context->viewingChunks[context->focus[0]][context->focus[1]+1] == NULL)
+            return FALSE; /* there is not a chunk to the south */
         else {
+            /* focus on the new chunk */
             context->relpos.row = 0;
-            ++context->focus[1]; /* this will always be in range (focus[1] <= 1 before the operation) */
+            ++context->map->pos.row;
+            ++context->focus[1];
+            context->map->chunk = context->map->chunk->adjacent[dir];
         }
     }
     else if (dir == pok_direction_left) {
         if (context->map->pos.column == 0)
             return FALSE;
+        --context->map->pos.column;
         if (context->relpos.column > 0) {
             --context->relpos.column;
             if (context->focus[0] == 0 && context->relpos.column <= context->map->chunkSize.columns/2)
@@ -522,21 +668,27 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,enum
         else {
             context->relpos.column = context->map->chunkSize.columns-1;
             --context->focus[0]; /* this will always be in range (focus[0] >= 1 before the operation) */
+            context->map->chunk = context->map->chunk->adjacent[dir];
         }
     }
-    else /*if (dir == pok_direction_right)*/ {
-        if (context->map->pos.column+1 >= context->map->mapSize.columns)
-            return FALSE;
+    else if (dir == pok_direction_right) {
         if (context->relpos.column < context->map->chunkSize.columns-1) {
             ++context->relpos.column;
+            ++context->map->pos.column;
             if (context->focus[0] == 2 && context->relpos.column >= context->map->chunkSize.columns/2)
                 pok_map_render_context_align(context,FALSE);
         }
+        /* focus[0] will always be in range (focus[0] <= 1 before the operation) */
+        else if (context->viewingChunks[context->focus[0]+1][context->focus[1]] == NULL)
+            return FALSE; /* there is no chunk to the east */
         else {
             context->relpos.column = 0;
-            ++context->focus[0]; /* this will always be in range (focus[0] <= 1 before the operation) */
+            ++context->focus[0];
+            context->map->chunk = context->map->chunk->adjacent[dir];
         }
     }
+    else
+        return FALSE;
     return TRUE;
 }
 
@@ -549,6 +701,8 @@ void compute_chunk_render_info(struct chunk_render_info* info,
        (but the dimensions should be correct for any multi-chunk map, otherwise undefined behavior will result) */
     int i, d[2];
     uint16_t u, v;
+    /* chunks: chunk1 is always the horizontally adjacent chunk (if any) and
+       chunk2 is always the vertically adjacent chunk (if any) */
     for (i = 0;i < 4;++i)
         info[i].chunk = NULL;
     info[0].px = info[0].py = 0;
@@ -609,7 +763,7 @@ void compute_chunk_render_info(struct chunk_render_info* info,
             v = sys->_playerLocationInv.row - u; /* how many rows below in viewing area? */
             info[0].down -= v;
             /* set dimensions for adjacent chunk */
-            info[2].px = sys->dimension * info[0].down;
+            info[2].py = sys->dimension * info[0].down;
             info[2].down = v;
             info[2].loc.row = 0;
             info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]+1]; /* straight down */
@@ -631,12 +785,12 @@ void compute_chunk_render_info(struct chunk_render_info* info,
     if (info[1].chunk!=NULL && info[2].chunk!=NULL) {
         /* we need to pull from a diagonal chunk; chunk 3 will be vertically identical
            to chunk 1 and horizontally identical to chunk 2 */
-        info[3].py = info[1].py;
-        info[3].down = info[1].down;
-        info[3].loc.row = info[1].loc.row;
-        info[3].px = info[2].px;
-        info[3].across = info[2].across;
-        info[3].loc.column = info[2].loc.column;
+        info[3].px = info[1].px;
+        info[3].across = info[1].across;
+        info[3].loc.column = info[1].loc.column;
+        info[3].py = info[2].py;
+        info[3].down = info[2].down;
+        info[3].loc.row = info[2].loc.row;
         info[3].chunk = context->viewingChunks[d[0]][d[1]];
     }
     /* correct chunk sizes */

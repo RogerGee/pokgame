@@ -7,8 +7,8 @@
 #include <ctype.h>
 #include <dstructs/treemap.h>
 
-static inline bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc);
-static inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
+static bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc);
+static bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
 
 /* include target-specific code */
 #if defined(POKGAME_POSIX)

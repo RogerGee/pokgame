@@ -1,3 +1,4 @@
+/* graphicstest1.c - pokgame graphics test #1 */
 #include "graphics.h"
 #include "tile.h"
 #include "map.h"
@@ -7,8 +8,18 @@
 #include <ctype.h>
 #include <assert.h>
 
+struct chunk_render_info
+{
+    uint32_t px, py;
+    uint16_t across, down;
+    struct pok_location loc;
+    struct pok_map_chunk* chunk;
+};
+
 extern const char* POKGAME_NAME;
 extern const char* HOME;
+extern void compute_chunk_render_info(struct chunk_render_info* chunks,
+    const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
 
 static char* get_token(char** start,char delim);
 static struct pok_image* get_tile_image(int no,int cols,int rows);
@@ -17,6 +28,7 @@ static struct pok_map* get_map(int no);
 /* test routines */
 static const int TEST_ROUT_TOP = 2;
 static void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void** contexts);
+static void keyup_routine(enum pok_input_key key);
 static void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman);
 static void routineB(struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
 static graphics_routine_t routines[] = {
@@ -24,7 +36,13 @@ static graphics_routine_t routines[] = {
     (graphics_routine_t) pok_map_render
 };
 
-int graphics_main_test()
+/* global game objects for this test */
+struct __
+{
+    struct pok_map_render_context* mcxt;
+} globals;
+
+int graphics_main_test1()
 {
     int cycle, nxt;
     char inbuf[1024];
@@ -32,12 +50,12 @@ int graphics_main_test()
     struct pok_map* map;
     struct pok_image* tileimg;
     struct pok_tile_manager* tman;
-    struct pok_map_render_context* mcxt;
     struct pok_graphics_subsystem* sys;
     void* contexts[10];
 
     sys = pok_graphics_subsystem_new();
     pok_graphics_subsystem_default(sys);
+    sys->keyup = keyup_routine;
 
     /* load up tiles for this test */
     tman = pok_tile_manager_new(sys);
@@ -51,11 +69,15 @@ int graphics_main_test()
 
     /* load up a test map */
     map =  get_map(1);
-    mcxt = pok_map_render_context_new(map,tman);
-    loc.column = 0;
-    loc.row = 0;
-    pok_map_render_context_center_on(mcxt,&loc);
-    contexts[1] = mcxt;
+    if (map == NULL) {
+        fprintf(stderr,"%s: couldn't read map\n",POKGAME_NAME);
+        return 1;
+    }
+    globals.mcxt = pok_map_render_context_new(map,tman);
+    loc.column = 17;
+    loc.row = 18;
+    assert( pok_map_render_context_center_on(globals.mcxt,&loc) );
+    contexts[1] = globals.mcxt;
 
     pok_graphics_subsystem_begin(sys);
     pok_graphics_subsystem_register(sys,routines[0],contexts[0]);
@@ -63,6 +85,7 @@ int graphics_main_test()
     /* read messages from stdin */
     cycle = nxt = 0;
     while (fgets(inbuf,sizeof(inbuf),stdin) != NULL) {
+        int i, j;
         size_t len = strlen(inbuf);
         char* s = inbuf;
         char* tok = get_token(&s,' ');
@@ -82,6 +105,30 @@ int graphics_main_test()
             if (nxt < 0)
                 nxt = TEST_ROUT_TOP-1;
         }
+        else if (strcmp(tok,"left") == 0)
+            pok_map_render_context_update(globals.mcxt,pok_direction_left);
+        else if (strcmp(tok,"right") == 0)
+            pok_map_render_context_update(globals.mcxt,pok_direction_right);
+        else if (strcmp(tok,"down") == 0)
+            pok_map_render_context_update(globals.mcxt,pok_direction_down);
+        else if (strcmp(tok,"up") == 0)
+            pok_map_render_context_update(globals.mcxt,pok_direction_up);
+        else if (strcmp(tok,"mapdebug") == 0) {
+            struct chunk_render_info info[4];
+            compute_chunk_render_info(info,sys,globals.mcxt);
+            printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
+                globals.mcxt->map->chunkSize.rows,globals.mcxt->focus[0],globals.mcxt->focus[1],globals.mcxt->relpos.column,
+                globals.mcxt->relpos.row,globals.mcxt->map->chunk->data[0][0].data.tileid);
+            for (j = 0;j < 3;++j) { /* rows */
+                for (i = 0;i < 3;++i) /* columns */
+                    printf("%d   ",globals.mcxt->viewingChunks[i][j]==NULL ? -1 : globals.mcxt->viewingChunks[i][j]->data[0][0].data.tileid);
+                putchar('\n');
+            }
+            for (i = 0;i < 4;++i)
+                if (info[i].chunk != NULL)
+                    printf("px[%ui] py[%ui] across[%ui] down[%ui] loc{%d,%d} tile{%d}\n",info[i].px,info[i].py,info[i].across,info[i].down,
+                        info[i].loc.column,info[i].loc.row,info[i].chunk->data[0][0].data.tileid);
+        }
         if (nxt != cycle) {
             replace_routine(sys,cycle,nxt,contexts);
             cycle = nxt;
@@ -90,7 +137,7 @@ int graphics_main_test()
 
     pok_graphics_subsystem_end(sys);
 
-    pok_map_render_context_free(mcxt);
+    pok_map_render_context_free(globals.mcxt);
     pok_map_free(map);
     pok_tile_manager_free(tman);
     pok_image_free(tileimg);
@@ -133,22 +180,19 @@ struct pok_image* get_tile_image(int no,int cols,int rows)
 struct pok_map* get_map(int no)
 {
     char name[256];
-    struct pok_netobj_readinfo info;
     struct pok_map* map = pok_map_new();
     struct pok_data_source* fstream;
 
     sprintf(name,"test/maps/testmap%d",no);
     fstream = pok_data_source_new_file(name,pok_filemode_open_existing,pok_iomode_read);
     assert(fstream != NULL);
-    pok_netobj_readinfo_init(&info);
-    if (pok_map_netread(map,fstream,&info) == pok_net_failed) {
-        printf("failed to read map: %s\n",pok_exception_pop()->message);
+    if ( !pok_map_open(map,fstream) ) {
+        const struct pok_exception* ex = pok_exception_pop();
+        fprintf(stderr,"%s: error: failed to read map: id=%d kind=%d message=%s\n",POKGAME_NAME,ex->id,ex->kind,ex->message);
         pok_map_free(map);
-        pok_netobj_readinfo_delete(&info);
         pok_data_source_free(fstream);
         return NULL;
     }
-    pok_netobj_readinfo_delete(&info);
     pok_data_source_free(fstream);
 
     return map;
@@ -158,6 +202,19 @@ void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void**
 {
     pok_graphics_subsystem_unregister(sys,routines[this]);
     pok_graphics_subsystem_register(sys,routines[that],contexts[that]);
+}
+
+void keyup_routine(enum pok_input_key key)
+{
+    printf("key up: %d\n",key);
+    if (key == pok_input_key_UP)
+        pok_map_render_context_update(globals.mcxt,pok_direction_up);
+    else if (key == pok_input_key_DOWN)
+        pok_map_render_context_update(globals.mcxt,pok_direction_down);
+    else if (key == pok_input_key_LEFT)
+        pok_map_render_context_update(globals.mcxt,pok_direction_left);
+    else if (key == pok_input_key_RIGHT)
+        pok_map_render_context_update(globals.mcxt,pok_direction_right);
 }
 
 void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)

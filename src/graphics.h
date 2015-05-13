@@ -11,8 +11,8 @@ enum pok_graphics_constants
     MAX_WINDOW_PIXEL_WIDTH = 1280,
     MAX_WINDOW_PIXEL_HEIGHT = 768,
     DEFAULT_DIMENSION = 32,
-    DEFAULT_WINDOW_WIDTH = 9,
-    DEFAULT_WINDOW_HEIGHT = 10,
+    DEFAULT_WINDOW_WIDTH = 10,
+    DEFAULT_WINDOW_HEIGHT = 9,
     DEFAULT_PLAYER_LOCATION_X = 4,
     DEFAULT_PLAYER_LOCATION_Y = 4,
     DEFAULT_PLAYER_OFFSET_X = 0,
@@ -38,7 +38,8 @@ enum pok_input_key
     pok_input_key_UP,
     pok_input_key_DOWN,
     pok_input_key_LEFT,
-    pok_input_key_RIGHT
+    pok_input_key_RIGHT,
+    pok_input_key_unknown
 };
 
 /* graphics routine: every graphics routine is passed two parameters, the graphics
@@ -47,6 +48,10 @@ enum pok_input_key
    can be obtained via the graphics subsystem) */
 struct pok_graphics_subsystem;
 typedef void (*graphics_routine_t)(struct pok_graphics_subsystem* sys,void* context);
+
+/* other hook routine types; a hook is a called hooked in on the graphics thread that doesn't
+   render (they are and should be only used for testing) */
+typedef void (*keyup_routine_t)(enum pok_input_key key);
 
 /* define graphics subsystem object; this abstracts input/output to a graphical window frame */
 struct _pok_graphics_subsystem_impl;
@@ -64,6 +69,9 @@ struct pok_graphics_subsystem
     graphics_routine_t routines[MAX_GRAPHICS_ROUTINES];
     void* contexts[MAX_GRAPHICS_ROUTINES];
 
+    /* hooks */
+    keyup_routine_t keyup;
+
     /* misc info used by rendering contexts */
     struct pok_image* blacktile; /* solid black tile image */
 
@@ -79,6 +87,8 @@ void pok_graphics_subsystem_init(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_delete(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_reset(struct pok_graphics_subsystem* sys);
 bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys);
+bool_t pok_graphics_subsystem_assign(struct pok_graphics_subsystem* sys,uint16_t dimension,uint16_t winCol,uint16_t winRow,
+    uint16_t playerCol,uint16_t playerRow,uint16_t playerOffsetX,uint16_t playerOffsetY,const char* title);
 enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsystem* sys,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 bool_t pok_graphics_subsystem_begin(struct pok_graphics_subsystem* sys);

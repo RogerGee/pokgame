@@ -27,7 +27,7 @@ struct pok_sprite_manager
 
     /* set of sprite images available to the tile manager; these images must
        be square with dimensions equal to 'sys->dimension'; these are "character" sprites;
-       servers are expected to order sprites correctly in order to form a sprite association */
+       servers are expected to order sprites correctly to form a sprite association */
     uint16_t spritecnt;
     struct pok_image** spriteset;
 

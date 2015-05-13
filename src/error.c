@@ -7,7 +7,7 @@
 
 extern const char* POKGAME_NAME;
 
-static inline int pok_get_thread_id();
+static int pok_get_thread_id();
 static void pok_lock_error_module();
 static void pok_unlock_error_module();
 
@@ -17,6 +17,46 @@ static void pok_unlock_error_module();
 #elif defined(POKGAME_WIN32)
 
 #endif
+
+/* error messages: each array of arrays represents a collection of error messages
+   based on exception kind; these messages are meant to be seen by the user */
+static char const* const* POK_ERROR_MESSAGES[] = {
+    (const char* []) { /* pok_ex_default */
+        "an undocumented error occurred",
+        "a memory allocation failed"
+    },
+    (const char* []) { /* pok_ex_net */
+        "an unspecified IO error occurred", /* pok_ex_net_unspec */
+        "an IO operation was interrupted", /* pok_ex_net_interrupt */
+        "an IO operation would have blocked", /* pok_ex_net_wouldblock */
+        "an IO operation did not return all the data requested", /* pok_ex_net_pending */
+        "an IO operation wrote to a broken pipe", /* pok_ex_net_brokenpipe */
+        "an IO operation flagged end of communications", /* pok_ex_net_endofcomms */
+        "the output buffer is full", /* pok_ex_net_noroom */
+        "specified file does not exist", /* pok_ex_net_file_does_not_exist */
+        "specified file already exists", /* pok_ex_net_file_already_exist */
+        "cannot open specified file: permission denied", /* pok_ex_net_file_permission_denied */
+        "the file path is incorrect" /* pok_ex_net_file_bad_path */
+    },
+    (const char* []) { /* pok_ex_graphics */
+        "a bad dimension was specified to the graphics subsystem", /* pok_ex_graphics_bad_dimension */
+        "a bad window size was specified to the graphics subsystem", /* pok_ex_graphics_bad_window_size */
+        "a bad player location was specified to the graphics subsystem", /* pok_ex_graphics_bad_player_location */
+        "a bad player offset was specified to the graphics subsystem" /* pok_ex_graphics_bad_player_offset */
+    },
+    (const char* []) { /* pok_ex_image */
+        "the image format is unrecognized", /* pok_ex_image_unrecognized_format */
+        "the specified image was too large", /* pok_ex_image_too_big */
+        "the specified subimage was invalid", /* pok_ex_image_invalid_subimage */
+        "the image object was already loaded" /* pok_ex_image_already_loaded */
+    },
+    (const char* []) { /* pok_ex_tile */
+        "a tile parameter was incorrect" /* pok_ex_tile_domain_error */
+    },
+    (const char* []) { /* pok_ex_map */
+        "the specified chunk size was incorrect" /* pok_ex_map_bad_chunk_size */
+    }
+};
 
 /* target-independent code */
 
@@ -130,7 +170,7 @@ struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
     ex = malloc(sizeof(struct pok_exception));
     ex->id = id;
     ex->kind = kind;
-    ex->message = NULL;
+    ex->message = POK_ERROR_MESSAGES[kind][id];
     /* place exceptions in data structure */
     pok_lock_error_module();
     tid = pok_get_thread_id();

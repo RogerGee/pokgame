@@ -55,7 +55,21 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
         free(tman->tileani);
     currentTileManager = NULL;
 }
-bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,byte_t* data,bool_t byRef)
+bool_t pok_tile_manager_save_tiles(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
+{
+    if (tman->tileset != NULL) {
+
+    }
+    return FALSE;
+}
+bool_t pok_tile_manager_open_tiles(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
+{
+    if (tman->tileset == NULL) {
+
+    }
+    return FALSE;
+}
+bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,const byte_t* data,bool_t byRef)
 {
     /* read tile data from memory; since tile images must match the 'dimension' value, the data is
        assumed to be of the correct length for the given value of 'imgc'; the pixel data also should
@@ -286,6 +300,23 @@ void pok_tile_init_ex(struct pok_tile* tile,const struct pok_tile_data* tiledata
         tile->impass = FALSE;
     else
         tile->impass = tile->data.tileid <= currentTileManager->impassability;
+}
+bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc)
+{
+    /* fields:
+        [2 bytes] id
+        [1 byte] warp kind
+        [2 bytes] warp map
+        [2 bytes] warp column
+        [2 bytes] warp row
+        [1 byte] impassable
+    */
+    return pok_data_stream_read_uint16(dsrc,&tile->data.tileid)
+        && pok_data_stream_read_byte(dsrc,&tile->data.warpKind)
+        && pok_data_stream_read_uint16(dsrc,&tile->data.warpMap)
+        && pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.column)
+        && pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.row)
+        && pok_data_stream_read_byte(dsrc,&tile->impass);
 }
 enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
 {

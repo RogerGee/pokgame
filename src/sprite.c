@@ -48,6 +48,7 @@ void pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t imgc,byte_
         /* refer to the black tile image provided globally */
         sman->spriteset[i] = sman->sys->blacktile;
     }
+    pok_sprite_manager_assoc(sman);
 }
 enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
@@ -87,8 +88,10 @@ enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sm
                 break;
             --info->fieldCnt;
         } while (info->fieldCnt > 0);
-        if (info->fieldCnt == 0)
+        if (info->fieldCnt == 0) {
+            pok_sprite_manager_assoc(sman);
             ++info->fieldProg;
+        }
     }
     return result;
 }

@@ -9,7 +9,7 @@ const char* TMPDIR;
 const char* HOME;
 
 extern int net_test1();
-extern int graphics_main_test();
+extern int graphics_main_test1();
 
 void halt()
 {
@@ -20,6 +20,7 @@ void halt()
 int main(int argc,const char* argv[])
 {
     int i;
+    char input[256];
     POKGAME_NAME = argv[0];
     printf("Starting pokgame test with cmdline=\"%s",argv[0]);
     for (i = 1;i < argc;++i)
@@ -41,14 +42,17 @@ int main(int argc,const char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    if (argc > 1) {
-        if (strcmp(argv[1],"net") == 0) {
-            assert(net_test1() == 0);
-        }
-    }
+    fputs("enter test: ",stdout);
+    fgets(input,sizeof(input),stdin);
+    i = strlen(input) - 1;
+    if (input[i] == '\n')
+        input[i] = 0;
+    if (strcmp(input,"net") == 0)
+        assert(net_test1() == 0);
+    else if (strcmp(input,"graphics 1") == 0)
+        graphics_main_test1();
     else
-        /* else do the main application test */
-        graphics_main_test();
+        puts("bad test name");
 
     /* unload modules */
     pok_exception_unload_module();
