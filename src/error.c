@@ -51,9 +51,11 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "the image object was already loaded", /* pok_ex_image_already_loaded */
         "the image being read from file was incomplete" /* pok_ex_image_incomplete_fromfile */
     },
+    (const char* []) { /* pok_ex_tileman */
+        "a zero amount of tiles was specified", /* pok_ex_tileman_zero_tiles */
+        "too few tile animation parameters were specified" /* pok_ex_tileman_too_few_ani */
+    },
     (const char* []) { /* pok_ex_tile */
-        "a zero amount of tiles was specified", /* pok_ex_tile_zero_tiles */
-        "too few tile animation parameters were specified" /* pok_ex_tile_too_few_ani */
         "a bad tile warp kind parameter was specified" /* pok_ex_tile_bad_warp_kind */
     },
     (const char* []) { /* pok_ex_map */

@@ -1,7 +1,7 @@
 /* graphicstest1.c - pokgame graphics test #1 */
 #include "graphics.h"
-#include "tile.h"
-#include "map.h"
+#include "tileman.h"
+#include "map-render.h"
 #include "error.h"
 #include <stdio.h>
 #include <string.h>

@@ -60,14 +60,16 @@ ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
 IMAGE_H = src/image.h $(NET_H)
 GRAPHICS_H = src/graphics.h $(NET_H) $(IMAGE_H)
-TILE_H = src/tile.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
+TILE_H = src/tile.h $(NET_H)
+TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
 SPRITE_H = src/sprite.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
-MAP_H = src/map.h $(NET_H) $(TILE_H) $(GRAPHICS_H)
+MAP_H = src/map.h $(NET_H) $(TILE_H)
+MAP_RENDER_H = src/map-render.h $(MAP_H) $(GRAPHICS_H)
 
-# object code files: library objects are used both by clients and 
-OBJECTS = graphics.o tile.o sprite.o map.o
+# object code files: library objects are used both by clients and version servers
+OBJECTS = graphics.o tileman.o sprite.o map-render.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
-OBJECTS_LIB = image.o error.o net.o types.o pok-util.o
+OBJECTS_LIB = image.o error.o net.o types.o pok-util.o tile.o map.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
 ifdef MAKE_TEST
 TEST_OBJECTS = main.o nettest.o graphicstest1.o
@@ -92,12 +94,12 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 # src targets (only for the game client)
 $(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
-$(OBJDIR)/tile.o: src/tile.c $(TILE_H) $(ERROR_H) $(PROTOCOL_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/tile.o src/tile.c
+$(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
 $(OBJDIR)/sprite.o: src/sprite.c $(SPRITE_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/sprite.o src/sprite.c
-$(OBJDIR)/map.o: src/map.c src/map-gl.c $(MAP_H) $(ERROR_H) $(POK_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/map.o src/map.c
+$(OBJDIR)/map-render.o: src/map-render.c src/map-render-gl.c $(MAP_RENDER_H) $(PROTOCOL_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/map-render.o src/map-render.c
 
 # src targets for the library
 $(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)
@@ -110,13 +112,17 @@ $(OBJDIR)/types.o: src/types.c $(TYPES_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/types.o src/types.c
 $(OBJDIR)/pok-util.o: src/pok-util.c $(POK_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/pok-util.o src/pok-util.c
+$(OBJDIR)/tile.o: src/tile.c $(TILE_H) $(ERROR_H) $(PROTOCOL_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/tile.o src/tile.c
+$(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/map.o src/map.c
 
 # test targets
 $(OBJECT_DIRECTORY_TEST)/main.o: test/main.c
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
 $(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
-$(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILE_H) $(MAP_H) $(ERROR_H)
+$(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_RENDER_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/graphicstest1.o test/graphicstest1.c
 
 # other targets
