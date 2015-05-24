@@ -47,6 +47,7 @@ int graphics_main_test1()
     int cycle, nxt;
     char inbuf[1024];
     struct pok_location loc;
+    struct pok_point pnt;
     struct pok_map* map;
     struct pok_image* tileimg;
     struct pok_tile_manager* tman;
@@ -60,7 +61,7 @@ int graphics_main_test1()
     /* load up tiles for this test */
     tman = pok_tile_manager_new(sys);
     contexts[0] = tman;
-    tileimg = get_tile_image(1,1,164);
+    tileimg = get_tile_image(1,1,41);
     if (tileimg == NULL) {
         fprintf(stderr,"%s: couldn't load test tile image\n",POKGAME_NAME);
         return 1;
@@ -74,9 +75,11 @@ int graphics_main_test1()
         return 1;
     }
     globals.mcxt = pok_map_render_context_new(map,tman);
-    loc.column = 17;
-    loc.row = 18;
-    assert( pok_map_render_context_center_on(globals.mcxt,&loc) );
+    loc.column = 5;
+    loc.row = 5;
+    pnt.X = 1;
+    pnt.Y = 1;
+    assert( pok_map_render_context_center_on(globals.mcxt,&pnt,&loc) );
     contexts[1] = globals.mcxt;
 
     pok_graphics_subsystem_begin(sys);
@@ -116,9 +119,9 @@ int graphics_main_test1()
         else if (strcmp(tok,"mapdebug") == 0) {
             struct chunk_render_info info[4];
             compute_chunk_render_info(info,sys,globals.mcxt);
-            printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
+            printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunkpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
                 globals.mcxt->map->chunkSize.rows,globals.mcxt->focus[0],globals.mcxt->focus[1],globals.mcxt->relpos.column,
-                globals.mcxt->relpos.row,globals.mcxt->map->chunk->data[0][0].data.tileid);
+                globals.mcxt->relpos.row,globals.mcxt->chunkpos.X,globals.mcxt->chunkpos.Y,globals.mcxt->map->chunk->data[0][0].data.tileid);
             for (j = 0;j < 3;++j) { /* rows */
                 for (i = 0;i < 3;++i) /* columns */
                     printf("%d   ",globals.mcxt->viewingChunks[i][j]==NULL ? -1 : globals.mcxt->viewingChunks[i][j]->data[0][0].data.tileid);
@@ -126,7 +129,7 @@ int graphics_main_test1()
             }
             for (i = 0;i < 4;++i)
                 if (info[i].chunk != NULL)
-                    printf("px[%ui] py[%ui] across[%ui] down[%ui] loc{%d,%d} tile{%d}\n",info[i].px,info[i].py,info[i].across,info[i].down,
+                    printf("px[%u] py[%u] across[%u] down[%u] loc{%d,%d} tile{%d}\n",info[i].px,info[i].py,info[i].across,info[i].down,
                         info[i].loc.column,info[i].loc.row,info[i].chunk->data[0][0].data.tileid);
         }
         if (nxt != cycle) {
@@ -169,7 +172,9 @@ struct pok_image* get_tile_image(int no,int cols,int rows)
     struct pok_image* img = pok_image_new();
     sprintf(name,"test/img/sts%d.data",no);
 
-    if ( !pok_image_load_rgb_ex(img,name,32*cols,1312*rows) ) {
+    if ( !pok_image_fromfile_rgb_ex(img,name,32*cols,32*rows) ) {
+        const struct pok_exception* ex = pok_exception_pop();
+        fprintf(stderr,"%s: error: failed to read image: id=%d kind=%d message=%s\n",POKGAME_NAME,ex->id,ex->kind,ex->message);
         pok_image_free(img);
         img = NULL;
     }
@@ -206,7 +211,7 @@ void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void**
 
 void keyup_routine(enum pok_input_key key)
 {
-    printf("key up: %d\n",key);
+    /*printf("key up: %d\n",key);*/
     if (key == pok_input_key_UP)
         pok_map_render_context_update(globals.mcxt,pok_direction_up);
     else if (key == pok_input_key_DOWN)

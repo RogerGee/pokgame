@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* define the black pixel used for the background (black tile); we don't want a true
+   harsh black, but a 'lighter' black */
+static const union pixel blackPixel = {{20,20,20}};
+
 /* implementation-specific api; we can assume that the implementation will run
    a graphical frame and other graphics operations on a separate thread; the
    below calls should guarentee concurrent access; mutual exclusion should be
@@ -25,7 +29,6 @@ static void impl_unlock(struct pok_graphics_subsystem* sys);
 #include "graphics-win32-gl.c"
 #endif
 
-static const union pixel blackPixel = {{0,0,0}};
 struct pok_graphics_subsystem* pok_graphics_subsystem_new()
 {
     struct pok_graphics_subsystem* sys;

@@ -293,6 +293,7 @@ void close_frame(struct pok_graphics_subsystem* sys)
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
+    float black[3];
     uint32_t wwidth, wheight;
     /* initialize global X11 connection */
     do_x_init();
@@ -301,6 +302,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     /* make the context current on this thread */
     if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
         pok_error(pok_error_fatal,"fail glkMakeCurrent()");
+    /* compute black pixel */
+    black[0] = blackPixel.rgb[0] / 255.0;
+    black[1] = blackPixel.rgb[1] / 255.0;
+    black[2] = blackPixel.rgb[2] / 255.0;
     /* setup OpenGL */
     wwidth = sys->dimension * sys->windowSize.columns;
     wheight = sys->dimension * sys->windowSize.rows;
@@ -353,7 +358,8 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
             sys->impl->doUnmap = FALSE;
         }
 
-        glClearColor(0,0,0,0); /* we need this to be black */
+        /* clear the screen; we need this to be the black pixel */
+        glClearColor(black[0],black[1],black[2],0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         if (sys->impl->gameRendering) {

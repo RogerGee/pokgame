@@ -5,8 +5,7 @@
 #include "image.h"
 #include "graphics.h"
 
-/* the elements in this enum will map directory to indeces for
-   sprite frames */
+/* the elements in this enum will map direction to sprite frame indeces */
 enum pok_sprite_frame_direction
 {
     sprite_up,
@@ -19,27 +18,33 @@ enum pok_sprite_frame_direction
     sprite_right_ani
 };
 
-/* the sprite manager is responsible for drawing sprites on the logical
-   screen; it is the "lower-level" drawing interface for characters */
+/* the sprite manager is responsible for representing character sprite images objects; it
+   provides a way to associate images into sprite sets */
 struct pok_sprite_manager
 {
     const struct pok_graphics_subsystem* sys;
 
+    uint16_t spritecnt; /* number of logical sprites */
+    uint16_t imagecnt; /* number of images allocated by sprite manager (spritecnt * 8) */
+
     /* set of sprite images available to the tile manager; these images must
        be square with dimensions equal to 'sys->dimension'; these are "character" sprites;
-       servers are expected to order sprites correctly to form a sprite association */
-    uint16_t spritecnt;
+       version servers are expected to order sprites correctly to form a sprite association */
     struct pok_image** spriteset;
 
     /* the following substructures store an association between a character index and the sprite
-       frames used to render it; every space in 'spriteassoc' stores a pointer to an image in
-       'spriteset' that lies on an index that is either 0 or a multiple of 8 */
-    struct pok_image** spriteassoc;
+       frames used to render it; every space in 'spriteassoc' stores a pointer to a set of images
+       that make up a single character set */
+    struct pok_image*** spriteassoc;
 };
-void pok_sprite_manager_init(struct pok_sprite_manager* tman,const struct pok_graphics_subsystem* sys);
-void pok_sprite_manager_delete(struct pok_sprite_manager* tman);
-void pok_sprite_manager_load(struct pok_sprite_manager* tman,uint16_t imgc,byte_t* data,bool_t byRef);
-enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* tman,struct pok_data_source* dsrc,
+struct pok_sprite_manager* pok_sprite_manager_new(const struct pok_graphics_subsystem* sys);
+void pok_sprite_manager_free(struct pok_sprite_manager* sman);
+void pok_sprite_manager_init(struct pok_sprite_manager* sman,const struct pok_graphics_subsystem* sys);
+void pok_sprite_manager_delete(struct pok_sprite_manager* sman);
+bool_t pok_sprite_manager_save(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
+bool_t pok_sprite_manager_open(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
+void pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t imgc,byte_t* data,bool_t byRef);
+enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 
 #endif

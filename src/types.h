@@ -47,6 +47,12 @@ struct pok_location
 
 #define pok_unsigned_diff(a,b) (a>b ? a-b : b-a)
 
+struct pok_point
+{
+    int32_t X;
+    int32_t Y;
+};
+
 /* define fundamental direction */
 enum pok_direction
 {

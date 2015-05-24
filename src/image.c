@@ -22,13 +22,13 @@ struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pi
 {
     size_t i, d, n;
     struct pok_image* img;
-    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+    d = width*height;
+    n = d * sizeof(union pixel);
+    if (d > MAX_IMAGE_SIZE) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
     img = malloc(sizeof(struct pok_image));
-    d = width*height;
-    n = d * sizeof(union pixel);
     img->width = width;
     img->height = height;
     img->flags = pok_image_flag_none;
@@ -41,13 +41,13 @@ struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union a
 {
     size_t i, d, n;
     struct pok_image* img;
-    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+    d = width * height;
+    n = d * sizeof(union alpha_pixel);
+    if (n > MAX_IMAGE_SIZE) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
     img = malloc(sizeof(struct pok_image));
-    d = width * height;
-    n = d * sizeof(union alpha_pixel);
     img->width = width;
     img->height = height;
     img->flags = pok_image_flag_none;
@@ -60,9 +60,11 @@ struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const b
 {
     /* copy pixel data into structure; each pixel is 3-bytes long and can be cast to a
        'pixel' structure; we sincerely hope the caller has the data formatted correctly */
-    size_t i, sz;
+    size_t i, sz, imgSz;
     struct pok_image* img;
-    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+    sz = width * height;
+    imgSz = sz * sizeof(union pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -74,8 +76,7 @@ struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const b
     img->width = width;
     img->height = height;
     img->flags = pok_image_flag_none;
-    sz = width * height;
-    img->pixels.dataRGB = malloc(sizeof(union alpha_pixel) * sz);
+    img->pixels.dataRGB = malloc(imgSz);
     if (img->pixels.data == NULL) {
         free(img);
         pok_exception_flag_memory_error();
@@ -92,9 +93,11 @@ struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const 
 {
     /* copy pixel data into structure; each pixel is 4-bytes long and can be cast to an
        'alpha_pixel' structure; we sincerely hope the caller has the data formatted correctly */
-    size_t i, sz;
+    size_t i, sz, imgSz;
     struct pok_image* img;
-    if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
+    sz = width * height;
+    imgSz = sz * sizeof(union alpha_pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -106,8 +109,7 @@ struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const 
     img->width = width;
     img->height = height;
     img->flags = pok_image_flag_alpha;
-    sz = width * height;
-    img->pixels.dataRGBA = malloc(sizeof(union alpha_pixel) * sz);
+    img->pixels.dataRGBA = malloc(imgSz);
     if (img->pixels.data == NULL) {
         free(img);
         pok_exception_flag_memory_error();
@@ -200,14 +202,70 @@ struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32
 }
 void pok_image_free(struct pok_image* img)
 {
-    if ((img->flags&pok_image_flag_byref) == 0)
+    if ((img->flags&pok_image_flag_byref) == 0 && img->pixels.data != NULL)
         free(img->pixels.data);
     free(img);
 }
-bool_t pok_image_load_rgb_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
+bool_t pok_image_save(struct pok_image* img,struct pok_data_source* dsrc)
+{
+    size_t dummy;
+    if (img->pixels.data == NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_unrecognized_format);
+        return FALSE;
+    }
+    return pok_data_stream_write_byte(dsrc,img->flags&pok_image_flag_alpha?0x1:0x00)
+        && pok_data_stream_write_uint32(dsrc,img->width)
+        && pok_data_stream_write_uint32(dsrc,img->height)
+        && pok_data_source_write(dsrc,img->pixels.data,
+            (img->flags&pok_image_flag_alpha ? sizeof(union alpha_pixel) : sizeof (union pixel)) * img->width * img->height,&dummy);
+}
+static bool_t pok_image_fromfile_generic(struct pok_image* img,struct pok_data_source* dsrc,size_t bytecnt)
 {
     size_t bytesout;
-    size_t bytecnt;
+    img->pixels.data = malloc(bytecnt);
+    if (img->pixels.data == NULL) {
+        pok_exception_flag_memory_error();
+        return FALSE;
+    }
+    if ( !pok_data_source_read_to_buffer(dsrc,img->pixels.data,bytecnt,&bytesout) ) {
+        free(img->pixels.data);
+        img->pixels.data = NULL;
+        return FALSE;
+    }
+    if (bytesout != bytecnt) {
+        free(img->pixels.data);
+        img->pixels.data = NULL;
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_incomplete_fromfile);
+        return FALSE;
+    }
+    return TRUE;
+}
+bool_t pok_image_open(struct pok_image* img,struct pok_data_source* dsrc)
+{
+    uint8_t alpha;
+    size_t imgSz;
+    if (img->pixels.data != NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
+        return FALSE;
+    }
+    /* read image alpha status, width and height; check image dimensions */
+    if (!pok_data_stream_read_byte(dsrc,&alpha) || !pok_data_stream_read_uint32(dsrc,&img->width)
+            || !pok_data_stream_read_uint32(dsrc,&img->height))
+        return FALSE;
+    img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
+    imgSz = (alpha ? sizeof (union alpha_pixel) : sizeof (union pixel)) * img->width * img->height;
+    if (imgSz > MAX_IMAGE_SIZE) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return FALSE;
+    }
+    /* allocate and read pixels */
+    if ( !pok_image_fromfile_generic(img,dsrc,imgSz) )
+        return FALSE;
+    return TRUE;
+}
+bool_t pok_image_fromfile_rgb(struct pok_image* img,const char* file)
+{
+    size_t imgSz;
     struct pok_data_source* fin;
     if (img->pixels.data != NULL) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
@@ -216,16 +274,91 @@ bool_t pok_image_load_rgb_ex(struct pok_image* img,const char* file,uint32_t wid
     fin = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
     if (fin == NULL)
         return FALSE;
-    bytecnt = width*height * sizeof(union pixel);
-    img->pixels.dataRGB = malloc(bytecnt);
-    if (img->pixels.dataRGB == NULL) {
-        pok_exception_flag_memory_error();
+    if (!pok_data_stream_read_uint32(fin,&img->width) || !pok_data_stream_read_uint32(fin,&img->height)) {
         pok_data_source_free(fin);
         return FALSE;
     }
-    if ( !pok_data_source_read_to_buffer(fin,img->pixels.dataRGB,bytecnt,&bytesout) ) {
-        free(img->pixels.dataRGB);
-        img->pixels.dataRGB = NULL;
+    imgSz = img->width * img->height * sizeof(union pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
+        pok_data_source_free(fin);
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return FALSE;
+    }
+    if ( !pok_image_fromfile_generic(img,fin,imgSz) ) {
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    return TRUE;
+}
+bool_t pok_image_fromfile_rgb_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
+{
+    size_t imgSz;
+    struct pok_data_source* fin;
+    imgSz = width * height * sizeof(union pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return FALSE;
+    }
+    if (img->pixels.data != NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
+        return FALSE;
+    }
+    fin = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
+    if (fin == NULL)
+        return FALSE;
+    if ( !pok_image_fromfile_generic(img,fin,imgSz) ) {
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    img->width = width;
+    img->height = height;
+    pok_data_source_free(fin);
+    return TRUE;
+}
+bool_t pok_image_fromfile_rgba(struct pok_image* img,const char* file)
+{
+    size_t imgSz;
+    struct pok_data_source* fin;
+    if (img->pixels.data != NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
+        return FALSE;
+    }
+    fin = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
+    if (fin == NULL)
+        return FALSE;
+    if (!pok_data_stream_read_uint32(fin,&img->width) || !pok_data_stream_read_uint32(fin,&img->height)) {
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    imgSz = img->width * img->height * sizeof(union alpha_pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
+        pok_data_source_free(fin);
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return FALSE;
+    }
+    if ( !pok_image_fromfile_generic(img,fin,imgSz) ) {
+        pok_data_source_free(fin);
+        return FALSE;
+    }
+    return TRUE;
+}
+bool_t pok_image_fromfile_rgba_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
+{
+    size_t imgSz;
+    struct pok_data_source* fin;
+    imgSz = width * height * sizeof(union alpha_pixel);
+    if (imgSz > MAX_IMAGE_SIZE) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+        return FALSE;
+    }
+    if (img->pixels.data != NULL) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
+        return FALSE;
+    }
+    fin = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
+    if (fin == NULL)
+        return FALSE;
+    if ( !pok_image_fromfile_generic(img,fin,imgSz) ) {
         pok_data_source_free(fin);
         return FALSE;
     }
@@ -242,7 +375,7 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
            [1 byte] hasAlpha (true if non-zero)
            [4 bytes] width
            [4 bytes] height
-           [n bytes] pixel-data, where n = widht*height * (4 if alpha channel, else 3) */
+           [n bytes] pixel-data, where n = width*height * (4 if alpha channel, else 3) */
     enum pok_network_result result = pok_net_already;
     /* read flags, width and height */
     if (info->fieldProg == 0) {
@@ -259,24 +392,21 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
     if (info->fieldProg == 1) {
         pok_data_stream_read_uint32(dsrc,&img->width);
         result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed && img->width > MAX_IMAGE_DIMENSION) {
-            pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
-            return pok_net_failed;
-        }
     }
     if (info->fieldProg == 2) {
         pok_data_stream_read_uint32(dsrc,&img->height);
         result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed && img->height > MAX_IMAGE_DIMENSION) {
-            pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
-            return pok_net_failed;
-        }
     }
     if (info->fieldProg == 3) {
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
-            img->pixels.data = malloc(allocation * img->width * img->height);
+            size_t amt = allocation * img->width * img->height;
+            if (amt > MAX_IMAGE_SIZE) {
+                pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+                return pok_net_failed;
+            }
+            img->pixels.data = malloc(amt);
             if (img->pixels.data == NULL) {
                 pok_exception_flag_memory_error();
                 return pok_net_failed;
@@ -315,16 +445,13 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         - data structure sent over network: 
            [1 byte] alpha
            [n bytes] pixel-data, where n = widht*height * (4 if alpha channel, else 3) */
+    size_t amount;
     enum pok_network_result result = pok_net_already;
     /* read flags */
     if (info->fieldProg == 0) {
         uint8_t alpha;
         if (img->pixels.data != NULL) {
             pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
-            return pok_net_failed;
-        }
-        if (width>MAX_IMAGE_DIMENSION || height>MAX_IMAGE_DIMENSION) {
-            pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
             return pok_net_failed;
         }
         img->width = width;
@@ -338,7 +465,12 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
-            img->pixels.data = malloc(allocation * width * height);
+            amount = allocation * width * height;
+            if (amount > MAX_IMAGE_SIZE) {
+                pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
+                return pok_net_failed;
+            }
+            img->pixels.data = malloc(amount);
             if (img->pixels.data == NULL) {
                 pok_exception_flag_memory_error();
                 return pok_net_failed;
@@ -347,7 +479,6 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         pixdata = (byte_t*)img->pixels.data + allocation * (info->depth[1]*width + info->depth[0]);
         while (info->depth[1] < height) {
             byte_t* recv;
-            size_t amount;
             recv = pok_data_source_read(dsrc,allocation,&amount);
             if (recv != NULL) {
                 if (amount < allocation) {

@@ -138,6 +138,7 @@ bool_t pok_netobj_readinfo_alloc_next(struct pok_netobj_readinfo* info);
 enum pok_netobj_kind
 {
     pok_netobj_unknown,
+    pok_netobj_map,
     pok_netobj_mapchunk
 };
 

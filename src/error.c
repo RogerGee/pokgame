@@ -48,13 +48,18 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "the image format is unrecognized", /* pok_ex_image_unrecognized_format */
         "the specified image was too large", /* pok_ex_image_too_big */
         "the specified subimage was invalid", /* pok_ex_image_invalid_subimage */
-        "the image object was already loaded" /* pok_ex_image_already_loaded */
+        "the image object was already loaded", /* pok_ex_image_already_loaded */
+        "the image being read from file was incomplete" /* pok_ex_image_incomplete_fromfile */
     },
     (const char* []) { /* pok_ex_tile */
-        "a tile parameter was incorrect" /* pok_ex_tile_domain_error */
+        "a zero amount of tiles was specified", /* pok_ex_tile_zero_tiles */
+        "too few tile animation parameters were specified" /* pok_ex_tile_too_few_ani */
+        "a bad tile warp kind parameter was specified" /* pok_ex_tile_bad_warp_kind */
     },
     (const char* []) { /* pok_ex_map */
-        "the specified chunk size was incorrect" /* pok_ex_map_bad_chunk_size */
+        "the specified chunk size was incorrect", /* pok_ex_map_bad_chunk_size */
+        "a zero amount of chunks was specified", /* pok_ex_map_zero_chunks */
+        "map information was incorrect" /* pok_ex_map_bad_format */
     }
 };
 

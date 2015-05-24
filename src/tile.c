@@ -17,6 +17,7 @@ void pok_tile_unload_module()
     currentTileManager = NULL;
 }
 
+/* pok_tile_manager */
 struct pok_tile_manager* pok_tile_manager_new(const struct pok_graphics_subsystem* sys)
 {
     struct pok_tile_manager* tman = malloc(sizeof(struct pok_tile_manager));
@@ -48,24 +49,94 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
         /* start at index 1 since the first tile is not owned by this manager; it is
            the black tile owned by the graphics subsystem */
         for (i = 1;i < tman->tilecnt;++i)
-            pok_image_free(tman->tileset[i]);
+            if (tman->tileset[i] != NULL)
+                pok_image_free(tman->tileset[i]);
         free(tman->tileset);
     }
     if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref))
         free(tman->tileani);
-    currentTileManager = NULL;
+    if (currentTileManager == tman)
+        currentTileManager = NULL;
 }
-bool_t pok_tile_manager_save_tiles(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
+bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
 {
+    /* fields:
+        [2 bytes] number of tiles
+        [2 bytes] impassable tiles cutoff
+        [n bytes] tile images
+        [1 byte]  has tile animation info if non-zero
+        [n bytes] optional tile animation info (if previous byte was non-zero)
+           (for each animation info structure)
+           [1 byte] ani ticks
+           [1 byte] number of indirections
+           [2 bytes] tile id
+    */
     if (tman->tileset != NULL) {
-
+        uint16_t i;
+        if (!pok_data_stream_write_uint16(dsrc,tman->tilecnt) || !pok_data_stream_write_uint16(dsrc,tman->impassability))
+            return FALSE;
+        for (i = 0;i < tman->tilecnt;++i)
+            if ( !pok_image_save(tman->tileset[i],dsrc) )
+                return FALSE;
+        if ( !pok_data_stream_write_byte(dsrc,tman->tileani != NULL) )
+            return FALSE;
+        if (tman->tileani != NULL)
+            for (i = 0;i < tman->tilecnt;++i)
+                if (!pok_data_stream_write_byte(dsrc,tman->tileani[i].ticks) || !pok_data_stream_write_byte(dsrc,tman->tileani[i].indirc)
+                    || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].tileid))
+                    return FALSE;
+        return TRUE;
     }
     return FALSE;
 }
-bool_t pok_tile_manager_open_tiles(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
+bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
 {
+    /* fields:
+        [2 bytes] number of tiles
+        [2 bytes] impassable tiles cutoff
+        [n bytes] tile images
+        [1 byte]  has tile animation info if non-zero
+        [n bytes] optional tile animation info (if previous byte was non-zero)
+           (for each animation info structure)
+           [1 byte] ani ticks
+           [1 byte] number of indirections
+           [2 bytes] tile id
+    */
     if (tman->tileset == NULL) {
-
+        uint16_t i;
+        bool_t hasAni;
+        if ( !pok_data_stream_read_uint16(dsrc,&tman->tilecnt) )
+            return FALSE;
+        if (tman->tilecnt == 0) {
+            pok_exception_new_ex(pok_ex_tile,pok_ex_tile_zero_tiles);
+            return FALSE;
+        }
+        if ( !pok_data_stream_read_uint16(dsrc,&tman->impassability) )
+            return FALSE;
+        tman->tileset = malloc(sizeof(struct pok_image*) * tman->tilecnt);
+        if (tman->tileset == NULL) {
+            pok_exception_flag_memory_error();
+            return FALSE;
+        }
+        for (i = 0;i < tman->tilecnt;++i) {
+            tman->tileset[i] = pok_image_new();
+            if (tman->tileset[i]==NULL ||  !pok_image_open(tman->tileset[i],dsrc))
+                return FALSE;
+        }
+        if ( !pok_data_stream_read_byte(dsrc,&hasAni) )
+            return FALSE;
+        if (hasAni) {
+            tman->tileani = malloc(sizeof(struct pok_tile_ani_data) * tman->tilecnt);
+            if (tman->tileani == NULL) {
+                pok_exception_flag_memory_error();
+                return FALSE;
+            }
+            for (i = 0;i < tman->tilecnt;++i)
+                if (!pok_data_stream_read_byte(dsrc,&tman->tileani[i].ticks) || !pok_data_stream_read_byte(dsrc,&tman->tileani[i].indirc)
+                    || !pok_data_stream_read_uint16(dsrc,&tman->tileani[i].tileid))
+                    return FALSE;
+        }
+        return TRUE;
     }
     return FALSE;
 }
@@ -166,7 +237,7 @@ static enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_mana
             }
             if (info->fieldCnt != tman->tilecnt) {
                 /* not enough animation substructures were specified */
-                pok_exception_new_ex(pok_ex_tile,pok_ex_tile_domain_error);
+                pok_exception_new_ex(pok_ex_tile,pok_ex_tile_too_few_ani);
                 return pok_net_failed_protocol;
             }
             tman->tileani = malloc(sizeof(struct pok_tile_ani_data) * info->fieldCnt);
@@ -301,7 +372,7 @@ void pok_tile_init_ex(struct pok_tile* tile,const struct pok_tile_data* tiledata
     else
         tile->impass = tile->data.tileid <= currentTileManager->impassability;
 }
-bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc)
+bool_t pok_tile_save(struct pok_tile* tile,struct pok_data_source* dsrc)
 {
     /* fields:
         [2 bytes] id
@@ -311,9 +382,26 @@ bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc)
         [2 bytes] warp row
         [1 byte] impassable
     */
+    return pok_data_stream_write_uint16(dsrc,tile->data.tileid)
+        && pok_data_stream_write_byte(dsrc,tile->data.warpKind)
+        && pok_data_stream_write_uint32(dsrc,tile->data.warpMap)
+        && pok_data_stream_write_uint16(dsrc,tile->data.warpLocation.column)
+        && pok_data_stream_write_uint16(dsrc,tile->data.warpLocation.row)
+        && pok_data_stream_write_byte(dsrc,tile->impass);
+}
+bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc)
+{
+    /* fields:
+        [2 bytes] id
+        [1 byte] warp kind
+        [4 bytes] warp map number
+        [2 bytes] warp column
+        [2 bytes] warp row
+        [1 byte] impassable
+    */
     return pok_data_stream_read_uint16(dsrc,&tile->data.tileid)
         && pok_data_stream_read_byte(dsrc,&tile->data.warpKind)
-        && pok_data_stream_read_uint16(dsrc,&tile->data.warpMap)
+        && pok_data_stream_read_uint32(dsrc,&tile->data.warpMap)
         && pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.column)
         && pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.row)
         && pok_data_stream_read_byte(dsrc,&tile->impass);
@@ -324,7 +412,7 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
         [2 bytes] id
         [1 byte]  warp kind
         (the remaining fields are only expected if warp kind != none)
-        [2 bytes] warp map
+        [4 bytes] warp map number
         [2 bytes] warp column
         [2 bytes] warp row */
     enum pok_network_result result = pok_net_already;
@@ -338,13 +426,13 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
         pok_data_stream_read_byte(dsrc,&tile->data.warpKind);
         result = pok_netobj_readinfo_process(info);
         if (result==pok_net_completed && tile->data.warpKind>=pok_tile_warp_BOUND) {
-            pok_exception_new_ex(pok_ex_tile,pok_ex_tile_domain_error);
+            pok_exception_new_ex(pok_ex_tile,pok_ex_tile_bad_warp_kind);
             return pok_net_failed_protocol;
         }
     }
     if (info->fieldProg == 2) {
         if (tile->data.warpKind != pok_tile_warp_none) {
-            pok_data_stream_read_uint16(dsrc,&tile->data.warpMap);
+            pok_data_stream_read_uint32(dsrc,&tile->data.warpMap);
             result = pok_netobj_readinfo_process(info);
         }
         else {
