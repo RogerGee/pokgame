@@ -52,6 +52,9 @@ void pok_map_delete(struct pok_map* map);
 bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t complex);
 bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc);
 bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],uint32_t columns,uint32_t rows);
+bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename);
+bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename);
 enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
+int pok_map_compar(struct pok_map* left,struct pok_map* right);
 
 #endif

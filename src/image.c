@@ -265,6 +265,7 @@ bool_t pok_image_open(struct pok_image* img,struct pok_data_source* dsrc)
 }
 bool_t pok_image_fromfile_rgb(struct pok_image* img,const char* file)
 {
+    /* read rgb image from file; first 8 bytes specify image width and height */
     size_t imgSz;
     struct pok_data_source* fin;
     if (img->pixels.data != NULL) {
@@ -288,10 +289,12 @@ bool_t pok_image_fromfile_rgb(struct pok_image* img,const char* file)
         pok_data_source_free(fin);
         return FALSE;
     }
+    pok_data_source_free(fin);
     return TRUE;
 }
 bool_t pok_image_fromfile_rgb_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
 {
+    /* read rgb image from file using specified width and height; the file input is just interpreted as pixel data */
     size_t imgSz;
     struct pok_data_source* fin;
     imgSz = width * height * sizeof(union pixel);
@@ -317,6 +320,7 @@ bool_t pok_image_fromfile_rgb_ex(struct pok_image* img,const char* file,uint32_t
 }
 bool_t pok_image_fromfile_rgba(struct pok_image* img,const char* file)
 {
+    /* read rgba image from file; first 8 bytes specify image width and height */
     size_t imgSz;
     struct pok_data_source* fin;
     if (img->pixels.data != NULL) {
@@ -340,10 +344,12 @@ bool_t pok_image_fromfile_rgba(struct pok_image* img,const char* file)
         pok_data_source_free(fin);
         return FALSE;
     }
+    pok_data_source_free(fin);
     return TRUE;
 }
 bool_t pok_image_fromfile_rgba_ex(struct pok_image* img,const char* file,uint32_t width,uint32_t height)
 {
+    /* read rgba image from file using specified width and height; the file input is just interpreted as pixel data */
     size_t imgSz;
     struct pok_data_source* fin;
     imgSz = width * height * sizeof(union alpha_pixel);
@@ -377,8 +383,7 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
            [4 bytes] height
            [n bytes] pixel-data, where n = width*height * (4 if alpha channel, else 3) */
     enum pok_network_result result = pok_net_already;
-    /* read flags, width and height */
-    if (info->fieldProg == 0) {
+    if (info->fieldProg == 0) { /* read alpha flag */
         uint8_t alpha;
         if (img->pixels.data != NULL) {
             pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
@@ -389,15 +394,15 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
         if (result == pok_net_completed)
             img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     }
-    if (info->fieldProg == 1) {
+    if (info->fieldProg == 1) { /* read width */
         pok_data_stream_read_uint32(dsrc,&img->width);
         result = pok_netobj_readinfo_process(info);
     }
-    if (info->fieldProg == 2) {
+    if (info->fieldProg == 2) { /* read height */
         pok_data_stream_read_uint32(dsrc,&img->height);
         result = pok_netobj_readinfo_process(info);
     }
-    if (info->fieldProg == 3) {
+    if (info->fieldProg == 3) { /* read pixel-data */
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
@@ -448,7 +453,7 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
     size_t amount;
     enum pok_network_result result = pok_net_already;
     /* read flags */
-    if (info->fieldProg == 0) {
+    if (info->fieldProg == 0) { /* read alpha flag */
         uint8_t alpha;
         if (img->pixels.data != NULL) {
             pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
@@ -461,7 +466,7 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         if (result == pok_net_completed)
             img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     }
-    if (info->fieldProg == 1) {
+    if (info->fieldProg == 1) { /* read pixel data */
         byte_t* pixdata;
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {

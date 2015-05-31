@@ -8,16 +8,16 @@
    from the source image
 
     usage:
-      tilemaker init <image-dimension>                // create new database in current directory
-      tilemaker compile <compiled-output-raw-image>   // build tileset image from database
-      tilemaker add <source-raw-image> <cols> <rows>  // update database with tiles from source
-      tilemaker rm <position-index> ...               // remove tiles at specified positions
-      tilemaker pass <position-index> ...             // marks tiles as passable (put at end of list)
-      tilemaker mv <source-index> <dest-index>        // reorders tiles such that source is at dest position
+      tilemaker init <image-dimension>                          // create new database in current directory
+      tilemaker compile <compiled-output-raw-image> [rect|seq]  // build tileset image from database
+      tilemaker add <source-raw-image> <cols> <rows>            // update database with tiles from source
+      tilemaker rm <position-index> ...                         // remove tiles at specified positions
+      tilemaker pass <position-index> ...                       // marks tiles as passable (put at end of list)
+      tilemaker mv <source-index> <dest-index>                  // reorders tiles such that source is at dest position
 */
-#include "dstructs/dynarray.h"
+#include "lib.h"
+#include <dstructs/dynarray.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -27,13 +27,7 @@
 #include <unistd.h>
 #include <dirent.h>
 
-enum compiled_image_format
-{
-    COMPILED_RECTANGLE, /* tiles are stored in rows of 16 for viewing */
-    COMPILED_SEQUENTIAL /* tiles are stored sequentially for reading into pokgame */
-};
-
-static const char* programName;
+const char* programName;
 static const char* const CONFIG_FILE = ".tilemaker.config";
 static const char* const TILEDIR = ".tiles";
 static struct global_config
@@ -46,8 +40,6 @@ static struct global_config
 static void read_config();
 static void write_config();
 static struct dynamic_array* get_tile_files(int* highest);
-static void load_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput);
-static void save_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput);
 static int image_compar(uint8_t* imgA,uint8_t* imgB,size_t bytec);
 static int int_fn_compar(const char** left,const char** right);
 static inline int from_tile_name(const char* name);
@@ -225,42 +217,6 @@ struct dynamic_array* get_tile_files(int* highest)
     closedir(tiledir);
     return arry;
 }
-void load_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput)
-{
-    size_t pixcnt;
-    FILE* fin;
-    fin = fopen(file,"r");
-    if (fin == NULL) {
-        fprintf(stderr,"%s: could not open image file: %s\n",programName,strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    pixcnt = width * height;
-    if (showOutput)
-        printf("loading image [%s]: %zux%zu pixels [%zu total]\n",file,width,height,pixcnt);
-    if (fread(pix,3,pixcnt,fin) != pixcnt) {
-        fprintf(stderr,"%s: failed to read image\n",programName);
-        exit(EXIT_FAILURE);
-    }
-    fclose(fin);
-}
-void save_image(const char* file,uint8_t* pix,size_t width,size_t height,int showOutput)
-{
-    FILE* fout;
-    size_t pixcnt;
-    fout = fopen(file,"w");
-    if (fout == NULL) {
-        fprintf(stderr,"%s: could not open output file %s\n",programName,file);
-        exit(EXIT_FAILURE);
-    }
-    pixcnt = width*height;
-    if (showOutput)
-        printf("saving image [%s]: %zux%zu pixels [%zu total]\n",file,width,height,pixcnt);
-    if (fwrite(pix,3,pixcnt,fout) != pixcnt) {
-        fprintf(stderr,"%s: incomplete or failed write\n",programName);
-        exit(EXIT_FAILURE);
-    }
-    fclose(fout);
-}
 int image_compar(uint8_t* imgA,uint8_t* imgB,size_t bytec)
 {
     size_t iter;
@@ -311,6 +267,7 @@ void init(size_t dimension)
 
 static uint8_t* compile_rectangle(struct dynamic_array* arry,size_t* sz)
 {
+    /* note: the rectangular image is for viewing (validation) */
     uint8_t* tile;
     uint8_t* result;
     size_t i, iter, rows;
@@ -346,7 +303,7 @@ static uint8_t* compile_rectangle(struct dynamic_array* arry,size_t* sz)
             int doTile = 0;
             if (iter < arry->da_top) {
                 /* read tile image into memory */
-                load_image(arry->da_data[iter++],tile,config.dimension,config.dimension,0);
+                load_image_rgb(arry->da_data[iter++],tile,config.dimension,config.dimension,0);
                 doTile = 1;
             }
             /* write tile data into image at position {j,i} */
@@ -369,23 +326,32 @@ static uint8_t* compile_rectangle(struct dynamic_array* arry,size_t* sz)
 }
 static uint8_t* compile_sequential(struct dynamic_array* arry,size_t* sz)
 {
+    /* note: this image is for pokgame; we include 8 bytes up front for the image dimensions;
+       pokgame uses this to determine the number of tiles */
     size_t i, iter, tilebytes;
     uint8_t* tile;
     uint8_t* result;
+    uint32_t height;
     tilebytes = 3 * config.dimension * config.dimension;
     tile = malloc(tilebytes);
     if (tile == NULL) {
         fprintf(stderr,"%s: could not allocate enough memory for operation\n",programName);
         exit(EXIT_FAILURE);
     }
-    *sz = arry->da_top * tilebytes;
+    *sz = arry->da_top * tilebytes + 8;
     result = malloc(*sz);
     if (result == NULL) {
         fprintf(stderr,"%s: could not allocate enough memory for operation\n",programName);
         exit(EXIT_FAILURE);
     }
-    /* place tiles inside the result image */
+    /* write width and height to result image */
     iter = 0;
+    height = config.dimension * arry->da_top;
+    for (i = 0;i < 4;++i)
+        result[iter++] = ((uint32_t)config.dimension >> (8*i)) & 0xff;
+    for (i = 0;i < 4;++i)
+        result[iter++] = (height >> (8*i)) & 0xff;
+    /* place tiles inside the result image */
     if (chdir(TILEDIR) != 0) {
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
@@ -393,7 +359,7 @@ static uint8_t* compile_sequential(struct dynamic_array* arry,size_t* sz)
     for (i = 0;i < arry->da_top;++i) {
         size_t j;
         /* read tile image into memory */
-        load_image(dynamic_array_getat(arry,i),tile,config.dimension,config.dimension,0);
+        load_image_rgb(dynamic_array_getat(arry,i),tile,config.dimension,config.dimension,0);
         for (j = 0;j < tilebytes;++j)
             result[iter++] = tile[j];
     }
@@ -454,7 +420,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
         fprintf(stderr,"%s: could not allocate enough memory for operation\n",programName);
         exit(EXIT_FAILURE);
     }
-    load_image(sourceFile,src,columns*config.dimension,rows*config.dimension,1);
+    load_image_rgb(sourceFile,src,columns*config.dimension,rows*config.dimension,1);
     /* load tiles; first get all tile file names; then load them into memory, replacing
        the file names with the tile structure */
     arry = get_tile_files(&a);
@@ -469,7 +435,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
             fprintf(stderr,"%s: could not allocate enough memory for operation\n",programName);
             exit(EXIT_FAILURE);
         }
-        load_image(arry->da_data[i],t,config.dimension,config.dimension,0);
+        load_image_rgb(arry->da_data[i],t,config.dimension,config.dimension,0);
         free(arry->da_data[i]);
         arry->da_data[i] = t;
     }
@@ -507,7 +473,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
             if (m) {
                 char name[16];
                 snprintf(name,sizeof(name),"%d",a++);
-                save_image(name,tile,config.dimension,config.dimension,1);
+                save_image_rgb(name,tile,config.dimension,config.dimension,1);
                 /* add the tile to the list */
                 dynamic_array_pushback(arry,tile);
                 ++c;

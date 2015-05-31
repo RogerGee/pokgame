@@ -39,6 +39,7 @@ LINK = gcc
 OBJDIR = $(OBJECT_DIRECTORY_DEBUG)
 ifdef MAKE_TEST
 DEBUG_BINARY = $(PROGRAM_NAME_TEST)
+MACROS_DEBUG := $(MACROS_DEBUG) -DPOKGAME_TEST
 else
 DEBUG_BINARY = $(PROGRAM_NAME_DEBUG)
 endif
@@ -62,17 +63,18 @@ IMAGE_H = src/image.h $(NET_H)
 GRAPHICS_H = src/graphics.h $(NET_H) $(IMAGE_H)
 TILE_H = src/tile.h $(NET_H)
 TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
-SPRITE_H = src/sprite.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
+SPRITEMAN_H = src/spriteman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
 MAP_H = src/map.h $(NET_H) $(TILE_H)
 MAP_RENDER_H = src/map-render.h $(MAP_H) $(GRAPHICS_H)
+POKGAME_H = src/pokgame.h 
 
 # object code files: library objects are used both by clients and version servers
-OBJECTS = graphics.o tileman.o sprite.o map-render.o
+OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-render.o update-proc.o io-proc.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o types.o pok-util.o tile.o map.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
 ifdef MAKE_TEST
-TEST_OBJECTS = main.o nettest.o graphicstest1.o
+TEST_OBJECTS = main.o maintest.o nettest.o graphicstest1.o
 OBJECTS := $(OBJECTS) $(addprefix $(OBJECT_DIRECTORY_TEST)/,$(TEST_OBJECTS))
 endif
 
@@ -92,14 +94,20 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB)
 
 # src targets (only for the game client)
+$(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
 $(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
 $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
-$(OBJDIR)/sprite.o: src/sprite.c $(SPRITE_H) $(ERROR_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/sprite.o src/sprite.c
-$(OBJDIR)/map-render.o: src/map-render.c src/map-render-gl.c $(MAP_RENDER_H) $(PROTOCOL_H)
+$(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
+$(OBJDIR)/map-render.o: src/map-render.c src/map-render-gl.c $(MAP_RENDER_H) $(PROTOCOL_H) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map-render.o src/map-render.c
+$(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
+$(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/io-proc.o src/io-proc.c
 
 # src targets for the library
 $(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)
@@ -120,6 +128,8 @@ $(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H)
 # test targets
 $(OBJECT_DIRECTORY_TEST)/main.o: test/main.c
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
+$(OBJECT_DIRECTORY_TEST)/maintest.o: test/maintest.c $(POKGAME_H)
+	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/maintest.o test/maintest.c
 $(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
 $(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_RENDER_H) $(ERROR_H)

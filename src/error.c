@@ -53,7 +53,13 @@ static char const* const* POK_ERROR_MESSAGES[] = {
     },
     (const char* []) { /* pok_ex_tileman */
         "a zero amount of tiles was specified", /* pok_ex_tileman_zero_tiles */
-        "too few tile animation parameters were specified" /* pok_ex_tileman_too_few_ani */
+        "too few tile animation parameters were specified", /* pok_ex_tileman_too_few_ani */
+        "the tile manager was already configured for the specified operation", /* pok_ex_tileman_already */
+        "the specified tile sheet dimensions were incorrect" /* pok_ex_tileman_bad_image_dimension */
+    },
+    (const char* []) { /* pok_ex_spriteman */
+        "the sprite manager was already configured for the specified operation", /* pok_ex_spriteman_already */
+        "the specified sprite sheet dimensions were incorrect" /* pok_ex_spriteman_bad_image_dimension */
     },
     (const char* []) { /* pok_ex_tile */
         "a bad tile warp kind parameter was specified" /* pok_ex_tile_bad_warp_kind */
@@ -79,6 +85,13 @@ void pok_error(enum pok_errorkind kind,const char* message)
         exit(EXIT_FAILURE);
     }
     pok_unlock_error_module();
+}
+void pok_error_fromstack(enum pok_errorkind kind)
+{
+    const struct pok_exception* ex;
+    ex = pok_exception_pop();
+    if (ex != NULL)
+        pok_error(kind,ex->message);
 }
 
 /* pok exception handling; record exceptions on a per-thread basis */

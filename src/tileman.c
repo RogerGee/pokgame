@@ -3,19 +3,6 @@
 #include "error.h"
 #include <stdlib.h>
 
-/* we cache the last created tile manager so that we can use it to configure
-   new tiles automatically */
-static struct pok_tile_manager* currentTileManager = NULL;
-
-void pok_tileman_load_module(struct pok_tile_manager* tman)
-{
-    currentTileManager = tman;
-}
-void pok_tileman_unload_module()
-{
-    currentTileManager = NULL;
-}
-
 /* pok_tile_manager */
 struct pok_tile_manager* pok_tile_manager_new(const struct pok_graphics_subsystem* sys)
 {
@@ -40,6 +27,7 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
     tman->impassability = 1; /* black tile is impassable, everything else passable */
     tman->tileset = NULL;
     tman->tileani = NULL;
+    tman->_sheet = NULL;
 }
 void pok_tile_manager_delete(struct pok_tile_manager* tman)
 {
@@ -54,8 +42,8 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
     }
     if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref))
         free(tman->tileani);
-    if (currentTileManager == tman)
-        currentTileManager = NULL;
+    if (tman->_sheet != NULL)
+        pok_image_free(tman->_sheet);
 }
 bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
 {
@@ -139,16 +127,32 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
     }
     return FALSE;
 }
+static bool_t pok_tile_manager_from_data(struct pok_tile_manager* tman,uint16_t imgc,const byte_t* data,bool_t byRef)
+{
+    uint16_t i;
+    /* load tiles from data: the first tile (black tile) is already set */
+    for (i = 1;i <= imgc;++i) {
+        struct pok_image* img;
+        if (byRef)
+            img = pok_image_new_byref_rgb(tman->sys->dimension,tman->sys->dimension,data);
+        else
+            img = pok_image_new_byval_rgb(tman->sys->dimension,tman->sys->dimension,data);
+        if (img == NULL)
+            return FALSE;
+        data += img->width * img->height * sizeof(union pixel);
+        tman->tileset[i] = img;
+    }
+    return TRUE;
+}
 bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,const byte_t* data,bool_t byRef)
 {
     /* read tile data from memory; since tile images must match the 'dimension' value, the data is
        assumed to be of the correct length for the given value of 'imgc'; the pixel data also should
        not have an alpha channel */
-    uint16_t i;
-#ifdef POKGAME_DEBUG
-    if (tman->tileset != NULL)
-        pok_error(pok_error_fatal,"tileset is already loaded in pok_tile_manager_load_tiles()");
-#endif
+    if (tman->tileset != NULL) {
+        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_already);
+        return FALSE;
+    }
     tman->tilecnt = imgc+1;
     tman->impassability = impassability;
     tman->tileset = malloc(tman->tilecnt * sizeof(struct pok_image*));
@@ -159,16 +163,7 @@ bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,u
     /* the black tile is always the first tile */
     tman->tileset[0] = tman->sys->blacktile;
     /* load the other tiles */
-    for (i = 1;i <= imgc;++i) {
-        struct pok_image* img;
-        if (byRef)
-            img = pok_image_new_byref_rgb(tman->sys->dimension,tman->sys->dimension,data);
-        else
-            img = pok_image_new_byval_rgb(tman->sys->dimension,tman->sys->dimension,data);
-        data += img->width * img->height * sizeof(union pixel);
-        tman->tileset[i] = img;
-    }
-    return TRUE;
+    return pok_tile_manager_from_data(tman,imgc,data,byRef);
 }
 bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,struct pok_tile_ani_data* data,bool_t byRef)
 {
@@ -194,6 +189,34 @@ bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,str
         for (i = 0;i < anic;++i)
             tman->tileani[i] = data[i];
     }
+    return TRUE;
+}
+bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char* file)
+{
+    struct pok_image* img;
+    if (tman->_sheet != NULL || tman->tileset != NULL) {
+        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_already);
+        return FALSE;
+    }
+    img = pok_image_new();
+    if (img == NULL)
+        return FALSE;
+    if ( !pok_image_fromfile_rgb(img,file) ) {
+        pok_image_free(img);
+        return FALSE;
+    }
+    /* check image dimensions; it must specify complete tiles (and at least 1) */
+    if (img->width != tman->sys->dimension || img->height < tman->sys->dimension || img->height % tman->sys->dimension != 0) {
+        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_bad_image_dimension);
+        pok_image_free(img);
+        return FALSE;
+    }
+    /* load tile images by reference (set impassability to default value for now) */
+    if ( !pok_tile_manager_load_tiles(tman,img->height / tman->sys->dimension,0,img->pixels.data,TRUE) ) {
+        pok_image_free(img);
+        return FALSE;
+    }
+    tman->_sheet = img;
     return TRUE;
 }
 static enum pok_network_result pok_tile_ani_data_netread(struct pok_tile_ani_data* ani,struct pok_data_source* dsrc,
@@ -268,16 +291,16 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
     /* read tile info substructure from data source:
         [2 bytes] number of tiles
         [2 bytes] impassability cutoff
-        [n bytes] 'dimension x dimension' sized 'pok_image' structures
+        [n bytes] pok image containing the specified number of tiles; the image's size
+                  is assumed from the number of tiles (width=dimension height=dimension*number-of-tiles)
         [n bytes] tile animation data (optional if user sends zero as first field) */
     size_t i;
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
+    if (info->fieldProg == 0) { /* number of tiles */
         pok_data_stream_read_uint16(dsrc,&tman->tilecnt);
         result = pok_netobj_readinfo_process(info);
         if (result == pok_net_completed) {
             ++tman->tilecnt; /* account for first black tile */
-            info->fieldCnt = tman->tilecnt-1; /* let field count hold number of image substructures to read */
             tman->tileset = malloc(sizeof(struct pok_image*) * tman->tilecnt);
             if (tman->tileset == NULL) {
                 pok_exception_flag_memory_error();
@@ -286,37 +309,37 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
             /* initialize image substructures so that later calls can determine if allocated or not; the
                first tile is always set to the black tile */
             tman->tileset[0] = tman->sys->blacktile;
+            tman->_sheet = pok_image_new();
+            if (tman->_sheet == NULL) {
+                pok_exception_flag_memory_error();
+                return pok_net_failed_internal;
+            }
             for (i = 1;i < tman->tilecnt;++i)
                 tman->tileset[i] = NULL;
         }
     }
-    if (info->fieldProg == 1) {
+    if (info->fieldProg == 1) { /* impassability value */
         pok_data_stream_read_uint16(dsrc,&tman->impassability);
         result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 2) {
-        do {
-            struct pok_image** imgp;
-            imgp = tman->tileset + (tman->tilecnt - info->fieldCnt); /* grab ptr to image substructure */
-            if (*imgp == NULL) { /* we have not attempted netread on this tile yet */
-                *imgp = pok_image_new();
-                if ( !pok_netobj_readinfo_alloc_next(info) )
-                    return pok_net_failed_internal;
-            }
-            /* attempt to read from network; assume 'sys->dimension' is the image width/height */
-            result = pok_image_netread_ex(*imgp,tman->sys->dimension,tman->sys->dimension,dsrc,info->next);
-            if (result != pok_net_completed)
-                break;
-            --info->fieldCnt;
-        } while (info->fieldCnt > 0);
-        if (info->fieldCnt == 0)
-            ++info->fieldProg;
-    }
-    if (info->fieldProg == 3) {
-        if ( !pok_netobj_readinfo_alloc_next(info) )
+        if (result == pok_net_completed && !pok_netobj_readinfo_alloc_next(info))
             return pok_net_failed_internal;
-        result = pok_tile_manager_netread_ani(tman,dsrc,info->next);
     }
+    if (info->fieldProg == 2) { /* image containing tile structures */
+        /* netread a single image that contains all the tiles */
+        result = pok_image_netread_ex(tman->_sheet,tman->sys->dimension,(uint32_t)(tman->tilecnt-1)*tman->sys->dimension,dsrc,info->next);
+        if (result == pok_net_completed) {
+            /* divide the tile sheet image into individual tile images; this takes up minimal memory since
+               the individual images just refer to image data in the source sheet image; subtract 1 from
+               tilecnt since we incremented it earlier to account for the black tile */
+            if ( !pok_tile_manager_from_data(tman,tman->tilecnt-1,tman->_sheet->pixels.data,TRUE) )
+                return pok_net_failed_internal;
+            /* reset info next */
+            if ( !pok_netobj_readinfo_alloc_next(info) )
+                return pok_net_failed_internal;
+        }
+    }
+    if (info->fieldProg == 3)
+        result = pok_tile_manager_netread_ani(tman,dsrc,info->next);
     return result;
 }
 struct pok_image* pok_tile_manager_get_tile(const struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks)

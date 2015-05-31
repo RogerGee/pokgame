@@ -60,6 +60,7 @@ void pok_graphics_subsystem_init(struct pok_graphics_subsystem* sys)
     sys->keyup = NULL;
     sys->blacktile = NULL;
     sys->impl = NULL;
+    sys->framerate = INITIAL_FRAMERATE;
     pok_string_init(&sys->title);
     pok_string_assign(&sys->title,"pokgame: ");
 }

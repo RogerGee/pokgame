@@ -2,12 +2,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "pokgame.h"
 #include "error.h"
 
 const char* POKGAME_NAME;
 const char* TMPDIR;
 const char* HOME;
 
+extern int main_test();
 extern int net_test1();
 extern int graphics_main_test1();
 
@@ -29,6 +31,7 @@ int main(int argc,const char* argv[])
 
     /* load modules */
     pok_exception_load_module();
+    pok_game_load_module();
 
     /* find a temporary directory */
     if ((TMPDIR = getenv("TEMPDIR")) == NULL && (TMPDIR = getenv("TMPDIR")) == NULL && (TMPDIR = getenv("TMP")) == NULL) {
@@ -52,9 +55,10 @@ int main(int argc,const char* argv[])
     else if (strcmp(input,"graphics 1") == 0)
         graphics_main_test1();
     else
-        puts("bad test name");
+        main_test();
 
     /* unload modules */
+    pok_game_unload_module();
     pok_exception_unload_module();
 
     return 0;

@@ -12,6 +12,7 @@ enum pok_errorkind
     pok_error_unimplemented /* the control tried to execute a feature not yet supported */
 };
 void pok_error(enum pok_errorkind kind,const char* message);
+void pok_error_fromstack(enum pok_errorkind kind);
 
 /* exception categories are enumerated by the modules that generate them */
 enum pok_ex_kind
@@ -21,6 +22,7 @@ enum pok_ex_kind
     pok_ex_graphics,
     pok_ex_image,
     pok_ex_tileman,
+    pok_ex_spriteman,
     pok_ex_tile,
     pok_ex_map,
     _pok_ex_top

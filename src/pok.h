@@ -21,7 +21,7 @@
    playerOffsetX    - pixel offset within column tile for player sprite
    playerOffsetY    - pixel offset within row tile for player sprite
    doServer         - if non-zero, then library uses network sockets to host game;
-                      othewise the library uses the standard input/output
+                      otherwise the library uses the standard input/output
 
    'default' variant: lets the client specify graphics parameters
 */

@@ -129,7 +129,7 @@ inline void impl_unlock(struct pok_graphics_subsystem* sys)
 }
 
 /* define keyboard input functions */
-static int pok_input_key_to_keycode(enum pok_input_key key)
+static KeySym pok_input_key_to_keysym(enum pok_input_key key)
 {
     switch (key) {
     case pok_input_key_ABUTTON:
@@ -153,9 +153,9 @@ static int pok_input_key_to_keycode(enum pok_input_key key)
     }
     return -1;
 }
-static enum pok_input_key pok_input_key_from_keycode(int keycode)
+static enum pok_input_key pok_input_key_from_keysym(KeySym keysym)
 {
-    switch (keycode) {
+    switch (keysym) {
     case XK_Z:
         return pok_input_key_ABUTTON;
     case XK_X:
@@ -186,7 +186,8 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
            normal input key was pressed in this instance; only grab the keyboard state if the user specified
            'refresh' so that we can process the keys in a single instance */
         int keycode;
-        keycode = pok_input_key_to_keycode(key);
+        if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
+            return FALSE;
         if (refresh)
             XQueryKeymap(display,sys->impl->keys);
         return sys->impl->keys[keycode/8] & (0x01 << keycode%8) ? TRUE : FALSE;
@@ -204,6 +205,7 @@ void do_x_init()
         /* connect to the X server (now it gets real) */
         int dum;
         static int GLX_VISUAL[] = {GLX_RGBA,GLX_DEPTH_SIZE,24,GLX_DOUBLEBUFFER,None};
+        XInitThreads();
         display = XOpenDisplay(NULL);
         screen = DefaultScreen(display);
         if ( !glXQueryExtension(display,&dum,&dum) )
@@ -220,6 +222,7 @@ void do_x_close()
     if (--xref <= 0) {
         XFree(visual);
         XCloseDisplay(display);
+        display = NULL;
     }
     pthread_mutex_unlock(&xlib_mutex);
 }
@@ -294,6 +297,8 @@ void close_frame(struct pok_graphics_subsystem* sys)
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
     float black[3];
+    int framerate = 0;
+    useconds_t sleepamt = 0;
     uint32_t wwidth, wheight;
     /* initialize global X11 connection */
     do_x_init();
@@ -312,7 +317,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     glPixelZoom(1,-1);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(0.0,wwidth,wheight,0.0,-1.0,1.0);
+    glOrtho(0,wwidth,wheight,0,-1.0,1.0);
     /* set the modelview matrix to identity; this may be adjusted by any graphics routine
        during the game loop; assume that the routines play nice and reset it */
     glMatrixMode(GL_MODELVIEW);
@@ -333,14 +338,16 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
             }
             else if (evnt.type == ConfigureNotify) {
-                wwidth = evnt.xconfigure.width;
-                wheight = evnt.xconfigure.height;
-                glViewport(0,0,wwidth,wheight);
+                /* center the image */
+                int32_t x, y;
+                x = evnt.xconfigure.width / 2 - wwidth / 2;
+                y = evnt.xconfigure.height / 2 - wheight / 2;
+                glViewport(x,y,wwidth,wheight);
             }
             else if (evnt.type == KeyRelease) {
                 KeySym sym = XLookupKeysym(&evnt.xkey,0);
                 if (sys->keyup != NULL)
-                    (*sys->keyup)( pok_input_key_from_keycode(sym) );
+                    (*sys->keyup)( pok_input_key_from_keysym(sym) );
             }
         }
 
@@ -362,6 +369,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         glClearColor(black[0],black[1],black[2],0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        /* rendering */
         if (sys->impl->gameRendering) {
             uint16_t index;
             /* go through and call each render function */
@@ -372,8 +380,15 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         /* expose the backbuffer */
         glXSwapBuffers(display,sys->impl->window);
 
+        /* check for framerate updates */
+        if (sys->framerate != framerate) {
+            framerate = sys->framerate;
+            /* usleep uses microseconds; there are 10^6 microseconds in a second */
+            sleepamt = 1000000 / framerate;
+        }
+
         /* put the thread to sleep to produce a frame rate */
-        usleep(100000);
+        usleep(sleepamt);
     }
 
 done:
@@ -384,10 +399,17 @@ done:
 
 /* misc graphics routines */
 
-void pok_image_render(struct pok_image* img,uint32_t x,uint32_t y)
+void pok_image_render(struct pok_image* img,int32_t x,int32_t y)
 {
     /* raster graphic rendering routine implemented with OpenGL */
-    glRasterPos2i(x,y);
+    if (x < 0 || y < 0) {
+        /* hack around clipping restrictions with glRasterPos; we
+           must negate 'y' since the vertical coordinates were flipped */
+        glRasterPos2i(0,0);
+        glBitmap(0,0,0,0,x,-y,NULL);
+    }
+    else
+        glRasterPos2i(x,y);
     if (img->flags & pok_image_flag_alpha)
         glDrawPixels(img->width,img->height,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
     else

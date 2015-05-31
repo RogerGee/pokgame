@@ -4,14 +4,7 @@
 #include <stdlib.h>
 
 /* include the map rendering function; define an interface that it can use to compute map render info */
-struct chunk_render_info
-{
-    uint32_t px, py;
-    uint16_t across, down;
-    struct pok_location loc;
-    struct pok_map_chunk* chunk;
-};
-void compute_chunk_render_info(struct chunk_render_info* chunks, /* this is 'extern' for debugging */
+void compute_chunk_render_info(struct pok_chunk_render_info* chunks, /* this is 'extern' for debugging */
     const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
 
 /* include platform-dependent code */
@@ -20,18 +13,35 @@ void compute_chunk_render_info(struct chunk_render_info* chunks, /* this is 'ext
 #endif
 
 /* pok_map_render_context */
-struct pok_map_render_context* pok_map_render_context_new(struct pok_map* map,const struct pok_tile_manager* tman)
+struct pok_map_render_context* pok_map_render_context_new(const struct pok_tile_manager* tman)
 {
     struct pok_map_render_context* context;
     context = malloc(sizeof(struct pok_map_render_context));
-    pok_map_render_context_init(context,map,tman);
+    pok_map_render_context_init(context,tman);
     return context;
 }
 void pok_map_render_context_free(struct pok_map_render_context* context)
 {
     free(context);
 }
-void pok_map_render_context_init(struct pok_map_render_context* context,struct pok_map* map,const struct pok_tile_manager* tman)
+void pok_map_render_context_init(struct pok_map_render_context* context,const struct pok_tile_manager* tman)
+{
+    int i, j;
+    context->focus[0] = context->focus[1] = 0;
+    context->offset[0] = context->offset[1] = 0;
+    for (i = 0;i < 3;++i)
+        for (j = 0;j < 3;++j)
+            context->viewingChunks[i][j] = NULL;
+    context->relpos.column = context->relpos.row = 0;
+    context->chunkpos.X = 0;
+    context->chunkpos.Y = 0;
+    context->map = NULL;
+    context->tman = tman;
+    context->aniTicks = 0;
+    for (i = 0;i < 4;++i)
+        context->info[i].chunk = NULL;
+}
+void pok_map_render_context_set_map(struct pok_map_render_context* context,struct pok_map* map)
 {
     int i, j;
     context->focus[0] = context->focus[1] = 0;
@@ -44,22 +54,6 @@ void pok_map_render_context_init(struct pok_map_render_context* context,struct p
     context->chunkpos.Y = map->originPos.Y;
     map->chunk = map->origin;
     context->map = map;
-    context->tman = tman;
-    context->aniTicks = 0;
-}
-void pok_map_render_context_reset(struct pok_map_render_context* context,struct pok_map* newMap)
-{
-    int i, j;
-    context->focus[0] = context->focus[1] = 0;
-    context->offset[0] = context->offset[1] = 0;
-    for (i = 0;i < 3;++i)
-        for (j = 0;j < 3;++j)
-            context->viewingChunks[i][j] = NULL;
-    context->relpos.column = context->relpos.row = 0;
-    context->chunkpos.X = newMap->originPos.X;
-    context->chunkpos.Y = newMap->originPos.Y;
-    newMap->chunk = newMap->origin;
-    context->map = newMap;
     context->aniTicks = 0;
 }
 void pok_map_render_context_align(struct pok_map_render_context* context)
@@ -253,24 +247,29 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,enum
 }
 
 /* implementation of interface for map rendering routine */
-void compute_chunk_render_info(struct chunk_render_info* info,
+void compute_chunk_render_info(struct pok_chunk_render_info* info,
     const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context)
 {
     /* a map is painted as an application of at most 4 chunks; this routine computes which chunks are needed along with
        the bounding information specifying how each chunk is to be drawn; this routine corrects for small chunk dimensions
-       (but the dimensions should be correct for any multi-chunk map, otherwise undefined behavior will result) */
+       (but the dimensions should be correct for any multi-chunk map, otherwise undefined behavior will result); the viewing
+       space is expanded to include a column/row beyond the screen's border; this allows off-screen tiles to scroll correctly
+       into the viewing area */
     int i, d[2];
     uint16_t u, v;
+    const int32_t ZERO = - (uint32_t)sys->dimension;
     /* chunks: chunk1 is always the horizontally adjacent chunk (if any) and
        chunk2 is always the vertically adjacent chunk (if any) */
     for (i = 0;i < 4;++i)
         info[i].chunk = NULL;
-    info[0].px = info[0].py = 0;
-    info[0].across = sys->windowSize.columns;
-    info[0].down = sys->windowSize.rows;
+    /* compute initial chunk render info (offset so that we render a "border" around the viewing space) */
+    info[0].px = ZERO;
+    info[0].py = ZERO;
+    info[0].across = sys->windowSize.columns + 2;
+    info[0].down = sys->windowSize.rows + 2;
     info[0].chunk = context->map->chunk;
-    i = (int)context->relpos.column - (int)sys->playerLocation.column;
     d[0] = context->focus[0]; d[1] = context->focus[1];
+    i = (int)context->relpos.column - (int)sys->playerLocation.column - 1; /* compute left column position within chunk */
     if (i < 0) {
         /* viewing area exceeds chunk bounds on the left */
         u = -i; /* number of columns to the left */
@@ -278,7 +277,7 @@ void compute_chunk_render_info(struct chunk_render_info* info,
         info[0].across -= u;
         info[0].loc.column = 0;
         /* set dimensions for adjacent chunk; 'py', 'down' and 'loc.row' members to be set later */
-        info[1].px = 0;
+        info[1].px = ZERO;
         info[1].across = u;
         info[1].loc.column = context->map->chunkSize.columns - u;
         info[1].chunk = context->viewingChunks[context->focus[0]-1][context->focus[1]]; /* immediate left */
@@ -287,20 +286,20 @@ void compute_chunk_render_info(struct chunk_render_info* info,
     else {
         info[0].loc.column = i;
         u = context->map->chunkSize.columns - context->relpos.column - 1; /* how many columns to the right in chunk? */
-        if (u < sys->_playerLocationInv.column) {
+        if (u < sys->_playerLocationInv.column + 1) {
             /* viewing area exceeds chunk bounds on the right
                (note: viewing area can only exceed on the right given it did not exceed on the left) */
-            v = sys->_playerLocationInv.column - u; /* how many columns to the right in viewing area? */
+            v = sys->_playerLocationInv.column + 1 - u; /* how many columns to the right in viewing area? */
             info[0].across -= v;
             /* set dimensions for adjacent chunk; 'py', 'down' and 'loc.row' members to be set later */
-            info[1].px = sys->dimension * info[0].across;
+            info[1].px = info[0].px + sys->dimension * info[0].across;
             info[1].across = v;
             info[1].loc.column = 0;
             info[1].chunk = context->viewingChunks[context->focus[0]+1][context->focus[1]]; /* immediate right */
             ++d[0];
         }
     }
-    i = (int)context->relpos.row - (int)sys->playerLocation.row;
+    i = (int)context->relpos.row - (int)sys->playerLocation.row - 1; /* compute top row position within chunk */
     if (i < 0) {
         /* viewing area exceeds chunk bounds above */
         u = -i; /* number of rows above */
@@ -308,7 +307,7 @@ void compute_chunk_render_info(struct chunk_render_info* info,
         info[0].down -= u;
         info[0].loc.row = 0;
         /* set dimensions for adjacent chunk */
-        info[2].py = 0;
+        info[2].py = ZERO;
         info[2].down = u;        
         info[2].loc.row = context->map->chunkSize.rows - u;
         info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]-1]; /* straight up */
@@ -317,13 +316,13 @@ void compute_chunk_render_info(struct chunk_render_info* info,
     else {
         info[0].loc.row = i;
         u = context->map->chunkSize.rows - context->relpos.row - 1; /* how many rows below in chunk? */
-        if (u < sys->_playerLocationInv.row) {
+        if (u < sys->_playerLocationInv.row+1) {
             /* viewing area exceeds chunk bounds below
                (note: viewing area can only exceed below given it did not exceed above) */
-            v = sys->_playerLocationInv.row - u; /* how many rows below in viewing area? */
+            v = sys->_playerLocationInv.row + 1 - u; /* how many rows below in viewing area? */
             info[0].down -= v;
             /* set dimensions for adjacent chunk */
-            info[2].py = sys->dimension * info[0].down;
+            info[2].py = info[0].py + sys->dimension * info[0].down;
             info[2].down = v;
             info[2].loc.row = 0;
             info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]+1]; /* straight down */

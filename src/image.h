@@ -17,7 +17,10 @@ enum pok_ex_image
    NOT employ padding) are used to modify pixel data easily */
 union pixel
 {
-    byte_t rgb[3];
+    byte_t rgb[3]; /* this needs to be the first member */
+    byte_t r;
+    byte_t g;
+    byte_t b;
 };
 union alpha_pixel
 {

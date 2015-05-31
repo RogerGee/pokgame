@@ -476,6 +476,24 @@ bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],ui
     }
     return FALSE;
 }
+bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename)
+{
+    /* load space-separated tile data */
+    if (map->origin == NULL) {
+
+
+    }
+    return FALSE;
+}
+bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename)
+{
+    /* load comma-separated tile data */
+    if (map->origin == NULL) {
+
+
+    }
+    return FALSE;
+}
 static void pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* info)
 {
     /* configure a map's chunks based on an adjacency list; the adjacency list specifies
@@ -630,4 +648,8 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
     }
 fail:
     return result;
+}
+int pok_map_compar(struct pok_map* left,struct pok_map* right)
+{
+    return left->mapNo - right->mapNo;
 }

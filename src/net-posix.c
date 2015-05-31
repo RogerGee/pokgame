@@ -205,8 +205,27 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
 }
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead)
 {
-    /* perform a simpler read into a user-provided buffer (this just wraps the underlying system call) */
-    ssize_t r;
+    /* perform a simpler read into a user-provided buffer */
+    ssize_t r, amt;
+    if (dsrc->mode & DS_MODE_REACH_EOF) {
+        *bytesRead = 0;
+        return TRUE;
+    }
+    /* transfer bytes in our input buffer first; then read the remainder in directly to the user-provided buffer */
+    if (dsrc->szRead > 0) {
+        amt = bytesRequested > dsrc->szRead ? dsrc->szRead : bytesRequested;
+        memcpy(buffer,dsrc->bufferRead + dsrc->itRead,amt);
+        buffer = (char*)buffer + amt;
+        bytesRequested -= amt;
+        dsrc->szRead -= amt;
+        dsrc->itRead += amt;
+        *bytesRead = amt;
+    }
+    else
+        *bytesRead = 0;
+    if (bytesRequested == 0)
+        return TRUE;
+    /* read the remaining bytes directly */
     r = read(dsrc->fd[0],buffer,bytesRequested);
     if (r == -1) {
         /* read error */
@@ -225,7 +244,7 @@ bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,
     if (r == 0)
         /* set EOF mode bit */
         dsrc->mode |= DS_MODE_REACH_EOF;
-    *bytesRead = r;
+    *bytesRead += r;
     return TRUE;
 }
 static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t size,size_t* bytesWritten,bool_t flagError)
