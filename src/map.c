@@ -2,6 +2,7 @@
 #include "map.h"
 #include "error.h"
 #include "pok.h" /* gets protocol.h */
+#include "parser.h"
 #include <stdlib.h>
 
 /* structs used by the implementation */
@@ -400,14 +401,14 @@ static void pok_map_insert_chunk(struct pok_map* map,struct pok_map_chunk* chunk
         ++hint->pos.column;
     }
 }
-bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],uint32_t columns,uint32_t rows)
+bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_t columns,uint32_t rows)
 {
     /* load a map based on a rectangular tile configuration */
     if (map->origin == NULL) {
         uint16_t i, j;
         struct pok_size mapArea;
         struct pok_size lefttop, rightbottom;
-        const struct pok_tile_data* td[3];
+        const uint16_t* td[3];
         struct chunk_insert_hint hint;
         mapArea = pok_util_compute_chunk_size(columns,rows,MAX_MAP_CHUNK_DIMENSION,&map->chunkSize,&lefttop,&rightbottom);
         chunk_insert_hint_init(&hint,mapArea.columns,mapArea.rows);
@@ -455,9 +456,9 @@ bool_t pok_map_load(struct pok_map* map,const struct pok_tile_data tiledata[],ui
                 o = n;
                 for (k = 0;k < size.rows;++m,++k) {
                     for (l = 0;l < size.columns;++n,++l)
-                        pok_tile_init_ex(chunk->data[m]+n,td[2]+l);
+                        pok_tile_init(chunk->data[m]+n,td[2][l]);
                     n = o;
-                    td[2] += rows; /* move to next logical row in tile data */
+                    td[2] += columns; /* move to next logical row in tile data */
                 }
                 /* advance to the next chunk in the row of chunks */
                 td[1] += size.columns;
@@ -480,8 +481,25 @@ bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename)
 {
     /* load space-separated tile data */
     if (map->origin == NULL) {
-
-
+        bool_t result;
+        struct pok_parser_info info;
+        pok_parser_info_init(&info);
+        info.dsrc = pok_data_source_new_file(filename,pok_filemode_open_existing,pok_iomode_read);
+        if (info.dsrc == NULL)
+            return FALSE;
+        info.separator = ' ';
+        result = pok_parse_map_simple(&info);
+        if (result) {
+            if (info.qwords[0] == 0 || info.qwords[1] == 0 || info.words_c[0] < info.qwords[0] * info.qwords[1]) {
+                pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_format);
+                result = FALSE;
+            }
+            else
+                result = pok_map_load_simple(map,info.words,info.qwords[0],info.qwords[1]);            
+        }
+        pok_data_source_free(info.dsrc);
+        pok_parser_info_delete(&info);
+        return result;
     }
     return FALSE;
 }
@@ -489,8 +507,25 @@ bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename)
 {
     /* load comma-separated tile data */
     if (map->origin == NULL) {
-
-
+        bool_t result;
+        struct pok_parser_info info;
+        pok_parser_info_init(&info);
+        info.dsrc = pok_data_source_new_file(filename,pok_filemode_open_existing,pok_iomode_read);
+        if (info.dsrc == NULL)
+            return FALSE;
+        info.separator = ',';
+        result = pok_parse_map_simple(&info);
+        if (result) {
+            if (info.qwords[0] == 0 || info.qwords[1] == 0 || info.words_c[0] != info.qwords[0] * info.qwords[1]) {
+                pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_format);
+                result = FALSE;
+            }
+            else
+                result = pok_map_load_simple(map,info.words,info.qwords[0],info.qwords[1]);
+        }
+        pok_data_source_free(info.dsrc);
+        pok_parser_info_delete(&info);
+        return result;
     }
     return FALSE;
 }

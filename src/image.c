@@ -344,6 +344,7 @@ bool_t pok_image_fromfile_rgba(struct pok_image* img,const char* file)
         pok_data_source_free(fin);
         return FALSE;
     }
+    img->flags = pok_image_flag_alpha;
     pok_data_source_free(fin);
     return TRUE;
 }
@@ -370,6 +371,7 @@ bool_t pok_image_fromfile_rgba_ex(struct pok_image* img,const char* file,uint32_
     }
     img->width = width;
     img->height = height;
+    img->flags = pok_image_flag_alpha;
     pok_data_source_free(fin);
     return TRUE;
 }

@@ -16,6 +16,11 @@ struct pok_string* pok_string_new_ex(size_t initialCapacity)
     pok_string_init_ex(str,initialCapacity);
     return str;
 }
+void pok_string_free(struct pok_string* str)
+{
+    pok_string_delete(str);
+    free(str);
+}
 void pok_string_init(struct pok_string* str)
 {
     str->len = 0;

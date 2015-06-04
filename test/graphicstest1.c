@@ -103,13 +103,13 @@ int graphics_main_test1()
                 nxt = TEST_ROUT_TOP-1;
         }
         else if (strcmp(tok,"left") == 0)
-            pok_map_render_context_update(globals.mcxt,pok_direction_left);
+            pok_map_render_context_move(globals.mcxt,pok_direction_left,FALSE);
         else if (strcmp(tok,"right") == 0)
-            pok_map_render_context_update(globals.mcxt,pok_direction_right);
+            pok_map_render_context_move(globals.mcxt,pok_direction_right,FALSE);
         else if (strcmp(tok,"down") == 0)
-            pok_map_render_context_update(globals.mcxt,pok_direction_down);
+            pok_map_render_context_move(globals.mcxt,pok_direction_down,FALSE);
         else if (strcmp(tok,"up") == 0)
-            pok_map_render_context_update(globals.mcxt,pok_direction_up);
+            pok_map_render_context_move(globals.mcxt,pok_direction_up,FALSE);
         else if (strcmp(tok,"mapdebug") == 0) {
             struct pok_chunk_render_info info[4];
             compute_chunk_render_info(info,sys,globals.mcxt);
@@ -142,8 +142,10 @@ int graphics_main_test1()
             }
         }
         else if (strcmp(tok,"offset") == 0) {
-            globals.mcxt->offset[0] = 16;
-
+            if (globals.mcxt->offset[0] == -16)
+                globals.mcxt->offset[0] = 0;
+            else
+                globals.mcxt->offset[0] = -16;
         }
         if (nxt != cycle) {
             replace_routine(sys,cycle,nxt,contexts);
@@ -218,7 +220,7 @@ struct pok_map* get_map(int no)
 
 void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void** contexts)
 {
-    pok_graphics_subsystem_unregister(sys,routines[this]);
+    pok_graphics_subsystem_unregister(sys,routines[this],contexts[this]);
     pok_graphics_subsystem_register(sys,routines[that],contexts[that]);
 }
 
@@ -226,13 +228,13 @@ void keyup_routine(enum pok_input_key key)
 {
     /*printf("key up: %d\n",key);*/
     if (key == pok_input_key_UP)
-        pok_map_render_context_update(globals.mcxt,pok_direction_up);
+        pok_map_render_context_move(globals.mcxt,pok_direction_up,FALSE);
     else if (key == pok_input_key_DOWN)
-        pok_map_render_context_update(globals.mcxt,pok_direction_down);
+        pok_map_render_context_move(globals.mcxt,pok_direction_down,FALSE);
     else if (key == pok_input_key_LEFT)
-        pok_map_render_context_update(globals.mcxt,pok_direction_left);
+        pok_map_render_context_move(globals.mcxt,pok_direction_left,FALSE);
     else if (key == pok_input_key_RIGHT)
-        pok_map_render_context_update(globals.mcxt,pok_direction_right);
+        pok_map_render_context_move(globals.mcxt,pok_direction_right,FALSE);
 }
 
 void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)

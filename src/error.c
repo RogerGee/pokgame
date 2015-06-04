@@ -79,7 +79,7 @@ void pok_error(enum pok_errorkind kind,const char* message)
     if (kind == pok_error_warning)
         fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,message);
     else if (kind == pok_error_unimplemented)
-        fprintf(stderr,"%s: unimplemented: %s",POKGAME_NAME,message);
+        fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,message);
     else if (kind == pok_error_fatal) {
         fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,message);
         exit(EXIT_FAILURE);
@@ -90,8 +90,22 @@ void pok_error_fromstack(enum pok_errorkind kind)
 {
     const struct pok_exception* ex;
     ex = pok_exception_pop();
-    if (ex != NULL)
-        pok_error(kind,ex->message);
+    if (ex != NULL) {
+        pok_lock_error_module();
+        if (kind == pok_error_warning)
+            fprintf(stderr,"%s: warning: %s",POKGAME_NAME,ex->message);
+        else if (kind == pok_error_unimplemented)
+            fprintf(stderr,"%s: unimplemented: %s",POKGAME_NAME,ex->message);
+        else if (kind == pok_error_fatal)
+            fprintf(stderr,"%s: fatal error: %s",POKGAME_NAME,ex->message);
+        pok_unlock_error_module();
+        if (ex->lineno != 0)
+            fprintf(stderr,": line %d\n",ex->lineno);
+        else
+            fputc('\n',stderr);
+        if (kind == pok_error_fatal)
+            exit(EXIT_FAILURE);
+    }
 }
 
 /* pok exception handling; record exceptions on a per-thread basis */
@@ -122,7 +136,8 @@ static bool_t memory_error_flag = FALSE;
    need to be able to still create this structure */
 static struct pok_exception memerror = {pok_ex_default_memory_allocation_fail,
                                         pok_ex_default,
-                                        "memory allocation exception"};
+                                        "memory allocation exception",
+                                        0};
 
 void pok_exception_load_module()
 {
@@ -162,6 +177,7 @@ struct pok_exception* pok_exception_new()
 #endif
     ex = malloc(sizeof(struct pok_exception));
     ex->id = -1;
+    ex->lineno = 0;
     ex->kind = pok_ex_default;
     ex->message = NULL;
     /* place exceptions in data structure */
@@ -189,8 +205,37 @@ struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
 #endif
     ex = malloc(sizeof(struct pok_exception));
     ex->id = id;
+    ex->lineno = 0;
     ex->kind = kind;
     ex->message = POK_ERROR_MESSAGES[kind][id];
+    /* place exceptions in data structure */
+    pok_lock_error_module();
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list == NULL) {
+        list = malloc(sizeof(struct thread_exception_item));
+        thread_exception_item_init(list,tid);
+        hashmap_insert(&exceptions,list);
+    }
+    stack_push(&list->exceptions,ex);
+    list->last = FALSE; /* current top of stack is current exception */
+    pok_unlock_error_module();
+    return ex;
+}
+struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
+{
+    int tid;
+    struct thread_exception_item* list;
+    struct pok_exception* ex;
+#ifdef POKGAME_DEBUG
+    if (!init)
+        pok_error(pok_error_fatal,"module 'exception' was unloaded");
+#endif
+    ex = malloc(sizeof(struct pok_exception));
+    ex->id = pok_ex_default;
+    ex->lineno = lineno;
+    ex->kind = pok_ex_default_undocumented;
+    ex->message = message;
     /* place exceptions in data structure */
     pok_lock_error_module();
     tid = pok_get_thread_id();

@@ -17,6 +17,7 @@ struct pok_string
 };
 struct pok_string* pok_string_new();
 struct pok_string* pok_string_new_ex(size_t initialCapacity);
+void pok_string_free(struct pok_string* str);
 void pok_string_init(struct pok_string* str);
 void pok_string_init_ex(struct pok_string* str,size_t initialCapacity);
 void pok_string_delete(struct pok_string* str);

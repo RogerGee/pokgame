@@ -78,7 +78,7 @@ void impl_free(struct pok_graphics_subsystem* sys)
 static void check_impl(struct pok_graphics_subsystem* sys)
 {
     if (sys->impl == NULL)
-        pok_error(pok_error_fatal,"graphics_subsystem was not configured properly");
+        pok_error(pok_error_fatal,"graphics_subsystem was not configured properly!");
 }
 #endif
 
@@ -181,18 +181,56 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
     check_impl(sys);
 #endif
 
+    static int cache[8][2] = {
+        {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1},
+        {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1}
+    };
+
     if (display != NULL) {
         /* asynchronously get the state of the keyboard from the X server; return TRUE if the specified
            normal input key was pressed in this instance; only grab the keyboard state if the user specified
            'refresh' so that we can process the keys in a single instance */
-        int keycode;
-        if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
-            return FALSE;
-        if (refresh)
+        int keycode, i, j;
+        if (refresh) {
+            pthread_mutex_lock(&sys->impl->mutex);
             XQueryKeymap(display,sys->impl->keys);
-        return sys->impl->keys[keycode/8] & (0x01 << keycode%8) ? TRUE : FALSE;
+            pthread_mutex_unlock(&sys->impl->mutex);
+            if ((int)key == -1)
+                return FALSE;
+        }
+        if (key < 8) {
+            if (cache[key][0] == -1) {
+                if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
+                    return FALSE;
+                cache[key][0] = i = keycode/8;
+                cache[key][1] = j = 0x01 << keycode%8;
+            }
+            else {
+                i = cache[key][0];
+                j = cache[key][1];
+            }
+        }
+        else {
+            if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
+                return FALSE;
+            i = keycode/8;
+            j = 0x01 << keycode%8;
+        }
+        return sys->impl->keys[i] & j ? TRUE : FALSE;
     }
     return FALSE;
+}
+
+bool_t pok_graphics_subsystem_is_running(struct pok_graphics_subsystem* sys)
+{
+    /* the game is running (a.k.a. being rendered) if the 'gameRendering' flag is up */
+    return sys->impl != NULL && sys->impl->rendering && sys->impl->gameRendering;
+}
+
+bool_t pok_graphics_subsystem_has_window(struct pok_graphics_subsystem* sys)
+{
+    /* the window is up if the 'rendering' flag is true */
+    return sys->impl != NULL && sys->impl->rendering;
 }
 
 /* x11 functions */
@@ -233,6 +271,7 @@ void make_frame(struct pok_graphics_subsystem* sys)
     XSetWindowAttributes attrs;
     Colormap cmap;
     XSizeHints hints;
+    XVisualInfo* vi;
     /* prepare X window parameters */
     cmap = XCreateColormap(display,RootWindow(display,visual->screen),visual->visual,AllocNone);
     vmask = CWBorderPixel | CWColormap | CWEventMask;
@@ -314,7 +353,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     /* setup OpenGL */
     wwidth = sys->dimension * sys->windowSize.columns;
     wheight = sys->dimension * sys->windowSize.rows;
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     glPixelZoom(1,-1);
+    glDrawBuffer(GL_BACK);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0,wwidth,wheight,0,-1.0,1.0);
@@ -392,6 +434,8 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     }
 
 done:
+    sys->impl->gameRendering = FALSE;
+    sys->impl->rendering = FALSE;
     close_frame(sys);
     do_x_close();
     return NULL;

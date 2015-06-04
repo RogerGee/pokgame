@@ -27,6 +27,11 @@ enum pok_sprite_frame_direction
     sprite_right_ani
 };
 
+#define pok_to_frame_direction(dir) (dir == pok_direction_up ? sprite_up : (dir == pok_direction_down ? sprite_down \
+            : (dir == pok_direction_left ? sprite_left : sprite_right)))
+#define pok_from_frame_direction(frame) (frame < 3 ? pok_direction_up : (frame < 6 ? pok_direction_down \
+            : (frame < 8 ? pok_direction_left : pok_direction_right)))
+
 /* the sprite manager is responsible for representing character sprite images objects; it
    provides a way to associate images into sprite sets */
 struct pok_sprite_manager

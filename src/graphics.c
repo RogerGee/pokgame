@@ -208,7 +208,7 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
         }
     }
     if (info->fieldProg == 5) {
-        pok_data_stream_read_uint16(dsrc,&sys->playerOffsetX);
+        pok_data_stream_read_int16(dsrc,&sys->playerOffsetX);
         result = pok_netobj_readinfo_process(info);
         if (result==pok_net_completed && sys->playerOffsetX>=sys->dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_offset);
@@ -216,7 +216,7 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
         }
     }
     if (info->fieldProg == 6) {
-        pok_data_stream_read_uint16(dsrc,&sys->playerOffsetY);
+        pok_data_stream_read_int16(dsrc,&sys->playerOffsetY);
         result = pok_netobj_readinfo_process(info);
         if (result==pok_net_completed && sys->playerOffsetY>=sys->dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_offset);
@@ -244,8 +244,10 @@ void pok_graphics_subsystem_game_render_state(struct pok_graphics_subsystem* sys
 }
 void pok_graphics_subsystem_end(struct pok_graphics_subsystem* sys)
 {
-    if (sys->impl != NULL)
+    if (sys->impl != NULL) {
         impl_free(sys);
+        /*sys->impl = NULL;*/ /* performed by impl_free() */
+    }
 }
 void pok_graphics_subsystem_register(struct pok_graphics_subsystem* sys,graphics_routine_t routine,void* context)
 {
@@ -267,11 +269,11 @@ void pok_graphics_subsystem_register(struct pok_graphics_subsystem* sys,graphics
 #endif
     impl_unlock(sys);
 }
-void pok_graphics_subsystem_unregister(struct pok_graphics_subsystem* sys,graphics_routine_t routine)
+void pok_graphics_subsystem_unregister(struct pok_graphics_subsystem* sys,graphics_routine_t routine,void* context)
 {
     size_t i = 0;
     impl_lock(sys);
-    while (i<sys->routinetop && sys->routines[i]!=routine)
+    while (i<sys->routinetop && sys->routines[i]!=routine && sys->contexts[i]!=context)
         ++i;
     if (i < sys->routinetop) {
         sys->routines[i] = NULL;

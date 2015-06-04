@@ -136,7 +136,8 @@ struct pok_game_info* pok_game_new()
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
     game->ioTimeout = 100;
-    game->updateTimeout = 100;
+    game->updateTimeout = 1000 / INITIAL_FRAMERATE / 2; /* 2 frames for every update cycle */
+    game->control = TRUE;
     /* initialize graphics subsystem */
     game->sys = pok_graphics_subsystem_new();
     if (game->sys == NULL)
@@ -156,14 +157,62 @@ struct pok_game_info* pok_game_new()
     if (game->mapRC == NULL)
         pok_error_fromstack(pok_error_fatal);
     pok_map_init(&game->dummyMap);
+    /* initialize character render context */
+    game->charRC = pok_character_render_context_new(game->mapRC,game->sman);
+    /* initialize player and add it to the character render context */
+    game->player = pok_character_new();
+    if (game->player == NULL)
+        pok_error_fromstack(pok_error_fatal);
+    game->playerContext = pok_character_render_context_add_ex(game->charRC,game->player);
+    if (game->playerContext == NULL)
+        pok_error_fromstack(pok_error_fatal);
     return game;
 }
 void pok_game_free(struct pok_game_info* game)
 {
+    pok_character_free(game->player);
+    pok_character_render_context_free(game->charRC);
     pok_map_render_context_free(game->mapRC);
     treemap_free(game->loadedMaps);
     pok_sprite_manager_free(game->sman);
     pok_tile_manager_free(game->tman);
     pok_graphics_subsystem_free(game->sys);
     free(game);
+}
+void pok_game_register(struct pok_game_info* game)
+{
+    /* the order of the graphics routines is important */
+    pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
+    pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+}
+void pok_game_unregister(struct pok_game_info* game)
+{
+    pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
+    pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+}
+void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus)
+{
+    treemap_insert(game->loadedMaps,map);
+    if (focus)
+        pok_map_render_context_set_map(game->mapRC,map);
+}
+
+void timeout_interval_reset(struct timeout_interval* t,int mseconds)
+{
+    t->mseconds = mseconds;
+    t->useconds = mseconds * 1000;
+    t->ticksEighthSecond = 125 / t->mseconds;
+    t->ticksFourthSecond = 250 / t->mseconds;
+    t->ticksHalfSecond = 500 / t->mseconds;
+    t->ticksSecond = 1000 / t->mseconds;
+
+    /* these need to be a valid denominator */
+    if (t->ticksEighthSecond == 0)
+        t->ticksEighthSecond = 1;
+    if (t->ticksFourthSecond == 0)
+        t->ticksFourthSecond = 1;
+    if (t->ticksHalfSecond == 0)
+        t->ticksHalfSecond = 1;
+    if (t->ticksSecond == 0)
+        t->ticksSecond = 1;
 }

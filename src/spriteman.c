@@ -68,13 +68,13 @@ bool_t pok_sprite_manager_from_data(struct pok_sprite_manager* sman,uint16_t img
 {
     uint16_t i;
     size_t length;
-    length = sman->sys->dimension * sman->sys->dimension * sizeof(union pixel);
+    length = sman->sys->dimension * sman->sys->dimension * sizeof(union alpha_pixel);
     for (i = 0;i < imgc;++i) {
         struct pok_image* img;
         if (byRef)
-            img = pok_image_new_byref_rgb(sman->sys->dimension,sman->sys->dimension,data);
+            img = pok_image_new_byref_rgba(sman->sys->dimension,sman->sys->dimension,data);
         else
-            img = pok_image_new_byval_rgb(sman->sys->dimension,sman->sys->dimension,data);
+            img = pok_image_new_byval_rgba(sman->sys->dimension,sman->sys->dimension,data);
         if (img == NULL)
             return FALSE;
         data += length;
@@ -120,7 +120,7 @@ bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* f
     img = pok_image_new();
     if (img == NULL)
         return FALSE;
-    if ( !pok_image_fromfile_rgb(img,file) ) {
+    if ( !pok_image_fromfile_rgba(img,file) ) {
         pok_image_free(img);
         return FALSE;
     }

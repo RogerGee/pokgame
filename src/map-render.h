@@ -18,6 +18,7 @@ struct pok_chunk_render_info
     int32_t px, py;              /* screen location */
     uint16_t across, down;       /* number of visible columns and rows */
     struct pok_location loc;     /* location within chunk data to render */
+    struct pok_point chunkPos;   /* chunk position relative to origin */
     struct pok_map_chunk* chunk; /* the chunk specified; NULL if unused */
 };
 
@@ -32,16 +33,22 @@ struct pok_map_render_context
     struct pok_point chunkpos;                 /* position of chunk relative to origin */
     struct pok_map* map;                       /* current map to draw */
     const struct pok_tile_manager* tman;       /* tile collection to use */
-    uint32_t aniTicks;                         /* tile animation counter */
     struct pok_chunk_render_info info[4];      /* chunk render info for implementation */
+    uint16_t granularity;                      /* controls map scroll granularity (how many updates per scroll cycle) */
+    uint32_t tileAniTicks;                     /* tile animation counter */
+    uint32_t scrollTicks[2];                   /* scroll animation counter: [0] before, [1] after */
+    uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
+    bool_t update;                             /* is the map render context being updated? */
 };
 struct pok_map_render_context* pok_map_render_context_new(const struct pok_tile_manager* tman);
 void pok_map_render_context_free(struct pok_map_render_context* context);
 void pok_map_render_context_init(struct pok_map_render_context* context,const struct pok_tile_manager* tman);
 void pok_map_render_context_set_map(struct pok_map_render_context* context,struct pok_map* map);
 void pok_map_render_context_align(struct pok_map_render_context* context);
-bool_t pok_map_render_context_center_on(struct pok_map_render_context* map,const struct pok_point* chunkpos,const struct pok_location* relpos);
-bool_t pok_map_render_context_update(struct pok_map_render_context* context,enum pok_direction dir);
+bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_point* chunkpos,const struct pok_location* relpos);
+bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum pok_direction dir,bool_t checkPassable);
+void pok_map_render_context_set_update(struct pok_map_render_context* context,enum pok_direction dir,uint16_t dimension);
+bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension);
 
 /* render routine for maps */
 void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);

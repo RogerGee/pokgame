@@ -56,6 +56,7 @@ endif
 # header file dependencies
 PROTOCOL_H = src/protocol.h
 TYPES_H = src/types.h
+PARSER_H = src/parser.h $(TYPES_H)
 POK_H = src/pok.h $(PROTOCOL_H) $(TYPES_H)
 ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
@@ -66,12 +67,14 @@ TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
 SPRITEMAN_H = src/spriteman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
 MAP_H = src/map.h $(NET_H) $(TILE_H)
 MAP_RENDER_H = src/map-render.h $(MAP_H) $(GRAPHICS_H)
-POKGAME_H = src/pokgame.h 
+CHARACTER_H = src/character.h $(NET_H)
+CHARACTER_RENDER_H = src/character-render.h $(MAP_RENDER_H) $(SPRITEMAN_H) $(CHARACTER_H)
+POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_RENDER_H) $(CHARACTER_RENDER_H)
 
 # object code files: library objects are used both by clients and version servers
-OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-render.o update-proc.o io-proc.o
+OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-render.o character-render.o update-proc.o io-proc.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
-OBJECTS_LIB = image.o error.o net.o types.o pok-util.o tile.o map.o
+OBJECTS_LIB = image.o error.o net.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
 ifdef MAKE_TEST
 TEST_OBJECTS = main.o maintest.o nettest.o graphicstest1.o
@@ -104,6 +107,9 @@ $(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
 $(OBJDIR)/map-render.o: src/map-render.c src/map-render-gl.c $(MAP_RENDER_H) $(PROTOCOL_H) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map-render.o src/map-render.c
+$(OBJDIR)/character-render.o: src/character-render.c $(CHARACTER_RENDER_H) $(ERROR)
+	$(COMPILE) $(OUT)$(OBJDIR)/character-render.o src/character-render.c
+
 $(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
 $(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H)
@@ -118,17 +124,21 @@ $(OBJDIR)/net.o: src/net.c src/net-posix.c $(NET_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/net.o src/net.c
 $(OBJDIR)/types.o: src/types.c $(TYPES_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/types.o src/types.c
+$(OBJDIR)/parser.o: src/parser.c $(PARSER_H) $(ERROR_H)
+	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/parser.o src/parser.c
 $(OBJDIR)/pok-util.o: src/pok-util.c $(POK_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/pok-util.o src/pok-util.c
 $(OBJDIR)/tile.o: src/tile.c $(TILE_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tile.o src/tile.c
-$(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H)
+$(OBJDIR)/map.o: src/map.c $(MAP_H) $(ERROR_H) $(POK_H) $(PARSER_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map.o src/map.c
+$(OBJDIR)/character.o: src/character.c $(CHARACTER_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/character.o src/character.c
 
 # test targets
 $(OBJECT_DIRECTORY_TEST)/main.o: test/main.c
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
-$(OBJECT_DIRECTORY_TEST)/maintest.o: test/maintest.c $(POKGAME_H)
+$(OBJECT_DIRECTORY_TEST)/maintest.o: test/maintest.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/maintest.o test/maintest.c
 $(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c

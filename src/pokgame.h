@@ -6,12 +6,16 @@
 #include "tileman.h"
 #include "spriteman.h"
 #include "map-render.h"
+#include "character-render.h"
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
 /* this structure stores all of the top-level game information */
 struct pok_game_info
 {
+    /* controls the io and update procedures */
+    bool_t control;
+
     /* timeouts for main game procedures (in thousandths of a second) */
     int ioTimeout;
     int updateTimeout;
@@ -29,6 +33,13 @@ struct pok_game_info
     struct pok_map dummyMap; /* used as key to 'loadedMaps' */
     struct treemap* loadedMaps;
     struct pok_map_render_context* mapRC;
+
+    /* character render context */
+    struct pok_character_render_context* charRC;
+
+    /* player */
+    struct pok_character* player;
+    struct pok_character_context* playerContext; /* cached */
 };
 
 /* these functions provide mutual exclusion when an object is edited; the 'modify' functions
@@ -51,5 +62,23 @@ void pok_game_unload_module();
 /* game initialization/closing */
 struct pok_game_info* pok_game_new();
 void pok_game_free(struct pok_game_info* game);
+void pok_game_register(struct pok_game_info* game);
+void pok_game_unregister(struct pok_game_info* game);
+void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus);
+
+/* misc */
+
+struct timeout_interval
+{
+    int mseconds;
+    int useconds;
+
+    int ticksEighthSecond;
+    int ticksFourthSecond;
+    int ticksHalfSecond;
+    int ticksSecond;
+};
+void timeout_interval_reset(struct timeout_interval* t,int mseconds);
+void timeout(struct timeout_interval* interval);
 
 #endif

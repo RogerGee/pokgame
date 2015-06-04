@@ -47,9 +47,11 @@ struct pok_exception
     int id;
     enum pok_ex_kind kind;
     const char* message;
+    int lineno;
 };
 struct pok_exception* pok_exception_new();
 struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id);
+struct pok_exception* pok_exception_new_ex2(int lineno,const char* message);
 bool_t pok_exception_check();
 bool_t pok_exception_check_ex(enum pok_ex_kind kind);
 const struct pok_exception* pok_exception_pop();

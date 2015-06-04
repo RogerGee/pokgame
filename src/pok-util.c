@@ -16,22 +16,30 @@ struct pok_size pok_util_compute_chunk_size(uint32_t width,uint32_t height,const
     /* find ideal chunk size by dividing dimensions in half; if the dimension is odd at any stage, then
        we add an extra unused column/row to certain "edge" chunks */
     tog = TRUE; /* toggle between lefttop and rightbottom */
-    while (width > max) {
-        r = width % 2;
-        width /= 2;
-        width += r;
-        (tog ? lefttop : rightbottom)->columns += r;
-        tog = !tog;
-        size.columns += 2;
+    if (width <= max)
+        size.columns = 1;
+    else {
+        while (width > max) {
+            r = width % 2;
+            width /= 2;
+            width += r;
+            (tog ? lefttop : rightbottom)->columns += r;
+            tog = !tog;
+            size.columns += 2;
+        }
     }
     tog = TRUE;
-    while (height > max) {
-        r = height % 2;
-        height /= 2;
-        height += r;
-        (tog ? lefttop : rightbottom)->rows += r;
-        tog = !tog;
-        size.rows += 2;
+    if (height <= max)
+        size.rows = 1;
+    else {
+        while (height > max) {
+            r = height % 2;
+            height /= 2;
+            height += r;
+            (tog ? lefttop : rightbottom)->rows += r;
+            tog = !tog;
+            size.rows += 2;
+        }
     }
     chunkSize->columns = width;
     chunkSize->rows = height;

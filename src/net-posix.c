@@ -247,6 +247,26 @@ bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,
     *bytesRead += r;
     return TRUE;
 }
+char pok_data_source_peek(struct pok_data_source* dsrc)
+{
+    size_t bytesRead;
+    if (dsrc->szRead > 0)
+        return dsrc->bufferRead[dsrc->itRead];
+    if (pok_data_source_read(dsrc,1,&bytesRead) && bytesRead > 0)
+        return dsrc->bufferRead[--dsrc->itRead];
+    return (char) -1;
+}
+char pok_data_source_pop(struct pok_data_source* dsrc)
+{
+    size_t bytesRead;
+    if (dsrc->szRead > 0) {
+        --dsrc->szRead;
+        return dsrc->bufferRead[dsrc->itRead++];
+    }
+    if (pok_data_source_read(dsrc,1,&bytesRead) && bytesRead > 0)
+        return dsrc->bufferRead[dsrc->itRead-1];
+    return (char) -1;
+}
 static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t size,size_t* bytesWritten,bool_t flagError)
 {
     /* utilizes a system-call to write data to the specified descriptor; if an exception was generated, FALSE
