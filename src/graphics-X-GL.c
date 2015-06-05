@@ -29,6 +29,8 @@ struct _pok_graphics_subsystem_impl
     char keys[32];
     pthread_t tid;
     pthread_mutex_t mutex;
+    size_t textureAlloc, textureCount;
+    GLuint* textureNames;
 
     /* shared variable flags */
     volatile bool_t rendering;     /* is the system rendering the window frame? */
@@ -36,6 +38,8 @@ struct _pok_graphics_subsystem_impl
     volatile bool_t editFrame;     /* request to reinitialize frame */
     volatile bool_t doMap;         /* request that the window frame be mapped to screen */
     volatile bool_t doUnmap;       /* request that the window frame be unmapped from screen */
+    volatile int texinfoCount;     /* texture information; if set then the rendering thread loads new textures */
+    volatile struct texture_info* texinfo;
 };
 
 bool_t impl_new(struct pok_graphics_subsystem* sys)
@@ -45,12 +49,22 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         pok_exception_flag_memory_error();
         return FALSE;
     }
+    sys->impl->textureAlloc = 32;
+    sys->impl->textureCount = 0;
+    sys->impl->textureNames = malloc(sizeof(GLuint) * sys->impl->textureAlloc);
+    if (sys->impl->textureNames == NULL) {
+        pok_exception_flag_memory_error();
+        free(sys->impl);
+        return FALSE;
+    }
     /* prepare the rendering thread */
     sys->impl->rendering = TRUE;
     sys->impl->gameRendering = TRUE;
     sys->impl->editFrame = FALSE;
     sys->impl->doMap = FALSE;
     sys->impl->doUnmap = FALSE;
+    sys->impl->texinfo = NULL;
+    sys->impl->texinfoCount = 0;
     pthread_mutex_init(&sys->impl->mutex,NULL);
     if (pthread_create(&sys->impl->tid,NULL,(void*(*)(void*))graphics_loop,sys) != 0)
         pok_error(pok_error_fatal,"fail pthread_create()");
@@ -70,6 +84,7 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl->rendering = FALSE;
     if (pthread_join(sys->impl->tid,NULL) != 0)
         pok_error(pok_error_fatal,"fail pthread_join()");
+    free(sys->impl->textureNames);
     free(sys->impl);
     sys->impl = NULL;
 }
@@ -89,6 +104,25 @@ inline void impl_reload(struct pok_graphics_subsystem* sys)
 #endif
 
     sys->impl->editFrame = TRUE;
+}
+
+inline void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
+{
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
+    do {
+        pthread_mutex_lock(&sys->impl->mutex);
+        /* make sure a request is not already being processed */
+        if (sys->impl->texinfo != NULL) {
+            pthread_mutex_unlock(&sys->impl->mutex);
+            continue;
+        }
+    } while (FALSE);
+    sys->impl->texinfo = info;
+    sys->impl->texinfoCount = count;
+    pthread_mutex_unlock(&sys->impl->mutex);
 }
 
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
@@ -332,6 +366,45 @@ void close_frame(struct pok_graphics_subsystem* sys)
     XDestroyWindow(display,sys->impl->window);
 }
 
+/* OpenGL functions */
+void create_textures(struct pok_graphics_subsystem* sys)
+{   
+    int i;
+    for (i = 0;i < sys->impl->texinfoCount;++i) {
+        int j;
+        GLuint names[sys->impl->texinfo[i].count];
+        GLenum err;
+        glGenTextures(sys->impl->texinfo[i].count,names);
+        for (j = 0;j < sys->impl->texinfo[i].count;++j) {
+            struct pok_image* img = sys->impl->texinfo[i].images[j];
+            /* append texture name to collection */
+            if (sys->impl->textureCount >= sys->impl->textureAlloc) {
+                size_t nalloc;
+                void* ndata;
+                nalloc = sys->impl->textureAlloc << 1;
+                ndata = realloc(sys->impl->textureNames,nalloc * sizeof(GLuint));
+                if (ndata == NULL) {
+                    pok_error(pok_error_warning,"could not allocate memory in create_textures()");
+                    return;
+                }
+                sys->impl->textureNames = ndata;
+                sys->impl->textureAlloc = nalloc;
+            }
+            sys->impl->textureNames[sys->impl->textureCount++] = names[j];
+            /* create texture object */
+            glBindTexture(GL_TEXTURE_2D,names[j]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+            if (img->flags & pok_image_flag_alpha)
+                glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,img->width,img->height,0,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
+            else
+                glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,img->width,img->height,0,GL_RGB,GL_UNSIGNED_BYTE,img->pixels.data);
+            /* assign the texture reference to the image */
+            img->texref = names[j];
+        }
+    } 
+}
+
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
@@ -339,17 +412,22 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     int framerate = 0;
     useconds_t sleepamt = 0;
     uint32_t wwidth, wheight;
+
     /* initialize global X11 connection */
     do_x_init();
+
     /* make the frame */
     make_frame(sys);
+
     /* make the context current on this thread */
     if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
         pok_error(pok_error_fatal,"fail glkMakeCurrent()");
+
     /* compute black pixel */
     black[0] = blackPixel.rgb[0] / 255.0;
     black[1] = blackPixel.rgb[1] / 255.0;
     black[2] = blackPixel.rgb[2] / 255.0;
+
     /* setup OpenGL */
     wwidth = sys->dimension * sys->windowSize.columns;
     wheight = sys->dimension * sys->windowSize.rows;
@@ -365,6 +443,9 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glViewport(0,0,wwidth,wheight);
+    /* set clear color: we need this to be the black pixel */
+    glClearColor(black[0],black[1],black[2],0);
+
     /* begin rendering loop */
     while (sys->impl->rendering) {
         /* check for events from the XServer */
@@ -395,28 +476,43 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
         /* check for event notifications from another thread */
         if (sys->impl->editFrame) {
+            pthread_mutex_lock(&sys->impl->mutex);
             edit_frame(sys);
             sys->impl->editFrame = FALSE;
+            pthread_mutex_unlock(&sys->impl->mutex);
         }
         if (sys->impl->doMap) {
+            pthread_mutex_lock(&sys->impl->mutex);
             XMapWindow(display,sys->impl->window);
             sys->impl->doMap = FALSE;
+            pthread_mutex_unlock(&sys->impl->mutex);
         }
         if (sys->impl->doUnmap) {
+            pthread_mutex_lock(&sys->impl->mutex);
             XUnmapWindow(display,sys->impl->window);
             sys->impl->doUnmap = FALSE;
+            pthread_mutex_unlock(&sys->impl->mutex);
+        }
+        if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
+            pthread_mutex_lock(&sys->impl->mutex);
+            create_textures(sys);
+            free((struct texture_info*)sys->impl->texinfo);
+            sys->impl->texinfo = NULL;
+            sys->impl->texinfoCount = 0;
+            pthread_mutex_unlock(&sys->impl->mutex);
         }
 
-        /* clear the screen; we need this to be the black pixel */
-        glClearColor(black[0],black[1],black[2],0);
+        /* clear the screen */
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         /* rendering */
         if (sys->impl->gameRendering) {
             uint16_t index;
             /* go through and call each render function */
+            pthread_mutex_lock(&sys->impl->mutex);
             for (index = 0;index < sys->routinetop;++index)
                 (*sys->routines[index])(sys,sys->contexts[index]);
+            pthread_mutex_unlock(&sys->impl->mutex);
         }
 
         /* expose the backbuffer */
@@ -436,6 +532,8 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 done:
     sys->impl->gameRendering = FALSE;
     sys->impl->rendering = FALSE;
+    if (sys->impl->textureCount > 0)
+        glDeleteTextures(sys->impl->textureCount,sys->impl->textureNames);
     close_frame(sys);
     do_x_close();
     return NULL;
@@ -445,17 +543,42 @@ done:
 
 void pok_image_render(struct pok_image* img,int32_t x,int32_t y)
 {
-    /* raster graphic rendering routine implemented with OpenGL */
-    if (x < 0 || y < 0) {
-        /* hack around clipping restrictions with glRasterPos; we
-           must negate 'y' since the vertical coordinates were flipped */
-        glRasterPos2i(0,0);
-        glBitmap(0,0,0,0,x,-y,NULL);
+    if (img->pixels.data != NULL) {
+        /* raster graphic rendering routine implemented with OpenGL */
+        if (x < 0 || y < 0) {
+            /* hack around clipping restrictions with glRasterPos; we
+               must negate 'y' since the vertical coordinates were flipped */
+            glRasterPos2i(0,0);
+            glBitmap(0,0,0,0,x,-y,NULL);
+        }
+        else
+            glRasterPos2i(x,y);
+        if (img->flags & pok_image_flag_alpha)
+            glDrawPixels(img->width,img->height,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
+        else
+            glDrawPixels(img->width,img->height,GL_RGB,GL_UNSIGNED_BYTE,img->pixels.data);
     }
-    else
-        glRasterPos2i(x,y);
-    if (img->flags & pok_image_flag_alpha)
-        glDrawPixels(img->width,img->height,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
-    else
-        glDrawPixels(img->width,img->height,GL_RGB,GL_UNSIGNED_BYTE,img->pixels.data);
+    else {
+        int32_t X, Y;
+        X = x + img->width;
+        Y = y + img->height;
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D,img->texref);
+        glBegin(GL_QUADS);
+        {
+            glTexCoord2i(0,0);
+            glVertex2i(x,y);
+
+            glTexCoord2i(1,0);
+            glVertex2i(X,y);
+
+            glTexCoord2i(1,1);
+            glVertex2i(X,Y);
+
+            glTexCoord2i(0,1);
+            glVertex2i(x,Y);
+        }
+        glEnd();
+        glDisable(GL_TEXTURE_2D);
+    }
 }

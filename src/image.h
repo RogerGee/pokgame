@@ -43,6 +43,7 @@ struct pok_image
     uint8_t flags;
     uint32_t width;
     uint32_t height;
+    uint32_t texref;
     union { /* pixel data stored row by row */
         void* data;
         union pixel* dataRGB;

@@ -44,6 +44,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
     context->scrollTicks[0] = 0;
     context->scrollTicks[1] = 0;
     context->scrollTicksAmt = 1;
+    context->groove = FALSE;
     context->update = FALSE;
 }
 void pok_map_render_context_set_map(struct pok_map_render_context* context,struct pok_map* map)
@@ -308,37 +309,45 @@ void pok_map_render_context_set_update(struct pok_map_render_context* context,en
         break;
     }
     context->scrollTicks[0] = context->scrollTicks[1] = 0;
+    context->groove = FALSE;
     context->update = TRUE;
 }
 bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension)
 {
     /* check to see if map is being updated, and that enough time has elapsed for an update */
     uint32_t diff = context->scrollTicks[1]++ - context->scrollTicks[0];
-    if (context->update && diff >= context->scrollTicksAmt && diff % context->scrollTicksAmt == 0) {
-        /* updating map render context by incrementing the map offset in
-           the correct direction; there is no need to lock this operation */
-        int inc = dimension / context->granularity;
-        if (inc == 0) /* granularity was too fine */
-            inc = 1;
-        if (context->offset[0] < 0)
-            context->offset[0] += inc;
-        else if (context->offset[0] > 0)
-            context->offset[0] -= inc;
-        else if (context->offset[1] < 0)
-            context->offset[1] += inc;
-        else if (context->offset[1] > 0)
-            context->offset[1] -= inc;
-        if (context->offset[0] == 0 && context->offset[1] == 0) {
-            /* done: return TRUE to denote that the process finished */
-            context->update = FALSE;
-            return TRUE;
+    if (context->update) {
+        if (diff >= context->scrollTicksAmt && diff % context->scrollTicksAmt == 0) {
+            /* updating map render context by incrementing the map offset in
+               the correct direction; there is no need to lock this operation */
+            int inc = dimension / context->granularity;
+            if (inc == 0) /* granularity was too fine */
+                inc = 1;
+            if (context->offset[0] < 0)
+                context->offset[0] += inc;
+            else if (context->offset[0] > 0)
+                context->offset[0] -= inc;
+            else if (context->offset[1] < 0)
+                context->offset[1] += inc;
+            else if (context->offset[1] > 0)
+                context->offset[1] -= inc;
+            if (context->offset[0] == 0 && context->offset[1] == 0) {
+                /* done: return TRUE to denote that the process finished */
+                context->update = FALSE;
+                context->groove = TRUE;
+                context->scrollTicks[0] = context->scrollTicks[1] = 0;
+                return TRUE;
+            }
+            /* handle case where remainder will cause infinite oscillation */
+            if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
+                context->offset[0] = inc;
+            if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
+                context->offset[1] = inc;
         }
-        /* handle case where remainder will cause infinite oscillation */
-        if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
-            context->offset[0] = inc;
-        if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
-            context->offset[1] = inc;
     }
+    else if (context->groove && diff >= context->scrollTicksAmt * context->granularity)
+        /* we lost our groove */
+        context->groove = FALSE;
     return FALSE;
 }
 

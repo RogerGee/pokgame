@@ -8,12 +8,8 @@
    unless an operation is atomic in nature; the update procedure should exit before the rendering
    procedure */
 
-/* default update parameters */
-#define DEFAULT_MAP_SCROLL_GRANULARITY      8
-#define DEFAULT_CHARACTER_ANI_GRANULARITY   8
-
 /* constant update parameters (time is in milliseconds) */
-#define MAP_SCROLL_TIME          270 /* amount of time for complete map scroll update */
+#define MAP_SCROLL_TIME          250 /* amount of time for complete map scroll update */
 
 static void set_defaults(struct pok_game_info* info);
 static void set_tick_amounts(struct pok_game_info* info,struct timeout_interval* t);
@@ -73,8 +69,8 @@ int update_proc(struct pok_game_info* info)
 void set_defaults(struct pok_game_info* info)
 {
     /* TODO: load defaults from init file */
-    info->mapRC->granularity = DEFAULT_MAP_SCROLL_GRANULARITY;
-    info->playerContext->granularity = DEFAULT_CHARACTER_ANI_GRANULARITY;
+    info->mapRC->granularity = DEFAULT_GRANULARITY;
+    info->playerContext->granularity = DEFAULT_GRANULARITY;
 
 }
 
@@ -113,42 +109,43 @@ void update_key_input(struct pok_game_info* info)
         else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_RIGHT,FALSE) )
             direction = pok_direction_right;
 
-        if (direction == info->player->direction) { /* player facing update direction */
-            if (!info->playerContext->update) {
-                /* update player context for animation (direction does not change) */
-                pok_game_modify_enter(info->playerContext);
-                pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,info->sys->dimension);
-                pok_game_modify_exit(info->playerContext);
+        if (direction != pok_direction_none) {
+            if (direction == info->player->direction || info->mapRC->groove) { /* player facing update direction */
+                if (!info->playerContext->update) {
+                    /* update player context for animation (direction does not change) */
+                    pok_game_modify_enter(info->playerContext);
+                    pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,info->sys->dimension);
+                    pok_game_modify_exit(info->playerContext);
 
-
-                if (!info->mapRC->update) {
-                    /* update map context */
-                    pok_game_modify_enter(info->mapRC);
-                    /* attempt to update the map focus; check for all possible collisions; the
-                       map render context will handle impassable tile collisions */
-                    if (/* TODO: check collisions... */ pok_map_render_context_move(info->mapRC,direction,TRUE)) {
-                        /* prepare the map context to be updated */
-                        pok_map_render_context_set_update(info->mapRC,direction,info->sys->dimension);
-                        /* update the player character's location */
-                        info->player->chunkPos = info->mapRC->chunkpos;
-                        info->player->tilePos = info->mapRC->relpos;
-                        info->playerContext->slowDown = FALSE;
+                    if (!info->mapRC->update) {
+                        /* update map context */
+                        pok_game_modify_enter(info->mapRC);
+                        /* attempt to update the map focus; check for all possible collisions; the
+                           map render context will handle impassable tile collisions */
+                        if (/* TODO: check collisions... */ pok_map_render_context_move(info->mapRC,direction,TRUE)) {
+                            /* prepare the map context to be updated */
+                            pok_map_render_context_set_update(info->mapRC,direction,info->sys->dimension);
+                            /* update the player character's location */
+                            info->player->chunkPos = info->mapRC->chunkpos;
+                            info->player->tilePos = info->mapRC->relpos;
+                            info->playerContext->slowDown = FALSE;
+                        }
+                        else
+                            /* the player ran into something; animate slower for effect */
+                            info->playerContext->slowDown = TRUE;
+                        pok_game_modify_exit(info->mapRC);
                     }
-                    else
-                        /* the player ran into something; animate slower for effect */
-                        info->playerContext->slowDown = TRUE;
-                    pok_game_modify_exit(info->mapRC);
                 }
             }
-        }
-        else if (direction != pok_direction_none && !info->playerContext->update) {
-            /* update player context for animation; the player sprite is just moving in place; this
-               still produces an animation, but the sprite doesn't offset; this is specified by
-               passing 0 as the dimension parameter to 'pok_character_set_update' */
-            pok_game_modify_enter(info->playerContext);
-            info->playerContext->slowDown = FALSE;
-            pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,0);
-            pok_game_modify_exit(info->playerContext);
+            else if (!info->playerContext->update) {
+                /* update player context for animation; the player sprite is just moving in place; this
+                   still produces an animation, but the sprite doesn't offset; this is specified by
+                   passing 0 as the dimension parameter to 'pok_character_set_update' */
+                pok_game_modify_enter(info->playerContext);
+                info->playerContext->slowDown = FALSE;
+                pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,0);
+                pok_game_modify_exit(info->playerContext);
+            }
         }
     }
     else

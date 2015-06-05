@@ -40,10 +40,39 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
                 pok_image_free(tman->tileset[i]);
         free(tman->tileset);
     }
-    if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref))
+    if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref) == 0)
         free(tman->tileani);
     if (tman->_sheet != NULL)
         pok_image_free(tman->_sheet);
+}
+static void pok_tile_manager_compute_ani_ticks(struct pok_tile_manager* tman)
+{
+    /* compute total ticks involved in a tile animation's indirections */
+    uint16_t i, j;
+    struct pok_tile_ani_data* ani = tman->tileani;
+    for (i = 0;i < tman->tilecnt;++i,++ani) {
+        bool_t dir = TRUE;
+        ani->totalTicks = 0;
+        if (ani->ticks > 0) {
+            struct pok_tile_ani_data* walker;
+            j = tman->tilecnt; /* limit number of indirections */
+            /* walk through indirections */
+            walker = ani;
+            do {
+                ani->totalTicks += walker->ticks;
+                if (dir) {
+                    if (walker->forward == 0)
+                        dir = FALSE;
+                    else if (walker != ani && walker->forward == ani->forward)
+                        break;
+                }
+                else if (walker->backward == 0 || walker->backward == ani->backward)
+                    break;
+                walker = tman->tileani + (dir ? walker->forward : walker->backward);
+                --j;
+            } while (j > 0);
+        }
+    }
 }
 bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_source* dsrc)
 {
@@ -55,8 +84,8 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
         [n bytes] optional tile animation info (if previous byte was non-zero)
            (for each animation info structure)
            [1 byte] ani ticks
-           [1 byte] number of indirections
-           [2 bytes] tile id
+           [2 bytes] forward tile id
+           [2 bytes] backward tile id
     */
     if (tman->tileset != NULL) {
         uint16_t i;
@@ -69,8 +98,8 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
             return FALSE;
         if (tman->tileani != NULL)
             for (i = 0;i < tman->tilecnt;++i)
-                if (!pok_data_stream_write_byte(dsrc,tman->tileani[i].ticks) || !pok_data_stream_write_byte(dsrc,tman->tileani[i].indirc)
-                    || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].tileid))
+                if (!pok_data_stream_write_byte(dsrc,tman->tileani[i].ticks) || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].forward)
+                    || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].backward))
                     return FALSE;
         return TRUE;
     }
@@ -86,8 +115,8 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
         [n bytes] optional tile animation info (if previous byte was non-zero)
            (for each animation info structure)
            [1 byte] ani ticks
-           [1 byte] number of indirections
-           [2 bytes] tile id
+           [2 bytes] forward tile id
+           [2 bytes] backward tile id
     */
     if (tman->tileset == NULL) {
         uint16_t i;
@@ -119,9 +148,10 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
                 return FALSE;
             }
             for (i = 0;i < tman->tilecnt;++i)
-                if (!pok_data_stream_read_byte(dsrc,&tman->tileani[i].ticks) || !pok_data_stream_read_byte(dsrc,&tman->tileani[i].indirc)
-                    || !pok_data_stream_read_uint16(dsrc,&tman->tileani[i].tileid))
+                if (!pok_data_stream_read_byte(dsrc,&tman->tileani[i].ticks) || !pok_data_stream_read_uint16(dsrc,&tman->tileani[i].forward)
+                    || !pok_data_stream_read_uint16(dsrc,&tman->tileani[i].backward))
                     return FALSE;
+            pok_tile_manager_compute_ani_ticks(tman);
         }
         return TRUE;
     }
@@ -189,6 +219,7 @@ bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,str
         for (i = 0;i < anic;++i)
             tman->tileani[i] = data[i];
     }
+    pok_tile_manager_compute_ani_ticks(tman);
     return TRUE;
 }
 bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char* file)
@@ -222,18 +253,22 @@ bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char*
 static enum pok_network_result pok_tile_ani_data_netread(struct pok_tile_ani_data* ani,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
 {
-    /* fields: [byte] ticks, [byte] indirections, [2-bytes] tile ID */
+    /* fields:
+       [1 byte] ticks
+       [2 bytes] forward tile id
+       [2 bytes] backward tile id
+    */
     enum pok_network_result result = pok_net_already;
     if (info->fieldProg == 0) {
         pok_data_stream_read_byte(dsrc,&ani->ticks);
         result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 1) {
-        pok_data_stream_read_byte(dsrc,&ani->indirc);
+        pok_data_stream_read_uint16(dsrc,&ani->forward);
         result = pok_netobj_readinfo_process(info);
     }
     if (info->fieldProg == 2) {
-        pok_data_stream_read_uint16(dsrc,&ani->tileid);
+        pok_data_stream_read_uint16(dsrc,&ani->backward);
         result = pok_netobj_readinfo_process(info);
     }
     return result;
@@ -242,8 +277,8 @@ static enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_mana
     struct pok_netobj_readinfo* info)
 {
     /* read tile animation data substructure from data source:
-        [2-bytes] animation data item count
-        [4*n bytes] animation data items */
+        [2 bytes] animation data item count
+        [n bytes] animation data items */
     enum pok_network_result result = pok_net_already;
     if (info->fieldProg == 0) {
         /* note: we read this just to ensure that the peer will send the
@@ -280,8 +315,10 @@ static enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_mana
             ++info->depth[0];
             --info->fieldCnt;
         } while (info->fieldCnt > 0);
-        if (info->fieldCnt == 0)
+        if (info->fieldCnt == 0) {
+            pok_tile_manager_compute_ani_ticks(tman);
             ++info->fieldProg;
+        }
     }
     return result;
 }
@@ -344,31 +381,27 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
 }
 struct pok_image* pok_tile_manager_get_tile(const struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks)
 {
-    struct pok_image* img;
     if (tileid >= tman->tilecnt)
         tileid = 0;
     /* find animation tile for specified tile based on 'aniframe'; note
        that tile animation is optional and must first be loaded */
-    if (tman->tileani!=NULL && aniticks>0) {
-        struct pok_tile_ani_data* ani;
-        /* think of the animation data as a linked list of tileset indeces; each
-           animation sequence has some predetermined number of indirections; if
-           this number is zero, then the tile does not animate; each tile animation
-           has a 'ticks' value indicating the number of ticks before an indirection
-           is applied; 'aniticks' must be some non-zero multiple of this value in
-           order for an animation tile to be considered */
-        ani = tman->tileani + tileid;
-        if (ani->indirc>0 && ani->ticks>0 && aniticks%ani->ticks==0) {
-            aniticks /= ani->ticks; /* number of times an indirection has been performed */
-            aniticks %= ani->indirc; /* number of steps to get to desired indirection */
-            while (aniticks > 0) { /* follow animation tiles to get desired tileid */
-                ani = tman->tileani + ani->tileid;
-                --aniticks;
+    if (tman->tileani != NULL) {
+        /* tile animation structures form a linked list of tileset position; a tile
+           animation sequence oscillates back and forth */
+        struct pok_tile_ani_data* ani = tman->tileani + tileid;
+        if (ani->totalTicks > 0) {
+            bool_t dir = TRUE;
+            uint32_t rem = aniticks % ani->totalTicks;
+            while (rem >= ani->ticks) {
+                struct pok_tile_ani_data* prev;
+                if (dir && ani->forward == 0)
+                    dir = FALSE;
+                prev = ani;
+                tileid = dir ? ani->forward : ani->backward;
+                ani = tman->tileani + tileid;
+                rem -= prev->ticks;
             }
         }
-        img = tman->tileset[ani->tileid];
     }
-    else
-        img = tman->tileset[tileid];
-    return img;
+    return tman->tileset[tileid];
 }

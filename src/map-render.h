@@ -38,6 +38,7 @@ struct pok_map_render_context
     uint32_t tileAniTicks;                     /* tile animation counter */
     uint32_t scrollTicks[2];                   /* scroll animation counter: [0] before, [1] after */
     uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
+    bool_t groove;                             /* true after a context has finished updating and for a period afterwards */
     bool_t update;                             /* is the map render context being updated? */
 };
 struct pok_map_render_context* pok_map_render_context_new(const struct pok_tile_manager* tman);

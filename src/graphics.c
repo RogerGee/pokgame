@@ -4,6 +4,7 @@
 #include "protocol.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 /* define the black pixel used for the background (black tile); we don't want a true
    harsh black, but a 'lighter' black */
@@ -13,9 +14,15 @@ static const union pixel blackPixel = {{20,20,20}};
    a graphical frame and other graphics operations on a separate thread; the
    below calls should guarentee concurrent access; mutual exclusion should be
    used when accessing data used by the implementation */
+struct texture_info
+{
+    int count;
+    struct pok_image** images;
+};
 static bool_t impl_new(struct pok_graphics_subsystem* sys);
 static void impl_free(struct pok_graphics_subsystem* sys);
 static void impl_reload(struct pok_graphics_subsystem* sys);
+static void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 static void impl_set_game_state(struct pok_graphics_subsystem* sys,bool_t state);
 static void impl_map_window(struct pok_graphics_subsystem* sys);
 static void impl_unmap_window(struct pok_graphics_subsystem* sys);
@@ -236,6 +243,28 @@ bool_t pok_graphics_subsystem_begin(struct pok_graphics_subsystem* sys)
     if (!impl_new(sys))
         return FALSE;
     impl_map_window(sys);
+    return TRUE;
+}
+bool_t pok_graphics_subsystem_create_textures(struct pok_graphics_subsystem* sys,int count, ...)
+{
+    if (count > 0) {
+        int i;
+        va_list list;
+        struct texture_info* info;
+        info = malloc(sizeof(struct texture_info) * count);
+        if (info == NULL) {
+            pok_exception_flag_memory_error();
+            return FALSE;
+        }
+        va_start(list,count);
+        for (i = 0;i < count;++i) {
+            info[i].images = va_arg(list,struct pok_image**);
+            info[i].count = va_arg(list,int);
+        }
+        /* give the implementation a chance to optimize raster graphics operations using textures; it
+           may do nothing or may create the textures and free the image pixel data */
+        impl_load_textures(sys,info,count);
+    }
     return TRUE;
 }
 void pok_graphics_subsystem_game_render_state(struct pok_graphics_subsystem* sys,bool_t state)

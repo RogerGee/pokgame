@@ -24,8 +24,9 @@ enum pok_tile_manager_flags
 struct pok_tile_ani_data
 {
     byte_t ticks; /* animation frame waits this many 'ticks' */
-    byte_t indirc; /* indirection count from this point in the animation sequence to itself again */
-    uint16_t tileid; /* next tile frame in list */
+    uint16_t forward; /* next tile frame in list */
+    uint16_t backward; /* previous tile in list */
+    uint16_t totalTicks; /* total ticks from this tile to itself */
 };
 
 /* pok_tile_manager: interface to manage tile images and animation */

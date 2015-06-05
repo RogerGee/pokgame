@@ -10,6 +10,9 @@
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
+/* default parameters */
+#define DEFAULT_GRANULARITY      8
+
 /* this structure stores all of the top-level game information */
 struct pok_game_info
 {
