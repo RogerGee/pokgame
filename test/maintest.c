@@ -53,6 +53,7 @@ void init()
     load_maps();
     assert( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&START_LOCATION) );
     pok_character_context_set_player(game->playerContext,game->mapRC);
+    game->gameContext = pok_game_world_context;
     assert( pok_graphics_subsystem_begin(game->sys) );
     pok_graphics_subsystem_create_textures(
         game->sys,

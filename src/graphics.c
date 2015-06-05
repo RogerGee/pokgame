@@ -33,7 +33,7 @@ static void impl_unlock(struct pok_graphics_subsystem* sys);
 #if defined(POKGAME_POSIX) && defined(POKGAME_X11) && defined(POKGAME_OPENGL)
 #include "graphics-X-GL.c"
 #elif defined(POKGAME_WIN32) && defined(POKGAME_OPENGL)
-#include "graphics-win32-gl.c"
+#include "graphics-win32-GL.c"
 #endif
 
 struct pok_graphics_subsystem* pok_graphics_subsystem_new()

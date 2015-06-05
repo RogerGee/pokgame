@@ -99,7 +99,7 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 # src targets (only for the game client)
 $(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
-$(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
+$(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c src/graphics-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
 $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c

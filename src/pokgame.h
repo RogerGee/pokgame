@@ -10,8 +10,11 @@
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
-/* default parameters */
-#define DEFAULT_GRANULARITY      8
+enum pok_game_context
+{
+    pok_game_intro_context, /* the game is processing the intro screen */
+    pok_game_world_context  /* the game is handling map logic */
+};
 
 /* this structure stores all of the top-level game information */
 struct pok_game_info
@@ -22,6 +25,9 @@ struct pok_game_info
     /* timeouts for main game procedures (in thousandths of a second) */
     int ioTimeout;
     int updateTimeout;
+
+    /* flag what the game is currently doing */
+    enum pok_game_context gameContext;
 
     /* graphics */
     struct pok_graphics_subsystem* sys;

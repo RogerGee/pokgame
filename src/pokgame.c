@@ -136,8 +136,9 @@ struct pok_game_info* pok_game_new()
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
     game->ioTimeout = 100;
-    game->updateTimeout = 1000 / INITIAL_FRAMERATE * 2 / DEFAULT_GRANULARITY; /* enough frames for every update cycle */
+    game->updateTimeout = 5;
     game->control = TRUE;
+    game->gameContext = pok_game_intro_context;
     /* initialize graphics subsystem */
     game->sys = pok_graphics_subsystem_new();
     if (game->sys == NULL)
