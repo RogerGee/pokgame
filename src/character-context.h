@@ -1,7 +1,7 @@
-/* character-render.h - pokgame */
-#ifndef POKGAME_CHARACTER_RENDER_H
-#define POKGAME_CHARACTER_RENDER_H
-#include "map-render.h"
+/* character-context.h - pokgame */
+#ifndef POKGAME_CHARACTER_CONTEXT_H
+#define POKGAME_CHARACTER_CONTEXT_H
+#include "map-context.h"
 #include "spriteman.h"
 #include "character.h"
 #include <dstructs/dynarray.h>

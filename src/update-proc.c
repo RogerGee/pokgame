@@ -3,10 +3,10 @@
 #include "error.h"
 
 /* the update procedure runs the game engine logic; it changes a global configuration that
-   is handled by the other two game procedures (IO and rendering); this procedure must obtain
+   is handled by the other two game procedures (IO and graphics); this procedure must obtain
    locks when attempting to read/modify game information (from the 'pok_game_info' structure)
-   unless an operation is atomic in nature; the update procedure should exit before the rendering
-   procedure */
+   that would cause the other procedures to demonstrate undefined behavior; the update procedure
+   should exit before the rendering procedure */
 
 /* constant update parameters */
 #define DEFAULT_GRANULARITY      8
@@ -46,8 +46,7 @@ int update_proc(struct pok_game_info* info)
         /* key input logic */
         update_key_input(info);
 
-        /* perform update operations; we trust them to lock when necessary; if
-           an update operation just completed, then skip the timeout */
+        /* perform update operations; if an update operation just completed, then skip the timeout */
         skip = pok_map_render_context_update(info->mapRC,info->sys->dimension)
             || pok_character_context_update(info->playerContext,info->sys->dimension);
 

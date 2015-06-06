@@ -66,13 +66,13 @@ TILE_H = src/tile.h $(NET_H)
 TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
 SPRITEMAN_H = src/spriteman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
 MAP_H = src/map.h $(NET_H) $(TILE_H)
-MAP_RENDER_H = src/map-render.h $(MAP_H) $(GRAPHICS_H)
+MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
 CHARACTER_H = src/character.h $(NET_H)
-CHARACTER_RENDER_H = src/character-render.h $(MAP_RENDER_H) $(SPRITEMAN_H) $(CHARACTER_H)
-POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_RENDER_H) $(CHARACTER_RENDER_H)
+CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
+POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H)
 
 # object code files: library objects are used both by clients and version servers
-OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-render.o character-render.o update-proc.o io-proc.o
+OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
@@ -105,10 +105,10 @@ $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
 $(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
-$(OBJDIR)/map-render.o: src/map-render.c $(MAP_RENDER_H) $(PROTOCOL_H) $(POKGAME_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/map-render.o src/map-render.c
-$(OBJDIR)/character-render.o: src/character-render.c $(CHARACTER_RENDER_H) $(ERROR)
-	$(COMPILE) $(OUT)$(OBJDIR)/character-render.o src/character-render.c
+$(OBJDIR)/map-context.o: src/map-context.c $(MAP_CONTEXT_H) $(PROTOCOL_H) $(POKGAME_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/map-context.o src/map-context.c
+$(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(ERROR) $(POKGAME_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/character-context.o src/character-context.c
 
 $(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
@@ -142,7 +142,7 @@ $(OBJECT_DIRECTORY_TEST)/maintest.o: test/maintest.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/maintest.o test/maintest.c
 $(OBJECT_DIRECTORY_TEST)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
-$(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_RENDER_H) $(ERROR_H)
+$(OBJECT_DIRECTORY_TEST)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_CONTEXT_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/graphicstest1.o test/graphicstest1.c
 
 # other targets

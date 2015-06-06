@@ -1,6 +1,6 @@
-/* map-render.h - pokgame */
-#ifndef POKGAME_MAP_RENDER_H
-#define POKGAME_MAP_RENDER_H
+/* map-context.h - pokgame */
+#ifndef POKGAME_MAP_CONTEXT_H
+#define POKGAME_MAP_CONTEXT_H
 #include "map.h"
 #include "tileman.h"
 #include "graphics.h"
@@ -36,9 +36,10 @@ struct pok_map_render_context
     struct pok_chunk_render_info info[4];      /* chunk render info for implementation */
     uint16_t granularity;                      /* controls map scroll granularity (how many updates per scroll cycle) */
     uint32_t tileAniTicks;                     /* tile animation counter */
-    uint32_t scrollTicks;                   /* scroll animation counter */
+    uint32_t scrollTicks;                      /* scroll animation counter */
     uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
     bool_t groove;                             /* true after a context has finished updating and for a period afterwards */
+    bool_t changed;                            /* true if the map render context location has been changed */
     bool_t update;                             /* is the map render context being updated? */
 };
 struct pok_map_render_context* pok_map_render_context_new(const struct pok_tile_manager* tman);

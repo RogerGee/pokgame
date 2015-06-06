@@ -5,8 +5,8 @@
 #include "graphics.h"
 #include "tileman.h"
 #include "spriteman.h"
-#include "map-render.h"
-#include "character-render.h"
+#include "map-context.h"
+#include "character-context.h"
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
@@ -60,7 +60,7 @@ void pok_game_modify_exit(void* object); /* exit modify context */
 void pok_game_lock(void* object); /* ensure that 'object' is not being modified (read-only access) */
 void pok_game_unlock(void* object); /* exit 'lock' context (read-only access) */
 
-/* main pokgame procedures (the other procedure is rendering which is handled by the graphics subsystem) */
+/* main pokgame procedures (the other procedure is graphics which is handled by the graphics subsystem) */
 int io_proc(struct pok_game_info* info);
 int update_proc(struct pok_game_info* info);
 

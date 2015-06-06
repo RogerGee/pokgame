@@ -1,5 +1,5 @@
-/* character-render.c - pokgame */
-#include "character-render.h"
+/* character-context.c - pokgame */
+#include "character-context.h"
 #include "error.h"
 #include <stdlib.h>
 

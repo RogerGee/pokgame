@@ -1,7 +1,6 @@
-/* map-render.c - pokgame */
-#include "map-render.h"
+/* map-context.c - pokgame */
+#include "map-context.h"
 #include "protocol.h"
-#include "pokgame.h"
 #include <stdlib.h>
 
 /* this function computes chunk render information for the map rendering routine; this is 'extern' for debugging */
@@ -39,6 +38,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
     context->scrollTicks = 0;
     context->scrollTicksAmt = 1;
     context->groove = FALSE;
+    context->changed = FALSE;
     context->update = FALSE;
 }
 void pok_map_render_context_set_map(struct pok_map_render_context* context,struct pok_map* map)
@@ -54,6 +54,7 @@ void pok_map_render_context_set_map(struct pok_map_render_context* context,struc
     context->chunkpos.Y = map->originPos.Y;
     map->chunk = map->origin;
     context->map = map;
+    context->changed = TRUE;
 }
 void pok_map_render_context_align(struct pok_map_render_context* context)
 {
@@ -68,6 +69,7 @@ void pok_map_render_context_align(struct pok_map_render_context* context)
     context->viewingChunks[2][0] = context->viewingChunks[1][0] != NULL ? context->viewingChunks[1][0]->adjacent[pok_direction_right] : NULL;
     context->viewingChunks[0][2] = context->viewingChunks[1][2] != NULL ? context->viewingChunks[1][2]->adjacent[pok_direction_left] : NULL;
     context->viewingChunks[2][2] = context->viewingChunks[1][2] != NULL ? context->viewingChunks[1][2]->adjacent[pok_direction_right] : NULL;
+    context->changed = TRUE;
 }
 /* bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_location* location) */
 /* { */
@@ -166,7 +168,7 @@ bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,c
         context->chunkpos = *chunkpos;
     }
     /* realign the context and set the relative position */
-    pok_map_render_context_align(context);
+    pok_map_render_context_align(context); /* flags change */
     context->relpos = *relpos;
     return TRUE;
 }
@@ -280,6 +282,7 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
     }
     else
         return FALSE;
+    context->changed = TRUE;
     return TRUE;
 }
 void pok_map_render_context_set_update(struct pok_map_render_context* context,enum pok_direction dir,uint16_t dimension)
@@ -313,7 +316,7 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
     if (context->update) {
         if (ticks >= context->scrollTicksAmt && ticks % context->scrollTicksAmt == 0) {
             /* updating map render context by incrementing the map offset in
-               the correct direction; there is no need to lock this operation */
+               the correct direction */
             int inc = dimension / context->granularity;
             if (inc == 0) /* granularity was too fine */
                 inc = 1;
@@ -473,10 +476,11 @@ void compute_chunk_render_info(struct pok_map_render_context* context,const stru
 void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context)
 {
     int i;
-    /* obtain lock for the map context */
-    pok_game_lock(context);
-    /* compute dimensions of draw spaces */
-    compute_chunk_render_info(context,sys);
+    if (context->changed) {
+        /* compute dimensions of draw spaces */
+        compute_chunk_render_info(context,sys);
+        context->changed = FALSE;
+    }
     /* draw each of the (possible) 4 chunks; make sure to perform scroll offset */
     for (i = 0;i < 4;++i) {
         if (context->info[i].chunk != NULL) {
@@ -496,6 +500,4 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
             }
         }
     }
-    /* release lock for the map context */
-    pok_game_unlock(context);
 }
