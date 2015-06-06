@@ -14,7 +14,7 @@ static bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc);
 #if defined(POKGAME_POSIX)
 #include "net-posix.c"
 #elif defined(POKGAME_WIN32)
-
+#include "net-win32.c"
 #endif
 
 /* target-independent code */
@@ -241,7 +241,7 @@ bool_t pok_data_stream_fread(struct pok_data_source* dsrc,int* cnt,const char* f
     *cnt = 0;
     while (*format) {
         int c = *format++;
-        byte_t* data;
+        byte_t* data = NULL;
         size_t bytesRead = 0, bytesNeeded = 0;
         if ( isspace(c) )
             continue;

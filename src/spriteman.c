@@ -125,7 +125,7 @@ bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* f
         return FALSE;
     }
     /* check image dimensions; it must support at least a single sprite set */
-    if (img->width != sman->sys->dimension || img->height < sman->sys->dimension*10 || img->height % sman->sys->dimension != 0) {
+    if (img->width != sman->sys->dimension || img->height < (uint16_t)(sman->sys->dimension*10) || img->height % sman->sys->dimension != 0) {
         pok_exception_new_ex(pok_ex_spriteman,pok_ex_spriteman_bad_image_dimension);
         pok_image_free(img);
         return FALSE;

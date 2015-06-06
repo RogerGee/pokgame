@@ -29,7 +29,7 @@ void pok_image_render(struct pok_image* img,int32_t x,int32_t y)
             /* hack around clipping restrictions with glRasterPos; we
                must negate 'y' since the vertical coordinates were flipped */
             glRasterPos2i(0,0);
-            glBitmap(0,0,0,0,x,-y,NULL);
+            glBitmap(0,0,0,0,(GLfloat)x,(GLfloat)-y,NULL);
         }
         else
             glRasterPos2i(x,y);

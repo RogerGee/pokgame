@@ -9,3 +9,9 @@ tilemaker
 spritemaker
 test/img
 test/maps
+
+*.obj
+pokgame.vcxproj.filters
+pokgame.vcxproj.user
+Debug/
+Release/

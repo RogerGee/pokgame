@@ -598,7 +598,6 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
         an adjacency list (of adjacency bitmasks). The list of adjacency bitmasks is parallel to the list of
         chunks
     */
-    uint16_t i;
     struct chunk_adj_info* adj = (struct chunk_adj_info*) info->aux;
     enum pok_network_result result = pok_net_already;
     if (info->fieldProg == 0) /* super class */

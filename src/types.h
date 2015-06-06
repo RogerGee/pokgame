@@ -4,6 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* the Microsoft C Compiler does not support C99; therefore
+   make every "inline" reference just an empty macro substitution */
+#ifdef POKGAME_VISUAL_STUDIO
+#define inline
+#endif
+
 typedef unsigned char bool_t;
 typedef unsigned char byte_t;
 

@@ -15,7 +15,7 @@ static void pok_unlock_error_module();
 #if defined(POKGAME_POSIX)
 #include "error-posix.c"
 #elif defined(POKGAME_WIN32)
-
+#include "error-win32.c"
 #endif
 
 /* error messages: each array of arrays represents a collection of error messages

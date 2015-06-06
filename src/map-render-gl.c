@@ -1,4 +1,8 @@
 #include "pokgame.h"
+#if defined(POKGAME_WIN32)
+/* must include Windows.h before gl.h using Microsoft C compiler */
+#include <Windows.h>
+#endif
 #include <GL/gl.h>
 
 void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context)
@@ -7,7 +11,7 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
     /* obtain lock for the map context */
     pok_game_lock(context);
     /* compute dimensions of draw spaces */
-    compute_chunk_render_info(context->info,sys,context);
+    compute_chunk_render_info(context,sys);
     /* draw each of the (possible) 4 chunks; make sure to perform scroll offset */
     for (i = 0;i < 4;++i) {
         if (context->info[i].chunk != NULL) {

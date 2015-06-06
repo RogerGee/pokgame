@@ -87,7 +87,7 @@ void set_tick_amounts(struct pok_game_info* info,struct timeout_interval* t)
 {
     /* compute tick amounts; note: map scroll and character animation need to be synced */
     globals.mapTicksNormal = MAP_SCROLL_TIME / t->mseconds / info->mapRC->granularity;
-    globals.mapTicksFast = globals.mapTicksNormal / 1.75;
+    globals.mapTicksFast = (uint32_t) (globals.mapTicksNormal / 1.5);
     info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
     info->playerContext->aniTicksAmt = globals.mapTicksNormal;
 

@@ -27,6 +27,7 @@ struct gamelock;
 static struct gamelock* glock; /* global lock */
 static struct hashmap locks; /* void* --> void* */
 static struct gamelock* gamelock_new(void* object);
+static void gamelock_free(struct gamelock* lock);
 static void gamelock_aquire(struct gamelock* lock);
 static void gamelock_release(struct gamelock* lock);
 static void gamelock_up(struct gamelock* lock);
@@ -35,6 +36,8 @@ static void gamelock_down(struct gamelock* lock);
 /* include platform-specific code */
 #if defined(POKGAME_POSIX)
 #include "pokgame-posix.c"
+#elif defined(POKGAME_WIN32)
+#include "pokgame-win32.c"
 #endif
 
 static int gamelock_hash(const void** obj,int size)
@@ -55,8 +58,8 @@ void pok_game_load_module()
 }
 void pok_game_unload_module()
 {
-    hashmap_delete_ex(&locks,free);
-    free(glock);
+    hashmap_delete_ex(&locks,(destructor)gamelock_free);
+    gamelock_free(glock);
 }
 
 void pok_game_modify_enter(void* object)

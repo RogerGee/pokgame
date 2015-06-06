@@ -11,8 +11,7 @@
 
 extern const char* POKGAME_NAME;
 extern const char* HOME;
-extern void compute_chunk_render_info(struct pok_chunk_render_info* chunks,
-    const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
+extern void compute_chunk_render_info(struct pok_map_render_context* context,const struct pok_graphics_subsystem* sys);
 
 static char* get_token(char** start,char delim);
 struct pok_image* get_tile_image(int no); /* make these visable to other compilation units */
@@ -112,7 +111,7 @@ int graphics_main_test1()
             pok_map_render_context_move(globals.mcxt,pok_direction_up,FALSE);
         else if (strcmp(tok,"mapdebug") == 0) {
             struct pok_chunk_render_info info[4];
-            compute_chunk_render_info(info,sys,globals.mcxt);
+            compute_chunk_render_info(globals.mcxt,sys);
             printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunkpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
                 globals.mcxt->map->chunkSize.rows,globals.mcxt->focus[0],globals.mcxt->focus[1],globals.mcxt->relpos.column,
                 globals.mcxt->relpos.row,globals.mcxt->chunkpos.X,globals.mcxt->chunkpos.Y,globals.mcxt->map->chunk->data[0][0].data.tileid);

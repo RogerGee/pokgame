@@ -3,9 +3,8 @@
 #include "protocol.h"
 #include <stdlib.h>
 
-/* include the map rendering function; define an interface that it can use to compute map render info */
-void compute_chunk_render_info(struct pok_chunk_render_info* chunks, /* this is 'extern' for debugging */
-    const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
+/* this function computes chunk render information for the map rendering routine; this is 'extern' for debugging */
+void compute_chunk_render_info(struct pok_map_render_context* context, const struct pok_graphics_subsystem* sys);
 
 /* include platform-dependent code */
 #if defined(POKGAME_OPENGL)
@@ -351,9 +350,9 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
     return FALSE;
 }
 
-/* implementation of interface for map rendering routine */
-void compute_chunk_render_info(struct pok_chunk_render_info* info,
-    const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context)
+/* implementation of check render info function for map rendering routine; the 'pok_chunk_render_info' structures
+   created by this routine are used in many rendering contexts (not just for maps) */
+void compute_chunk_render_info(struct pok_map_render_context* context,const struct pok_graphics_subsystem* sys)
 {
     /* a map is painted as an application of at most 4 chunks; this routine computes which chunks are needed along with
        the bounding information specifying how each chunk is to be drawn; this routine corrects for small chunk dimensions
@@ -362,48 +361,48 @@ void compute_chunk_render_info(struct pok_chunk_render_info* info,
        into the viewing area */
     int i, d[2];
     uint16_t u, v;
-    const int32_t ZERO = - (uint32_t)sys->dimension;
+    const int32_t ZERO = - (int32_t)sys->dimension;
     /* chunks: chunk1 is always the horizontally adjacent chunk (if any) and
        chunk2 is always the vertically adjacent chunk (if any) */
     for (i = 0;i < 4;++i)
-        info[i].chunk = NULL;
+        context->info[i].chunk = NULL;
     /* compute initial chunk render info (offset so that we render a "border" around the viewing space) */
-    info[0].px = ZERO;
-    info[0].py = ZERO;
-    info[0].across = sys->windowSize.columns + 2;
-    info[0].down = sys->windowSize.rows + 2;
-    info[0].chunkPos = context->chunkpos;
-    info[0].chunk = context->map->chunk;
+    context->info[0].px = ZERO;
+    context->info[0].py = ZERO;
+    context->info[0].across = sys->windowSize.columns + 2;
+    context->info[0].down = sys->windowSize.rows + 2;
+    context->info[0].chunkPos = context->chunkpos;
+    context->info[0].chunk = context->map->chunk;
     d[0] = context->focus[0]; d[1] = context->focus[1];
     i = (int)context->relpos.column - (int)sys->playerLocation.column - 1; /* compute left column position within chunk */
     if (i < 0) {
         /* viewing area exceeds chunk bounds on the left */
         u = -i; /* number of columns to the left */
-        info[0].px += sys->dimension * u;
-        info[0].across -= u;
-        info[0].loc.column = 0;
+        context->info[0].px += sys->dimension * u;
+        context->info[0].across -= u;
+        context->info[0].loc.column = 0;
         /* set dimensions for adjacent chunk; 'py', 'down' and 'loc.row' members to be set later */
-        info[1].px = ZERO;
-        info[1].across = u;
-        info[1].loc.column = context->map->chunkSize.columns - u;
-        info[1].chunkPos = info[0].chunkPos; --info[1].chunkPos.X;
-        info[1].chunk = context->viewingChunks[context->focus[0]-1][context->focus[1]]; /* immediate left */
+        context->info[1].px = ZERO;
+        context->info[1].across = u;
+        context->info[1].loc.column = context->map->chunkSize.columns - u;
+        context->info[1].chunkPos = context->info[0].chunkPos; --context->info[1].chunkPos.X;
+        context->info[1].chunk = context->viewingChunks[context->focus[0]-1][context->focus[1]]; /* immediate left */
         --d[0];
     }
     else {
-        info[0].loc.column = i;
+        context->info[0].loc.column = i;
         u = context->map->chunkSize.columns - context->relpos.column - 1; /* how many columns to the right in chunk? */
         if (u < sys->_playerLocationInv.column + 1) {
             /* viewing area exceeds chunk bounds on the right
                (note: viewing area can only exceed on the right given it did not exceed on the left) */
             v = sys->_playerLocationInv.column + 1 - u; /* how many columns to the right in viewing area? */
-            info[0].across -= v;
+            context->info[0].across -= v;
             /* set dimensions for adjacent chunk; 'py', 'down' and 'loc.row' members to be set later */
-            info[1].px = info[0].px + sys->dimension * info[0].across;
-            info[1].across = v;
-            info[1].loc.column = 0;
-            info[1].chunkPos = info[0].chunkPos; ++info[1].chunkPos.X;
-            info[1].chunk = context->viewingChunks[context->focus[0]+1][context->focus[1]]; /* immediate right */
+            context->info[1].px = context->info[0].px + sys->dimension * context->info[0].across;
+            context->info[1].across = v;
+            context->info[1].loc.column = 0;
+            context->info[1].chunkPos = context->info[0].chunkPos; ++context->info[1].chunkPos.X;
+            context->info[1].chunk = context->viewingChunks[context->focus[0]+1][context->focus[1]]; /* immediate right */
             ++d[0];
         }
     }
@@ -411,66 +410,66 @@ void compute_chunk_render_info(struct pok_chunk_render_info* info,
     if (i < 0) {
         /* viewing area exceeds chunk bounds above */
         u = -i; /* number of rows above */
-        info[0].py += sys->dimension * u;
-        info[0].down -= u;
-        info[0].loc.row = 0;
+        context->info[0].py += sys->dimension * u;
+        context->info[0].down -= u;
+        context->info[0].loc.row = 0;
         /* set dimensions for adjacent chunk */
-        info[2].py = ZERO;
-        info[2].down = u;        
-        info[2].loc.row = context->map->chunkSize.rows - u;
-        info[2].chunkPos = info[0].chunkPos; --info[2].chunkPos.Y;
-        info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]-1]; /* straight up */
+        context->info[2].py = ZERO;
+        context->info[2].down = u;
+        context->info[2].loc.row = context->map->chunkSize.rows - u;
+        context->info[2].chunkPos = context->info[0].chunkPos; --context->info[2].chunkPos.Y;
+        context->info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]-1]; /* straight up */
         --d[1];
     }
     else {
-        info[0].loc.row = i;
+        context->info[0].loc.row = i;
         u = context->map->chunkSize.rows - context->relpos.row - 1; /* how many rows below in chunk? */
         if (u < sys->_playerLocationInv.row+1) {
             /* viewing area exceeds chunk bounds below
                (note: viewing area can only exceed below given it did not exceed above) */
             v = sys->_playerLocationInv.row + 1 - u; /* how many rows below in viewing area? */
-            info[0].down -= v;
+            context->info[0].down -= v;
             /* set dimensions for adjacent chunk */
-            info[2].py = info[0].py + sys->dimension * info[0].down;
-            info[2].down = v;
-            info[2].loc.row = 0;
-            info[2].chunkPos = info[0].chunkPos; ++info[2].chunkPos.Y;
-            info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]+1]; /* straight down */
+            context->info[2].py = context->info[0].py + sys->dimension * context->info[0].down;
+            context->info[2].down = v;
+            context->info[2].loc.row = 0;
+            context->info[2].chunkPos = context->info[0].chunkPos; ++context->info[2].chunkPos.Y;
+            context->info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]+1]; /* straight down */
             ++d[1];
         }
     }
-    if (info[1].chunk != NULL) {
+    if (context->info[1].chunk != NULL) {
         /* chunk 1 is identical to chunk 0 vertically */
-        info[1].py = info[0].py;
-        info[1].down = info[0].down;
-        info[1].loc.row = info[0].loc.row;
+        context->info[1].py = context->info[0].py;
+        context->info[1].down = context->info[0].down;
+        context->info[1].loc.row = context->info[0].loc.row;
     }
-    if (info[2].chunk != NULL) {
+    if (context->info[2].chunk != NULL) {
         /* chunk 2 is identical to chunk 0 horizontally */
-        info[2].px = info[0].px;
-        info[2].across = info[0].across;
-        info[2].loc.column = info[0].loc.column;
+        context->info[2].px = context->info[0].px;
+        context->info[2].across = context->info[0].across;
+        context->info[2].loc.column = context->info[0].loc.column;
     }
-    if (info[1].chunk!=NULL && info[2].chunk!=NULL) {
+    if (context->info[1].chunk!=NULL && context->info[2].chunk!=NULL) {
         /* we need to pull from a diagonal chunk; chunk 3 will be vertically identical
            to chunk 1 and horizontally identical to chunk 2 */
-        info[3].px = info[1].px;
-        info[3].across = info[1].across;
-        info[3].loc.column = info[1].loc.column;
-        info[3].py = info[2].py;
-        info[3].down = info[2].down;
-        info[3].loc.row = info[2].loc.row;
-        info[3].chunkPos.X = info[0].chunkPos.X + d[0];
-        info[3].chunkPos.Y = info[1].chunkPos.Y + d[1];
-        info[3].chunk = context->viewingChunks[d[0]][d[1]];
+        context->info[3].px = context->info[1].px;
+        context->info[3].across = context->info[1].across;
+        context->info[3].loc.column = context->info[1].loc.column;
+        context->info[3].py = context->info[2].py;
+        context->info[3].down = context->info[2].down;
+        context->info[3].loc.row = context->info[2].loc.row;
+        context->info[3].chunkPos.X = context->info[0].chunkPos.X + d[0];
+        context->info[3].chunkPos.Y = context->info[1].chunkPos.Y + d[1];
+        context->info[3].chunk = context->viewingChunks[d[0]][d[1]];
     }
     /* correct chunk sizes */
     for (i = 0;i < 4;++i) {
-        if (info[i].chunk != NULL) {
-            if (info[i].across > context->map->chunkSize.columns)
-                info[i].across = context->map->chunkSize.columns;
-            if (info[i].down > context->map->chunkSize.rows)
-                info[i].down = context->map->chunkSize.rows;
+        if (context->info[i].chunk != NULL) {
+            if (context->info[i].across > context->map->chunkSize.columns)
+                context->info[i].across = context->map->chunkSize.columns;
+            if (context->info[i].down > context->map->chunkSize.rows)
+                context->info[i].down = context->map->chunkSize.rows;
         }
     }
 }
