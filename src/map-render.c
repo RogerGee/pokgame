@@ -1,15 +1,11 @@
 /* map-render.c - pokgame */
 #include "map-render.h"
 #include "protocol.h"
+#include "pokgame.h"
 #include <stdlib.h>
 
 /* this function computes chunk render information for the map rendering routine; this is 'extern' for debugging */
 void compute_chunk_render_info(struct pok_map_render_context* context, const struct pok_graphics_subsystem* sys);
-
-/* include platform-dependent code */
-#if defined(POKGAME_OPENGL)
-#include "map-render-gl.c"
-#endif
 
 /* pok_map_render_context */
 struct pok_map_render_context* pok_map_render_context_new(const struct pok_tile_manager* tman)
@@ -40,8 +36,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
         context->info[i].chunk = NULL;
     context->granularity = 1;
     context->tileAniTicks = 0;
-    context->scrollTicks[0] = 0;
-    context->scrollTicks[1] = 0;
+    context->scrollTicks = 0;
     context->scrollTicksAmt = 1;
     context->groove = FALSE;
     context->update = FALSE;
@@ -307,16 +302,16 @@ void pok_map_render_context_set_update(struct pok_map_render_context* context,en
     default:
         break;
     }
-    context->scrollTicks[0] = context->scrollTicks[1] = 0;
+    context->scrollTicks = 0;
     context->groove = FALSE;
     context->update = TRUE;
 }
 bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension)
 {
     /* check to see if map is being updated, and that enough time has elapsed for an update */
-    uint32_t diff = context->scrollTicks[1]++ - context->scrollTicks[0];
+    uint32_t ticks = context->scrollTicks++;
     if (context->update) {
-        if (diff >= context->scrollTicksAmt && diff % context->scrollTicksAmt == 0) {
+        if (ticks >= context->scrollTicksAmt && ticks % context->scrollTicksAmt == 0) {
             /* updating map render context by incrementing the map offset in
                the correct direction; there is no need to lock this operation */
             int inc = dimension / context->granularity;
@@ -334,7 +329,7 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
                 /* done: return TRUE to denote that the process finished */
                 context->update = FALSE;
                 context->groove = TRUE;
-                context->scrollTicks[0] = context->scrollTicks[1] = 0;
+                context->scrollTicks = 0;
                 return TRUE;
             }
             /* handle case where remainder will cause infinite oscillation */
@@ -344,7 +339,7 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
                 context->offset[1] = inc;
         }
     }
-    else if (context->groove && diff >= context->scrollTicksAmt * context->granularity)
+    else if (context->groove && ticks >= context->scrollTicksAmt * context->granularity)
         /* we lost our groove */
         context->groove = FALSE;
     return FALSE;
@@ -472,4 +467,35 @@ void compute_chunk_render_info(struct pok_map_render_context* context,const stru
                 context->info[i].down = context->map->chunkSize.rows;
         }
     }
+}
+
+/* pok map rendering function */
+void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context)
+{
+    int i;
+    /* obtain lock for the map context */
+    pok_game_lock(context);
+    /* compute dimensions of draw spaces */
+    compute_chunk_render_info(context,sys);
+    /* draw each of the (possible) 4 chunks; make sure to perform scroll offset */
+    for (i = 0;i < 4;++i) {
+        if (context->info[i].chunk != NULL) {
+            uint16_t h, row = context->info[i].loc.row;
+            uint32_t y = context->info[i].py + context->offset[1];
+            for (h = 0;h < context->info[i].down;++h,++row,y+=sys->dimension) {
+                uint16_t w, col = context->info[i].loc.column;
+                uint32_t x = context->info[i].px + context->offset[0];
+                for (w = 0;w < context->info[i].across;++w,++col,x+=sys->dimension)
+                    pok_image_render(
+                        pok_tile_manager_get_tile(
+                            context->tman,
+                            context->info[i].chunk->data[row][col].data.tileid,
+                            context->tileAniTicks ),
+                        x,
+                        y );
+            }
+        }
+    }
+    /* release lock for the map context */
+    pok_game_unlock(context);
 }

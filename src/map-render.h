@@ -36,7 +36,7 @@ struct pok_map_render_context
     struct pok_chunk_render_info info[4];      /* chunk render info for implementation */
     uint16_t granularity;                      /* controls map scroll granularity (how many updates per scroll cycle) */
     uint32_t tileAniTicks;                     /* tile animation counter */
-    uint32_t scrollTicks[2];                   /* scroll animation counter: [0] before, [1] after */
+    uint32_t scrollTicks;                   /* scroll animation counter */
     uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
     bool_t groove;                             /* true after a context has finished updating and for a period afterwards */
     bool_t update;                             /* is the map render context being updated? */

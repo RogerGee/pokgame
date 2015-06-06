@@ -55,7 +55,7 @@ enum pok_iomode
    operating system; to the rest of the application it is an opaque type used to receive
    and send data to another process, either local or remote */
 struct pok_data_source;
-
+struct pok_data_source* pok_data_source_new_standard();
 struct pok_data_source* pok_data_source_new_local_named(const char* name);
 struct pok_data_source* pok_data_source_new_local_anon();
 struct pok_data_source* pok_data_source_new_network(struct pok_network_address* address);

@@ -105,7 +105,7 @@ $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
 $(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
-$(OBJDIR)/map-render.o: src/map-render.c src/map-render-gl.c $(MAP_RENDER_H) $(PROTOCOL_H) $(POKGAME_H)
+$(OBJDIR)/map-render.o: src/map-render.c $(MAP_RENDER_H) $(PROTOCOL_H) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map-render.o src/map-render.c
 $(OBJDIR)/character-render.o: src/character-render.c $(CHARACTER_RENDER_H) $(ERROR)
 	$(COMPILE) $(OUT)$(OBJDIR)/character-render.o src/character-render.c

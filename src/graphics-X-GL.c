@@ -259,12 +259,12 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
     return FALSE;
 }
 
+/* misc. pok_graphics_subsystem functions */
 bool_t pok_graphics_subsystem_is_running(struct pok_graphics_subsystem* sys)
 {
     /* the game is running (a.k.a. being rendered) if the 'gameRendering' flag is up */
     return sys->impl != NULL && sys->impl->rendering && sys->impl->gameRendering;
 }
-
 bool_t pok_graphics_subsystem_has_window(struct pok_graphics_subsystem* sys)
 {
     /* the window is up if the 'rendering' flag is true */
@@ -377,7 +377,6 @@ void create_textures(struct pok_graphics_subsystem* sys)
     for (i = 0;i < sys->impl->texinfoCount;++i) {
         int j;
         GLuint names[sys->impl->texinfo[i].count];
-        GLenum err;
         glGenTextures(sys->impl->texinfo[i].count,names);
         for (j = 0;j < sys->impl->texinfo[i].count;++j) {
             struct pok_image* img = sys->impl->texinfo[i].images[j];

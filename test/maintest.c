@@ -3,7 +3,6 @@
 #include "error.h"
 #include <stdio.h>
 #include <assert.h>
-#include <unistd.h>
 
 /* data */
 struct pok_tile_ani_data ANIDATA[] = {

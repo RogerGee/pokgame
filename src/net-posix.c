@@ -17,6 +17,7 @@ enum pok_data_source_mode_flag
     DS_MODE_FD_BOTH = 0x1 << 0x2,
     DS_MODE_BUFFER_OUTPUT = 0x1 << 0x3,
     DS_MODE_IS_SOCKET = 0x1 << 0x4,
+    DS_MODE_USING_STD_FILENO = 0x1 << 0x5,
     DS_MODE_REACH_EOF = 0x1 << 0x7
 };
 
@@ -52,6 +53,19 @@ static void pok_data_source_init(struct pok_data_source* dsrc,enum pok_iomode io
     dsrc->szWrite = 0;
     dsrc->itWrite = 0;
 }
+struct pok_data_source* pok_data_source_new_standard()
+{
+    struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    dsrc->fd[0] = STDOUT_FILENO;
+    dsrc->fd[1] = STDIN_FILENO;
+    dsrc->mode = DS_MODE_FD_BOTH | DS_MODE_USING_STD_FILENO;
+    pok_data_source_init(dsrc,pok_iomode_full_duplex);
+    return dsrc;
+}
 struct pok_data_source* pok_data_source_new_local_named(const char* name)
 {
     struct sockaddr_un addr;
@@ -77,16 +91,17 @@ struct pok_data_source* pok_data_source_new_local_named(const char* name)
 }
 struct pok_data_source* pok_data_source_new_local_anon()
 {
-    int r;
     struct pok_data_source* dsrc;
     dsrc = malloc(sizeof(struct pok_data_source));
     if (dsrc == NULL) {
         pok_exception_flag_memory_error();
         return NULL;
     }
-    r = pipe(dsrc->fd);
-    if (r == -1)
-        pok_error(pok_error_fatal,"cannot create pipe resource");
+    if (pipe(dsrc->fd) == -1) {
+
+        free(dsrc);
+        return NULL;
+    }
     dsrc->mode = DS_MODE_FD_BOTH;
     pok_data_source_init(dsrc,pok_iomode_full_duplex);
     return dsrc;
@@ -118,6 +133,7 @@ struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_f
         flags |= O_CREAT | O_EXCL;
     else if (mode == pok_filemode_create_always)
         flags |= O_CREAT | O_TRUNC;
+    /* else... the default flags (no flags) attempt to open an existing file */
     if (access == pok_iomode_read)
         flags |= O_RDONLY;
     else if (access == pok_iomode_write)
@@ -151,7 +167,7 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
        from the data source; it will return what it was able to read; NULL is returned if an
        exception was generated; if non-NULL is returned and *bytesRead==0 then the EOF was reached on
        the device */
-    size_t it, remain;
+    size_t it;
     struct pok_exception* ex;
     /* check end of file on fd[0] */
     if (dsrc->mode & DS_MODE_REACH_EOF) {
@@ -165,6 +181,7 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
        have the requested number of bytes */
     if (bytesRequested > dsrc->szRead) {
         ssize_t r;
+        size_t remain;
         /* compute remaining bytes */
         remain = sizeof(dsrc->bufferRead) - dsrc->szRead - dsrc->itRead;
         /* reduce used buffer portion to maximize capacity if needed */
@@ -206,13 +223,14 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead)
 {
     /* perform a simpler read into a user-provided buffer */
-    ssize_t r, amt;
+    ssize_t r;
     if (dsrc->mode & DS_MODE_REACH_EOF) {
         *bytesRead = 0;
         return TRUE;
     }
     /* transfer bytes in our input buffer first; then read the remainder in directly to the user-provided buffer */
     if (dsrc->szRead > 0) {
+        ssize_t amt;
         amt = bytesRequested > dsrc->szRead ? dsrc->szRead : bytesRequested;
         memcpy(buffer,dsrc->bufferRead + dsrc->itRead,amt);
         buffer = (char*)buffer + amt;
@@ -386,10 +404,12 @@ void pok_data_source_free(struct pok_data_source* dsrc)
     /* call shutdown syscall if device is socket */
     if (dsrc->mode & DS_MODE_IS_SOCKET)
         shutdown(dsrc->fd[0],SHUT_RDWR);
-    /* close file descriptions */
-    close(dsrc->fd[0]);
-    if (dsrc->mode & DS_MODE_FD_BOTH)
-        close(dsrc->fd[1]);
+    if ((dsrc->mode & DS_MODE_USING_STD_FILENO) == 0) {
+        /* close file descriptions (if not standard input/output) */
+        close(dsrc->fd[0]);
+        if (dsrc->mode & DS_MODE_FD_BOTH)
+            close(dsrc->fd[1]);
+    }
     free(dsrc);
 }
 void pok_data_source_unread(struct pok_data_source* dsrc,size_t size)

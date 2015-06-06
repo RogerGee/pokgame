@@ -22,8 +22,7 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
     context->resolveFrame = 0;
     context->granularity = 1;
     context->slowDown = FALSE;
-    context->aniTicks[0] = 0;
-    context->aniTicks[1] = 0;
+    context->aniTicks = 0;
     context->aniTicksAmt = 1;
     context->frameAlt = 0;
     context->update = FALSE;
@@ -95,16 +94,16 @@ void pok_character_context_set_update(struct pok_character_context* context,
     }
 
     /* reset tick counter */
-    context->aniTicks[0] = context->aniTicks[1] = 0;
+    context->aniTicks = 0;
 }
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension)
 {
     if (context->update) {
         /* update character context based on which effect is being applied; make sure enough elapsed time
            has occurred before performing the update operation */
-        uint32_t diff = context->aniTicks[1]++ - context->aniTicks[0];
+        uint32_t ticks = context->aniTicks++;
         uint32_t amount = context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt;
-        if (context->eff == pok_character_normal_effect && diff >= amount && diff % amount == 0) {
+        if (context->eff == pok_character_normal_effect && ticks >= amount && ticks % amount == 0) {
             int inc = dimension / context->granularity;
             if (inc == 0) /* granularity was too fine */
                 inc = 1;
