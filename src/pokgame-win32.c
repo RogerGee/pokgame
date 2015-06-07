@@ -67,5 +67,12 @@ void gamelock_down(struct gamelock* lock)
 /* implement 'timeout' from 'pokgame.h' */
 void timeout(struct timeout_interval* interval)
 {
+    LARGE_INTEGER before;
+    LARGE_INTEGER after;
+    LARGE_INTEGER freq;
+    QueryPerformanceCounter(&before);
     Sleep(interval->mseconds);
+    QueryPerformanceCounter(&after);
+    QueryPerformanceFrequency(&freq);
+    interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
 }
