@@ -78,5 +78,9 @@ void gamelock_down(struct gamelock* lock)
 /* implement 'timeout' from 'pokgame.h' */
 void timeout(struct timeout_interval* interval)
 {
+    struct timespec before, after;
+    clock_gettime(CLOCK_MONOTONIC,&before);
     usleep(interval->useconds);
+    clock_gettime(CLOCK_MONOTONIC,&after);
+    interval->elapsed = (after.tv_nsec - before.tv_nsec) / 1000000;
 }

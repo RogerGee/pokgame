@@ -36,7 +36,7 @@ struct pok_map_render_context
     struct pok_chunk_render_info info[4];      /* chunk render info for implementation */
     uint16_t granularity;                      /* controls map scroll granularity (how many updates per scroll cycle) */
     uint32_t tileAniTicks;                     /* tile animation counter */
-    uint32_t scrollTicks;                      /* scroll animation counter */
+    uint32_t scrollTicks;                      /* scroll animation tick counter */
     uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
     bool_t groove;                             /* true after a context has finished updating and for a period afterwards */
     bool_t changed;                            /* true if the map render context location has been changed */
@@ -50,7 +50,7 @@ void pok_map_render_context_align(struct pok_map_render_context* context);
 bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_point* chunkpos,const struct pok_location* relpos);
 bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum pok_direction dir,bool_t checkPassable);
 void pok_map_render_context_set_update(struct pok_map_render_context* context,enum pok_direction dir,uint16_t dimension);
-bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension);
+bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension,uint32_t ticks);
 
 /* render routine for maps */
 void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);

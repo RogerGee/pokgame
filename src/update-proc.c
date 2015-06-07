@@ -9,8 +9,9 @@
    should exit before the rendering procedure */
 
 /* constant update parameters */
-#define DEFAULT_GRANULARITY      8
-#define MAP_SCROLL_TIME          240 /* amount of time for complete map scroll update */
+#define MAP_GRANULARITY          8
+#define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME_FAST     140 /* number of ticks for complete fast map scroll update */
 
 /* globals */
 static struct
@@ -31,7 +32,7 @@ static void update_key_input(struct pok_game_info* info);
 int update_proc(struct pok_game_info* info)
 {
     int r = 0;
-    uint32_t ticks = 0;
+    uint32_t tileAniTicks = 0;
     struct timeout_interval t;
 
     /* setup parameters */
@@ -47,14 +48,15 @@ int update_proc(struct pok_game_info* info)
         update_key_input(info);
 
         /* perform update operations; if an update operation just completed, then skip the timeout */
-        skip = pok_map_render_context_update(info->mapRC,info->sys->dimension)
-            || pok_character_context_update(info->playerContext,info->sys->dimension);
+        skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,t.elapsed)
+            || pok_character_context_update(info->playerContext,info->sys->dimension,t.elapsed);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
-            ++ticks;
-            if (ticks % t.ticksFourthSecond == 0) /* tile animation ticks every 1/4 second */
+            if (tileAniTicks >= 250) { /* tile animation ticks every 1/4 second */
                 ++info->mapRC->tileAniTicks;
+                tileAniTicks = 0;
+            }
 
             /* check timeout change; then perform timeout */
             if (t.mseconds != info->updateTimeout) {
@@ -63,6 +65,7 @@ int update_proc(struct pok_game_info* info)
             }
 
             timeout(&t);
+            tileAniTicks += t.elapsed;
         }
 
         if ( !pok_graphics_subsystem_has_window(info->sys) ) {
@@ -77,24 +80,26 @@ int update_proc(struct pok_game_info* info)
 void set_defaults(struct pok_game_info* info)
 {
     /* TODO: load defaults from init file */
-    info->mapRC->granularity = DEFAULT_GRANULARITY;
-    info->playerContext->granularity = DEFAULT_GRANULARITY;
+    info->mapRC->granularity = MAP_GRANULARITY;
+    info->playerContext->granularity = MAP_GRANULARITY;
 
 }
 
 void set_tick_amounts(struct pok_game_info* info,struct timeout_interval* t)
 {
     /* compute tick amounts; note: map scroll and character animation need to be synced */
-    globals.mapTicksNormal = MAP_SCROLL_TIME / t->mseconds / info->mapRC->granularity;
-    globals.mapTicksFast = (uint32_t) (globals.mapTicksNormal / 1.5);
-    info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
-    info->playerContext->aniTicksAmt = globals.mapTicksNormal;
+    globals.mapTicksNormal = MAP_SCROLL_TIME / info->mapRC->granularity;
+    globals.mapTicksFast = MAP_SCROLL_TIME_FAST / info->mapRC->granularity;
 
     /* these need to be valid denominators */
-    if (info->mapRC->scrollTicksAmt == 0)
-        info->mapRC->scrollTicksAmt = 1;
-    if (info->playerContext->aniTicksAmt == 0)
-        info->playerContext->aniTicksAmt = 1;
+    if (globals.mapTicksNormal == 0)
+        globals.mapTicksNormal = 1;
+    if (globals.mapTicksFast == 0)
+        globals.mapTicksFast = 1;
+
+    /* set default tick amounts for game contexts */
+    info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
+    info->playerContext->aniTicksAmt = globals.mapTicksNormal;
 }
 
 void update_key_input(struct pok_game_info* info)

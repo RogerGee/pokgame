@@ -31,7 +31,7 @@ struct pok_character_context
     uint8_t resolveFrame;             /* resolution frame */
     uint16_t granularity;             /* granularity of animation (how many update cycles does it take to complete?) */
     bool_t slowDown;                  /* takes twice as long to animate (for effect) */
-    uint32_t aniTicks;                /* animation ticks: [0] before, [1] after */
+    uint32_t aniTicks;                /* animation ticks up to this point */
     uint32_t aniTicksAmt;             /* number of animation ticks needed before each update */
     uint8_t frameAlt;                 /* sprite frame alternation counter */
     bool_t update;                    /* is the character context being updated? */
@@ -41,7 +41,7 @@ void pok_character_context_set_update(struct pok_character_context* context,
     enum pok_direction direction,
     enum pok_character_effect effect,
     uint16_t parameter);
-bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension);
+bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks);
 
 /* pok_character_render_context: provides information for rendering a set 
    of 'pok_character_context' instances; this render context depends on the

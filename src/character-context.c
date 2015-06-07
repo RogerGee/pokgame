@@ -96,46 +96,47 @@ void pok_character_context_set_update(struct pok_character_context* context,
     /* reset tick counter */
     context->aniTicks = 0;
 }
-bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension)
+bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks)
 {
     if (context->update) {
         /* update character context based on which effect is being applied; make sure enough elapsed time
            has occurred before performing the update operation */
-        uint32_t ticks = context->aniTicks++;
-        uint32_t amount = context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt;
-        if (context->eff == pok_character_normal_effect && ticks >= amount && ticks % amount == 0) {
-            int inc = dimension / context->granularity;
-            if (inc == 0) /* granularity was too fine */
-                inc = 1;
-            if (context->update == context->granularity)
-                context->frame = context->resolveFrame + 1 + context->frameAlt++ % (context->character->direction <= 1 ? 2 : 1);
-            if (context->offset[0] < 0)
-                context->offset[0] += inc;
-            else if (context->offset[0] > 0)
-                context->offset[0] -= inc;
-            else if (context->offset[1] < 0)
-                context->offset[1] += inc;
-            else if (context->offset[1] > 0)
-                context->offset[1] -= inc;
+        if (context->eff == pok_character_normal_effect) {
+            context->aniTicks += ticks;
+            if (context->aniTicks >= (context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt)) {
+                int inc = dimension / context->granularity;
+                if (inc == 0) /* granularity was too fine */
+                    inc = 1;
+                if (context->update == context->granularity)
+                    context->frame = context->resolveFrame + 1 + context->frameAlt++ % (context->character->direction <= 1 ? 2 : 1);
+                if (context->offset[0] < 0)
+                    context->offset[0] += inc;
+                else if (context->offset[0] > 0)
+                    context->offset[0] -= inc;
+                else if (context->offset[1] < 0)
+                    context->offset[1] += inc;
+                else if (context->offset[1] > 0)
+                    context->offset[1] -= inc;
 
-            /* check to see if we are finished; opt out of the last frame
-               (it's the same as the start of the next sequence) */
-            if (--context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
-                /* done: context->update is now false; return TRUE to mean
-                   that the process completed */
-                context->frame = context->resolveFrame;
-                return TRUE;
+                /* check to see if we are finished; opt out of the last frame
+                   (it's the same as the start of the next sequence) */
+                if (--context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
+                    /* done: context->update is now false; return TRUE to mean
+                       that the process completed */
+                    context->frame = context->resolveFrame;
+                    return TRUE;
+                }
+
+                /* handle case where remainder will cause infinite oscillation */
+                if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
+                    context->offset[0] = inc;
+                if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
+                    context->offset[1] = inc;
+                context->aniTicks = 0;
             }
-
-            /* handle case where remainder will cause infinite oscillation */
-            if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
-                context->offset[0] = inc;
-            if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
-                context->offset[1] = inc;
         }
 
     }
-
     return FALSE;
 }
 

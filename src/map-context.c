@@ -309,15 +309,17 @@ void pok_map_render_context_set_update(struct pok_map_render_context* context,en
     context->groove = FALSE;
     context->update = TRUE;
 }
-bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension)
+bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension,uint32_t ticks)
 {
     /* check to see if map is being updated, and that enough time has elapsed for an update */
-    uint32_t ticks = context->scrollTicks++;
+    context->scrollTicks += ticks;
     if (context->update) {
-        if (ticks >= context->scrollTicksAmt && ticks % context->scrollTicksAmt == 0) {
+        if (context->scrollTicks >= context->scrollTicksAmt) {
             /* updating map render context by incrementing the map offset in
                the correct direction */
-            int inc = dimension / context->granularity;
+            int inc;
+            context->scrollTicks = 0; /* reset scroll ticks for next time */
+            inc = dimension / context->granularity;
             if (inc == 0) /* granularity was too fine */
                 inc = 1;
             if (context->offset[0] < 0)
@@ -332,7 +334,6 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
                 /* done: return TRUE to denote that the process finished */
                 context->update = FALSE;
                 context->groove = TRUE;
-                context->scrollTicks = 0;
                 return TRUE;
             }
             /* handle case where remainder will cause infinite oscillation */
@@ -342,7 +343,7 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
                 context->offset[1] = inc;
         }
     }
-    else if (context->groove && ticks >= context->scrollTicksAmt * context->granularity)
+    else if (context->groove && context->scrollTicks >= context->scrollTicksAmt * context->granularity)
         /* we lost our groove */
         context->groove = FALSE;
     return FALSE;

@@ -23,8 +23,8 @@ struct pok_game_info
     bool_t control;
 
     /* timeouts for main game procedures (in thousandths of a second) */
-    int ioTimeout;
-    int updateTimeout;
+    uint32_t ioTimeout;
+    uint32_t updateTimeout;
 
     /* flag what the game is currently doing */
     enum pok_game_context gameContext;
@@ -79,15 +79,15 @@ void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focu
 
 struct timeout_interval
 {
-    int mseconds;
-    int useconds;
+    /* timeout duration */
+    uint32_t mseconds;
+    uint32_t useconds;
 
-    int ticksEighthSecond;
-    int ticksFourthSecond;
-    int ticksHalfSecond;
-    int ticksSecond;
+    /* how many ticks actually elapsed since the last timeout;
+       a tick is defined as a single millisecond */
+    uint32_t elapsed;
 };
-void timeout_interval_reset(struct timeout_interval* t,int mseconds);
+void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds);
 void timeout(struct timeout_interval* interval);
 
 #endif

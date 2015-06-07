@@ -139,7 +139,7 @@ struct pok_game_info* pok_game_new()
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
     game->ioTimeout = 100;
-    game->updateTimeout = 5;
+    game->updateTimeout = 10; /* needs to be less than 100 for good measure */
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
     /* initialize graphics subsystem */
@@ -201,22 +201,9 @@ void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focu
         pok_map_render_context_set_map(game->mapRC,map);
 }
 
-void timeout_interval_reset(struct timeout_interval* t,int mseconds)
+void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds)
 {
     t->mseconds = mseconds;
     t->useconds = mseconds * 1000;
-    t->ticksEighthSecond = 125 / t->mseconds;
-    t->ticksFourthSecond = 250 / t->mseconds;
-    t->ticksHalfSecond = 500 / t->mseconds;
-    t->ticksSecond = 1000 / t->mseconds;
-
-    /* these need to be a valid denominator */
-    if (t->ticksEighthSecond == 0)
-        t->ticksEighthSecond = 1;
-    if (t->ticksFourthSecond == 0)
-        t->ticksFourthSecond = 1;
-    if (t->ticksHalfSecond == 0)
-        t->ticksHalfSecond = 1;
-    if (t->ticksSecond == 0)
-        t->ticksSecond = 1;
+    t->elapsed = 0;
 }
