@@ -1,11 +1,14 @@
 #include <Windows.h>
 
+#define MAX_SEMAPHORE 10
+
 struct gamelock
 {
     void* object;
-    int updown;
-    HANDLE wait;
-    HANDLE aquire;
+    HANDLE readOnly;
+    HANDLE modify;
+    HANDLE atom;
+    INT updown;
 };
 
 struct gamelock* gamelock_new(void* object)
@@ -17,42 +20,48 @@ struct gamelock* gamelock_new(void* object)
         return NULL;
     }
     lock->object = object;
+    lock->readOnly = CreateSemaphore(NULL, MAX_SEMAPHORE, MAX_SEMAPHORE, NULL);
+    lock->modify = CreateSemaphore(NULL, 1, 1, NULL);
+    lock->atom = CreateMutex(NULL, FALSE, NULL);
     lock->updown = 0;
-    lock->wait = CreateMutex(NULL, FALSE, NULL);
-    lock->aquire = CreateMutex(NULL, FALSE, NULL);
-    if (lock->wait == NULL || lock->aquire == NULL) {
+    if (lock->readOnly == NULL || lock->modify == NULL)
+        pok_error(pok_error_fatal, "fail CreateSemaphore()");
+    if (lock->atom == NULL)
         pok_error(pok_error_fatal, "fail CreateMutex()");
-        return NULL;
-    }
     return lock;
 }
 void gamelock_free(struct gamelock* lock)
 {
-    CloseHandle(lock->wait);
-    CloseHandle(lock->aquire);
+    CloseHandle(lock->readOnly);
+    CloseHandle(lock->modify);
+    CloseHandle(lock->atom);
     free(lock);
 }
 void gamelock_aquire(struct gamelock* lock)
 {
-    WaitForSingleObject(lock->wait,INFINITE);
-    WaitForSingleObject(lock->aquire,INFINITE);
-    ReleaseMutex(lock->wait);
+    WaitForSingleObject(lock->modify, INFINITE);
 }
 void gamelock_release(struct gamelock* lock)
 {
-    ReleaseMutex(lock->aquire);
+    ReleaseSemaphore(lock->modify, 1, NULL);
 }
 void gamelock_up(struct gamelock* lock)
 {
-    WaitForSingleObject(lock->wait,INFINITE);
+    WaitForSingleObject(lock->atom, INFINITE);
     if (lock->updown++ == 0)
-        WaitForSingleObject(lock->aquire,INFINITE);
-    ReleaseMutex(lock->wait);
+        /* get inside the modify context */
+        WaitForSingleObject(lock->modify, INFINITE);
+    ReleaseMutex(lock->atom);
+    WaitForSingleObject(lock->readOnly, INFINITE);
 }
 void gamelock_down(struct gamelock* lock)
 {
+    WaitForSingleObject(lock->atom, INFINITE);
     if (--lock->updown == 0)
-        ReleaseMutex(lock->aquire);
+        /* we are the last reader; get outside modify context */
+        ReleaseSemaphore(lock->modify, 1, NULL);
+    ReleaseMutex(lock->atom);
+    ReleaseSemaphore(lock->readOnly, 1, NULL);
 }
 
 /* implement 'timeout' from 'pokgame.h' */

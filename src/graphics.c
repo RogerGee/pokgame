@@ -34,6 +34,8 @@ static void impl_unlock(struct pok_graphics_subsystem* sys);
 #include "graphics-X-GL.c"
 #elif defined(POKGAME_WIN32) && defined(POKGAME_OPENGL)
 #include "graphics-win32-GL.c"
+#elif defined(POKGAME_WIN32) && defined(POKGAME_WIN32_GDI)
+#include "graphics-win32-gdi.c"
 #endif
 
 struct pok_graphics_subsystem* pok_graphics_subsystem_new()

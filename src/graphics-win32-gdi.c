@@ -1,6 +1,8 @@
-/* graphics-win32-GL.c - pokgame */
+/* graphics-win32-gid.c - pokgame */
 #include <Windows.h>
-#include <gl/GL.h>
+
+/* note: this file mirrors 'graphics-win32-GL.c'; it is very similar except
+   it performs software rendering using the Win32 Graphics Display Interface */
 
 #define POKGAME_WINDOW_CLASS "pokgame"
 
@@ -10,21 +12,20 @@ VOID EditMainWindow(struct pok_graphics_subsystem* sys);
 VOID DestroyMainWindow(struct pok_graphics_subsystem* sys);
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys);
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
-static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
-    float black[],
-    uint32_t viewWidth,
-    uint32_t viewHeight);
 
 struct _pok_graphics_subsystem_impl
 {
     HDC hDC;
-    HGLRC hOpenGLContext;
     HWND hWnd;
+    HDC hMemDC;
     HANDLE mutex;
     HANDLE hThread;
+    HBITMAP hBackBuffer;
+    HDC hBackBufferDC;
+    HBRUSH hClearBrush;
 
     DWORD textureAlloc, textureCount;
-    GLuint* textureNames;
+    HBITMAP* textures;
 
     /* shared variable flags */
     volatile BOOLEAN rendering;     /* is the system rendering the window frame? */
@@ -50,8 +51,8 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     /* allocate space to store texture names */
     sys->impl->textureAlloc = 32;
     sys->impl->textureCount = 0;
-    sys->impl->textureNames = malloc(sizeof(GLuint) * sys->impl->textureAlloc);
-    if (sys->impl->textureNames == NULL) {
+    sys->impl->textures = malloc(sizeof(HBITMAP) * sys->impl->textureAlloc);
+    if (sys->impl->textures == NULL) {
         pok_exception_flag_memory_error();
         free(sys->impl);
         return FALSE;
@@ -79,11 +80,11 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
 void impl_free(struct pok_graphics_subsystem* sys)
 {
     /* flag that the rendering thread should quit, then
-       wait for the thread to return */
+    wait for the thread to return */
     sys->impl->rendering = FALSE;
     WaitForSingleObject(sys->impl->hThread, INFINITE);
     CloseHandle(sys->impl->hThread);
-    free(sys->impl->textureNames);
+    free(sys->impl->textures);
     free(sys->impl);
     sys->impl = NULL;
 }
@@ -94,7 +95,7 @@ void impl_reload(struct pok_graphics_subsystem* sys)
 void impl_load_textures(struct pok_graphics_subsystem* sys, struct texture_info* info, int count)
 {
     do {
-        WaitForSingleObject(sys->impl->mutex,INFINITE);
+        WaitForSingleObject(sys->impl->mutex, INFINITE);
         /* make sure a request is not already being processed */
         if (sys->impl->texinfo != NULL) {
             ReleaseMutex(sys->impl->mutex);
@@ -182,64 +183,75 @@ void create_textures(struct pok_graphics_subsystem* sys)
     int i;
     for (i = 0; i < sys->impl->texinfoCount; ++i) {
         int j;
-        GLuint* names;
-        names = malloc(sys->impl->texinfo[i].count * sizeof(GLuint));
-        glGenTextures(sys->impl->texinfo[i].count, names);
         for (j = 0; j < sys->impl->texinfo[i].count; ++j) {
+            HBITMAP hBitmap;
             struct pok_image* img = sys->impl->texinfo[i].images[j];
             /* append texture name to collection */
             if (sys->impl->textureCount >= sys->impl->textureAlloc) {
                 size_t nalloc;
                 void* ndata;
                 nalloc = sys->impl->textureAlloc << 1;
-                ndata = realloc(sys->impl->textureNames, nalloc * sizeof(GLuint));
+                ndata = realloc(sys->impl->textures, nalloc * sizeof(HBITMAP));
                 if (ndata == NULL) {
                     pok_error(pok_error_warning, "could not allocate memory in create_textures()");
                     return;
                 }
-                sys->impl->textureNames = ndata;
+                sys->impl->textures = ndata;
                 sys->impl->textureAlloc = nalloc;
             }
-            sys->impl->textureNames[sys->impl->textureCount++] = names[j];
-            /* create texture object */
-            glBindTexture(GL_TEXTURE_2D, names[j]);
+            /* assign the texture reference to the image (this is
+               the index+1 at which to find the Win32 BITMAP object) */
+            img->texref = sys->impl->textureCount+1;
+            /* create texture object (really just a boring old Win32 BITMAP) */
             if (img->flags & pok_image_flag_alpha)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img->width, img->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img->pixels.data);
-            else
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img->width, img->height, 0, GL_RGB, GL_UNSIGNED_BYTE, img->pixels.data);
-            /* assign the texture reference to the image */
-            img->texref = names[j];
+                hBitmap = CreateBitmap(img->width, img->height, 1, 32, img->pixels.data);
+            else {
+                /* word align the data */
+                uint32_t i, j, m = img->width * img->height;
+                byte_t* pixels = malloc(m * 4);
+                for (i = 0, j = 0; i < m; ++i) {
+                    pixels[j++] = img->pixels.dataRGB[i].r;
+                    pixels[j++] = img->pixels.dataRGB[i].g;
+                    pixels[j++] = img->pixels.dataRGB[i].b;
+                    pixels[j++] = 0;
+                }
+                hBitmap = CreateBitmap(img->width, img->height, 1, 32, pixels);
+                free(pixels);
+            }
+            sys->impl->textures[sys->impl->textureCount++] = hBitmap;
         }
-        free(names);
     }
 }
 
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 {
-    float black[3];
-    uint32_t wwidth, wheight;
+    DWORD i;
+    RECT windowDims;
+
+    /* compute window view dimensions */
+    windowDims.left = 0;
+    windowDims.top = 0;
+    windowDims.right = sys->dimension * sys->windowSize.columns;
+    windowDims.bottom = sys->dimension * sys->windowSize.rows;
 
     /* make window and OpenGL context; bind the context to this thread */
     CreateMainWindow(sys);
-    wglMakeCurrent(sys->impl->hDC, sys->impl->hOpenGLContext);
 
-    /* compute black pixel */
-    black[0] = blackPixel.rgb[0] / (float)255.0;
-    black[1] = blackPixel.rgb[1] / (float)255.0;
-    black[2] = blackPixel.rgb[2] / (float)255.0;
+    /* create back buffer */
+    sys->impl->hBackBuffer = CreateCompatibleBitmap(sys->impl->hDC, windowDims.right, windowDims.bottom);
+    sys->impl->hBackBufferDC = CreateCompatibleDC(sys->impl->hDC);
+    SelectObject(sys->impl->hBackBufferDC, sys->impl->hBackBuffer);
 
-    /* compute window view dimensions */
-    wwidth = sys->dimension * sys->windowSize.columns;
-    wheight = sys->dimension * sys->windowSize.rows;
-
-    /* call function to setup OpenGL */
-    gl_init(black, wwidth, wheight);
+    /* create clear brush */
+    sys->impl->hClearBrush = CreateSolidBrush(RGB(blackPixel.r, blackPixel.g, blackPixel.b));
+    if (sys->impl->hClearBrush == NULL)
+        pok_error(pok_error_fatal, "fail CreateSolidBrush()");
 
     while (sys->impl->rendering) {
         MSG msg;
 
         /* handle window messages from the operating system; use
-           PeekMessage so that we don't have to wait on messages 
+           PeekMessage so that we don't have to wait on messages
            but can go on to do more important things */
         if (PeekMessage(&msg, sys->impl->hWnd, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
@@ -280,28 +292,31 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
             ReleaseMutex(sys->impl->mutex);
         }
 
-        /* clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        /* clear the back buffer */
+        FillRect(sys->impl->hBackBufferDC, &windowDims,sys->impl->hClearBrush);
 
         /* rendering */
         if (sys->impl->gameRendering) {
             uint16_t index;
             /* go through and call each render function */
-            WaitForSingleObject(sys->impl->mutex,INFINITE);
+            WaitForSingleObject(sys->impl->mutex, INFINITE);
             for (index = 0; index < sys->routinetop; ++index)
                 (*sys->routines[index])(sys, sys->contexts[index]);
             ReleaseMutex(sys->impl->mutex);
         }
 
-        /* expose the backbuffer */
-        SwapBuffers(sys->impl->hDC);
+        /* draw back buffer */
+        BitBlt(sys->impl->hDC, 0, 0, windowDims.right, windowDims.bottom, sys->impl->hBackBufferDC, 0, 0, SRCCOPY);
 
         Sleep(sys->framerate);
     }
 
     /* cleanup */
-    if (sys->impl->textureCount > 0)
-        glDeleteTextures(sys->impl->textureCount, sys->impl->textureNames);
+    for (i = 0; i < sys->impl->textureCount; ++i)
+        DeleteObject(sys->impl->textures[i]);
+    DeleteObject(sys->impl->hClearBrush);
+    DeleteObject(sys->impl->hBackBufferDC);
+    DeleteObject(sys->impl->hBackBuffer);
     DestroyMainWindow(sys);
     return 0;
 }
@@ -312,25 +327,6 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
 
     HANDLE hInst;
     WNDCLASS wc;
-    int pixelFormat;
-    static PIXELFORMATDESCRIPTOR pfd = {
-        sizeof(PIXELFORMATDESCRIPTOR),
-        1,
-        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-        PFD_TYPE_RGBA, 
-        32,
-        0, 0, 0, 0, 0, 0,
-        0,
-        0,
-        0,
-        0, 0, 0, 0,
-        24,
-        8,
-        0,
-        PFD_MAIN_PLANE,
-        0,
-        0, 0, 0
-    };
 
     /* create the window class */
     hInst = GetModuleHandle(NULL);
@@ -342,7 +338,7 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
     wc.hInstance = hInst;
     wc.lpfnWndProc = WindowProc;
     wc.lpszClassName = POKGAME_WINDOW_CLASS;
-    wc.lpszMenuName = NULL; 
+    wc.lpszMenuName = NULL;
     wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
     if (!RegisterClass(&wc))
         pok_error(pok_error_fatal, "fail RegisterClass()");
@@ -363,17 +359,10 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
                                 sys)))
         pok_error(pok_error_fatal, "fail CreateWindowEx()");
 
-    /* setup window device context */
+    /* setup window device context; create a compatible memory device context
+       that we'll use to render bitmaps */
     sys->impl->hDC = GetDC(sys->impl->hWnd);
-    if (!(pixelFormat = ChoosePixelFormat(sys->impl->hDC, &pfd)))
-        pok_error(pok_error_fatal, "fail ChoosePixelFormat()");
-    if (!SetPixelFormat(sys->impl->hDC, pixelFormat, &pfd))
-        pok_error(pok_error_fatal, "fail SetPixelFormat()");
-
-    /* create OpenGL rendering context */
-    sys->impl->hOpenGLContext = wglCreateContext(sys->impl->hDC);
-    if (!sys->impl->hOpenGLContext)
-        pok_error(pok_error_fatal, "fail wglCreateContext()");
+    sys->impl->hMemDC = CreateCompatibleDC(sys->impl->hDC);
 }
 
 VOID EditMainWindow(struct pok_graphics_subsystem* sys)
@@ -389,29 +378,29 @@ VOID EditMainWindow(struct pok_graphics_subsystem* sys)
 
 VOID DestroyMainWindow(struct pok_graphics_subsystem* sys)
 {
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(sys->impl->hOpenGLContext);
+    DeleteDC(sys->impl->hMemDC);
     ReleaseDC(sys->impl->hWnd, sys->impl->hDC);
     DestroyWindow(sys->impl->hWnd);
     UnregisterClass(POKGAME_WINDOW_CLASS, GetModuleHandle(NULL));
 }
 
+static struct pok_graphics_subsystem* gsys = NULL;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    static struct pok_graphics_subsystem* sys = NULL;
     switch (uMsg) {
     case WM_CREATE:
         /* cache the graphics subsystem for later use; we trust
-           that other code doesn't destroy it while the window
-           message handler is running */
-        sys = ((CREATESTRUCT*)lParam)->lpCreateParams;
+        that other code doesn't destroy it while the window
+        message handler is running */
+        gsys = ((CREATESTRUCT*)lParam)->lpCreateParams;
         break;
     case WM_CLOSE:
         /* our X button was clicked */
         PostQuitMessage(0);
+        gsys = NULL;
         break;
     case WM_KEYUP:
-        if (sys->keyup != NULL) {
+        if (gsys->keyup != NULL) {
             enum pok_input_key key = pok_input_key_unknown;
             switch (wParam) {
             case VK_UP:
@@ -439,7 +428,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 key = pok_input_key_BBUTTON;
                 break;
             }
-            (*sys->keyup)(key);
+            (*gsys->keyup)(key);
         }
         break;
     default:
@@ -449,5 +438,12 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
-/* include misc. graphics routines (they don't require the Win32 API) */
-#include "graphics-GL.c"
+void pok_image_render(struct pok_image* img, int32_t x, int32_t y)
+{
+    if (gsys != NULL) {
+        HBITMAP hOld;
+        hOld = SelectObject(gsys->impl->hMemDC, gsys->impl->textures[img->texref - 1]);
+        BitBlt(gsys->impl->hBackBufferDC, x, y, img->width, img->height, gsys->impl->hMemDC, 0, 0, SRCCOPY);
+        SelectObject(gsys->impl->hMemDC, hOld);
+    }
+}

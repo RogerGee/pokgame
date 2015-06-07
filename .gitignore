@@ -15,3 +15,5 @@ pokgame.vcxproj.filters
 pokgame.vcxproj.user
 Debug/
 Release/
+ReleaseLib/
+ReleaseLibGDI/
