@@ -11,7 +11,7 @@
 /* constant update parameters */
 #define MAP_GRANULARITY          8
 #define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
-#define MAP_SCROLL_TIME_FAST     140 /* number of ticks for complete fast map scroll update */
+#define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
 
 /* globals */
 static struct
@@ -33,12 +33,10 @@ int update_proc(struct pok_game_info* info)
 {
     int r = 0;
     uint32_t tileAniTicks = 0;
-    struct timeout_interval t;
 
     /* setup parameters */
-    timeout_interval_reset(&t,info->updateTimeout);
     set_defaults(info);
-    set_tick_amounts(info,&t);
+    set_tick_amounts(info,&info->updateTimeout);
 
     /* game logic loop */
     do {
@@ -48,8 +46,8 @@ int update_proc(struct pok_game_info* info)
         update_key_input(info);
 
         /* perform update operations; if an update operation just completed, then skip the timeout */
-        skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,t.elapsed)
-            || pok_character_context_update(info->playerContext,info->sys->dimension,t.elapsed);
+        skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,info->updateTimeout.elapsed)
+            || pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
@@ -58,14 +56,9 @@ int update_proc(struct pok_game_info* info)
                 tileAniTicks = 0;
             }
 
-            /* check timeout change; then perform timeout */
-            if (t.mseconds != info->updateTimeout) {
-                timeout_interval_reset(&t,info->updateTimeout);
-                set_tick_amounts(info,&t);
-            }
-
-            timeout(&t);
-            tileAniTicks += t.elapsed;
+            /* perform timeout and update tile animation ticks */
+            timeout(&info->updateTimeout);
+            tileAniTicks += info->updateTimeout.elapsed;
         }
 
         if ( !pok_graphics_subsystem_has_window(info->sys) ) {

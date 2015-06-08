@@ -325,6 +325,8 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
 {
     /* !!! oh the horror of the Win32 API !!! */
 
+    RECT winrect;
+    DWORD dwStyle;
     HANDLE hInst;
     WNDCLASS wc;
 
@@ -343,16 +345,24 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
     if (!RegisterClass(&wc))
         pok_error(pok_error_fatal, "fail RegisterClass()");
 
+    /* calculate window size */
+    winrect.left = 0;
+    winrect.right = sys->windowSize.columns * sys->dimension;
+    winrect.top = 0;
+    winrect.bottom = sys->windowSize.rows * sys->dimension;
+    dwStyle = WS_OVERLAPPEDWINDOW ^ WS_SIZEBOX ^ WS_MAXIMIZEBOX;
+    AdjustWindowRectEx(&winrect, dwStyle, FALSE, WS_EX_CLIENTEDGE);
+
     /* create the main window */
     if (!(sys->impl->hWnd = CreateWindowEx(
                                 WS_EX_CLIENTEDGE,
                                 POKGAME_WINDOW_CLASS,
                                 sys->title.buf,
-                                WS_OVERLAPPEDWINDOW ^ WS_SIZEBOX,
+                                dwStyle,
                                 CW_USEDEFAULT,
                                 CW_USEDEFAULT,
-                                sys->windowSize.columns * sys->dimension,
-                                sys->windowSize.rows * sys->dimension,
+                                winrect.right - winrect.left,
+                                winrect.bottom - winrect.top,
                                 NULL,
                                 NULL,
                                 hInst,

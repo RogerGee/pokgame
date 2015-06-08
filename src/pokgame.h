@@ -10,6 +10,19 @@
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
+struct timeout_interval
+{
+    /* timeout duration */
+    uint32_t mseconds;
+    uint32_t useconds;
+
+    /* how many ticks actually elapsed since the last timeout;
+    a tick is defined as a single millisecond */
+    uint32_t elapsed;
+};
+void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds);
+void timeout(struct timeout_interval* interval);
+
 enum pok_game_context
 {
     pok_game_intro_context, /* the game is processing the intro screen */
@@ -23,8 +36,8 @@ struct pok_game_info
     bool_t control;
 
     /* timeouts for main game procedures (in thousandths of a second) */
-    uint32_t ioTimeout;
-    uint32_t updateTimeout;
+    struct timeout_interval ioTimeout;
+    struct timeout_interval updateTimeout;
 
     /* flag what the game is currently doing */
     enum pok_game_context gameContext;
@@ -74,20 +87,5 @@ void pok_game_free(struct pok_game_info* game);
 void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);
 void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus);
-
-/* misc */
-
-struct timeout_interval
-{
-    /* timeout duration */
-    uint32_t mseconds;
-    uint32_t useconds;
-
-    /* how many ticks actually elapsed since the last timeout;
-       a tick is defined as a single millisecond */
-    uint32_t elapsed;
-};
-void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds);
-void timeout(struct timeout_interval* interval);
 
 #endif

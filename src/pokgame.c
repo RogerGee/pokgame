@@ -129,6 +129,15 @@ void pok_game_unlock(void* object)
     gamelock_down(glock);
 }
 
+/* timeout_interval */
+
+void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds)
+{
+    t->mseconds = mseconds;
+    t->useconds = mseconds * 1000;
+    t->elapsed = 0;
+}
+
 /* pok game module - intialization and closing */
 
 struct pok_game_info* pok_game_new()
@@ -138,8 +147,8 @@ struct pok_game_info* pok_game_new()
     if (game == NULL)
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
-    game->ioTimeout = 100;
-    game->updateTimeout = 10; /* needs to be less than 100 for good measure */
+    timeout_interval_reset(&game->ioTimeout,100);
+    timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
     /* initialize graphics subsystem */
@@ -199,11 +208,4 @@ void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focu
     treemap_insert(game->loadedMaps,map);
     if (focus)
         pok_map_render_context_set_map(game->mapRC,map);
-}
-
-void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds)
-{
-    t->mseconds = mseconds;
-    t->useconds = mseconds * 1000;
-    t->elapsed = 0;
 }

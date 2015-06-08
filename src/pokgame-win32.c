@@ -67,12 +67,23 @@ void gamelock_down(struct gamelock* lock)
 /* implement 'timeout' from 'pokgame.h' */
 void timeout(struct timeout_interval* interval)
 {
+    /* Windows NT clock interval is 15 ms; I expect the
+       elapsed time computed here will be roughly that if
+       the timeout period <= 15 ms; to handle this inaccuracy,
+       we round the measured elapsed time to the nearest multiple
+       of the timeout period */
+    uint32_t i;
     LARGE_INTEGER before;
     LARGE_INTEGER after;
-    LARGE_INTEGER freq;
+    static LARGE_INTEGER freq = { 0, 0 };
+    if (freq.QuadPart == 0)
+        QueryPerformanceFrequency(&freq.QuadPart);
     QueryPerformanceCounter(&before);
     Sleep(interval->mseconds);
     QueryPerformanceCounter(&after);
-    QueryPerformanceFrequency(&freq);
     interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
+    i = 0;
+    while (i < interval->elapsed)
+        i += interval->mseconds;
+    interval->elapsed = (i - interval->elapsed < 5) ? i-10 : i;
 }
