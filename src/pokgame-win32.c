@@ -64,8 +64,8 @@ void gamelock_down(struct gamelock* lock)
     ReleaseSemaphore(lock->readOnly, 1, NULL);
 }
 
-/* implement 'timeout' from 'pokgame.h' */
-void timeout(struct timeout_interval* interval)
+/* implement 'pok_timeout' from 'pokgame.h' */
+void pok_timeout(struct pok_timeout_interval* interval)
 {
     /* Windows NT clock interval is 15 ms; I expect the
        elapsed time computed here will be roughly that if

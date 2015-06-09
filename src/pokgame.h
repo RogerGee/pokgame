@@ -7,10 +7,12 @@
 #include "spriteman.h"
 #include "map-context.h"
 #include "character-context.h"
+#include "effect.h"
 #include <dstructs/hashmap.h>
 #include <dstructs/treemap.h>
 
-struct timeout_interval
+/* timeout_interval: structure to represent game time */
+struct pok_timeout_interval
 {
     /* timeout duration */
     uint32_t mseconds;
@@ -20,9 +22,10 @@ struct timeout_interval
     a tick is defined as a single millisecond */
     uint32_t elapsed;
 };
-void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds);
-void timeout(struct timeout_interval* interval);
+void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds);
+void pok_timeout(struct pok_timeout_interval* interval);
 
+/* pok_game_context: flag current game state */
 enum pok_game_context
 {
     pok_game_intro_context, /* the game is processing the intro screen */
@@ -36,14 +39,17 @@ struct pok_game_info
     bool_t control;
 
     /* timeouts for main game procedures (in thousandths of a second) */
-    struct timeout_interval ioTimeout;
-    struct timeout_interval updateTimeout;
+    struct pok_timeout_interval ioTimeout;
+    struct pok_timeout_interval updateTimeout;
 
     /* flag what the game is currently doing */
     enum pok_game_context gameContext;
 
     /* graphics */
     struct pok_graphics_subsystem* sys;
+
+    /* effects */
+    struct pok_fadeout_effect fadeout;
 
     /* tile images */
     struct pok_tile_manager* tman;

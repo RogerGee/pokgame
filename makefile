@@ -62,6 +62,7 @@ ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
 IMAGE_H = src/image.h $(NET_H)
 GRAPHICS_H = src/graphics.h $(NET_H) $(IMAGE_H)
+EFFECT_H = src/effect.h $(GRAPHICS_H)
 TILE_H = src/tile.h $(NET_H)
 TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
 SPRITEMAN_H = src/spriteman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
@@ -69,10 +70,10 @@ MAP_H = src/map.h $(NET_H) $(TILE_H)
 MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
 CHARACTER_H = src/character.h $(NET_H)
 CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
-POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H)
+POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H)
 
-# object code files: library objects are used both by clients and version servers
-OBJECTS = pokgame.o graphics.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o
+# object code files: library objects are used both by the game engine and game versions
+OBJECTS = pokgame.o graphics.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
@@ -96,11 +97,13 @@ $(LIBRARY_REALNAME): $(OBJECTS_LIB)
 $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB)
 
-# src targets (only for the game client)
+# src targets (only for the game engine)
 $(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
 $(OBJDIR)/graphics.o: src/graphics.c src/graphics-X-GL.c src/graphics-GL.c $(GRAPHICS_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
+$(OBJDIR)/effect.o: src/effect.c src/effect-GL.c $(EFFECT_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/effect.o src/effect.c
 $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
 $(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)

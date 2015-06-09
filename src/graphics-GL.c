@@ -1,9 +1,8 @@
 /* graphics-GL.c - pokgame */
 
 void gl_init(
-    float black[],
-    uint32_t viewWidth,
-    uint32_t viewHeight)
+    int32_t viewWidth,
+    int32_t viewHeight)
 {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
@@ -18,7 +17,7 @@ void gl_init(
     glLoadIdentity();
     glViewport(0,0,viewWidth,viewHeight);
     /* set clear color: we need this to be the black pixel */
-    glClearColor(black[0],black[1],black[2],0);
+    glClearColor(BLACK_PIXEL_FLOAT[0],BLACK_PIXEL_FLOAT[1],BLACK_PIXEL_FLOAT[2],0.0);
 }
 
 void pok_image_render(struct pok_image* img,int32_t x,int32_t y)

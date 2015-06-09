@@ -10,7 +10,7 @@ enum pok_tile_warp_kind
     pok_tile_warp_none, /* tile does not warp */
     pok_tile_warp_instant, /* warp happens after player walks onto the tile */
     pok_tile_warp_latent_up, /* warp happens after player attempts to move off in the specified direction */
-    pok_tile_warp_latent_down,
+    pok_tile_warp_latent_down, /* the game may draw an arrow indicating the direction */
     pok_tile_warp_latent_left,
     pok_tile_warp_latent_right,
     pok_tile_warp_spin, /* player "spins" away off the tile */

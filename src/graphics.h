@@ -75,6 +75,7 @@ struct pok_graphics_subsystem
 
     /* misc info used by rendering contexts */
     struct pok_image* blacktile; /* solid black tile image */
+    int32_t wwidth, wheight; /* non-dimensionalized window width and height (obtained from 'windowSize') */
 
     /* implementation-specific information */
     struct _pok_graphics_subsystem_impl* impl;
@@ -107,5 +108,9 @@ void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys);
 
 /* other graphics-related routines */
 void pok_image_render(struct pok_image* img,int32_t x,int32_t y);
+
+/* globals */
+extern const union pixel BLACK_PIXEL;
+extern const float BLACK_PIXEL_FLOAT[];
 
 #endif

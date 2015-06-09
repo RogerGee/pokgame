@@ -25,6 +25,9 @@
 
 #endif
 
+#define INITIAL_FADEIN_DELAY     250
+#define INITIAL_FADEIN_TIME     2000
+
 /* globals */
 static struct
 {
@@ -34,7 +37,7 @@ static struct
 
 /* functions */
 static void set_defaults(struct pok_game_info* info);
-static void set_tick_amounts(struct pok_game_info* info,struct timeout_interval* t);
+static void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t);
 static void update_key_input(struct pok_game_info* info);
 
 /* this procedure drives all the game logic; the return value has special meaning:
@@ -50,6 +53,10 @@ int update_proc(struct pok_game_info* info)
     set_defaults(info);
     set_tick_amounts(info,&info->updateTimeout);
 
+    /* setup initial screen fade in (fade out with reverse set to true) */
+    info->fadeout.delay = INITIAL_FADEIN_DELAY;
+    pok_fadeout_effect_set_update(&info->fadeout,info->sys,INITIAL_FADEIN_TIME,pok_fadeout_black_screen,TRUE);
+
     /* game logic loop */
     do {
         bool_t skip;
@@ -57,9 +64,12 @@ int update_proc(struct pok_game_info* info)
         /* key input logic */
         update_key_input(info);
 
-        /* perform update operations; if an update operation just completed, then skip the timeout */
+        /* perform input-sensitive update operations; if an update operation just completed, then skip the timeout */
         skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,info->updateTimeout.elapsed)
             + pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
+
+        /* perform other update operations */
+        pok_fadeout_effect_update(&info->fadeout,info->updateTimeout.elapsed);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
@@ -69,9 +79,11 @@ int update_proc(struct pok_game_info* info)
             }
 
             /* perform timeout and update tile animation ticks */
-            timeout(&info->updateTimeout);
+            pok_timeout(&info->updateTimeout);
             tileAniTicks += info->updateTimeout.elapsed;
         }
+        else
+            info->updateTimeout.elapsed = 0;
 
         if ( !pok_graphics_subsystem_has_window(info->sys) ) {
             r = 1;
@@ -90,7 +102,7 @@ void set_defaults(struct pok_game_info* info)
 
 }
 
-void set_tick_amounts(struct pok_game_info* info,struct timeout_interval* t)
+void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t)
 {
     /* compute tick amounts; note: map scroll and character animation need to be synced */
     globals.mapTicksNormal = MAP_SCROLL_TIME / info->mapRC->granularity;
@@ -122,6 +134,10 @@ void update_key_input(struct pok_game_info* info)
             /* handle key logic for the world context; this context involves the
                player moving around the screen and potentially interacting with
                objects in the game world */
+
+            /* don't do keyboard updates if the screen is faded out in this context */
+            if (info->fadeout._base.update || info->fadeout.keep)
+                return;
 
             /* update player and map based on keyboard input by checking the directional
                keys; make sure the map and player are not already updating already */

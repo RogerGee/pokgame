@@ -75,8 +75,8 @@ void gamelock_down(struct gamelock* lock)
     pthread_mutex_unlock(&lock->atom);
 }
 
-/* implement 'timeout' from 'pokgame.h' */
-void timeout(struct timeout_interval* interval)
+/* implement 'pok_timeout' from 'pokgame.h' */
+void pok_timeout(struct pok_timeout_interval* interval)
 {
     struct timespec before, after;
     clock_gettime(CLOCK_MONOTONIC,&before);

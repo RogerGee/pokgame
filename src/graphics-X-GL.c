@@ -14,9 +14,8 @@ static void edit_frame(struct pok_graphics_subsystem* sys);
 static void close_frame(struct pok_graphics_subsystem* sys);
 static void* graphics_loop(struct pok_graphics_subsystem* sys);
 static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
-    float black[],
-    uint32_t viewWidth,
-    uint32_t viewHeight);
+    int32_t viewWidth,
+    int32_t viewHeight);
 
 /* globals */
 static int screen;
@@ -53,6 +52,7 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         pok_exception_flag_memory_error();
         return FALSE;
     }
+    sys->impl->window = None;
     sys->impl->textureAlloc = 32;
     sys->impl->textureCount = 0;
     sys->impl->textureNames = malloc(sizeof(GLuint) * sys->impl->textureAlloc);
@@ -219,12 +219,15 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
     check_impl(sys);
 #endif
 
+    int dummy;
+    Window xwin;
     static int cache[8][2] = {
         {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1},
         {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1}
     };
 
-    if (display != NULL) {
+    /* only query keyboard events if the window has input focus */
+    if (display != NULL && XGetInputFocus(display,&xwin,&dummy) && xwin == sys->impl->window) {
         /* asynchronously get the state of the keyboard from the X server; return TRUE if the specified
            normal input key was pressed in this instance; only grab the keyboard state if the user specified
            'refresh' so that we can process the keys in a single instance */
@@ -320,7 +323,6 @@ void do_x_close()
 }
 void make_frame(struct pok_graphics_subsystem* sys)
 {
-    int width, height;
     unsigned int vmask;
     XSetWindowAttributes attrs;
     Colormap cmap;
@@ -333,13 +335,11 @@ void make_frame(struct pok_graphics_subsystem* sys)
     attrs.colormap = cmap;
     attrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask;
     /* create the X Window */
-    width = sys->dimension * sys->windowSize.columns;
-    height = sys->dimension * sys->windowSize.rows;
     sys->impl->window = XCreateWindow(display,
         RootWindow(display,visual->screen),
         0, 0,
-        width,
-        height,
+        sys->wwidth,
+        sys->wheight,
         5, visual->depth,
         InputOutput,
         visual->visual,
@@ -350,8 +350,8 @@ void make_frame(struct pok_graphics_subsystem* sys)
     XSetWMProtocols(display,sys->impl->window,&sys->impl->del,1);
     /* make the frame non-resizable */
     hints.flags = PMaxSize | PMinSize;
-    hints.min_width = width; hints.max_width = width;
-    hints.min_height = height; hints.max_height = height;
+    hints.min_width = sys->wwidth; hints.max_width = sys->wwidth;
+    hints.min_height = sys->wheight; hints.max_height = sys->wheight;
     XSetWMNormalHints(display,sys->impl->window,&hints);
     /* set title bar text */
     XStoreName(display,sys->impl->window,sys->title.buf);
@@ -362,20 +362,19 @@ void make_frame(struct pok_graphics_subsystem* sys)
 }
 void edit_frame(struct pok_graphics_subsystem* sys)
 {
-    int width, height;
     XSizeHints hints;
-    width = sys->dimension * sys->windowSize.columns;
-    height = sys->dimension * sys->windowSize.rows;
+    sys->wwidth = sys->dimension * sys->windowSize.columns;
+    sys->wheight = sys->dimension * sys->windowSize.rows;
     /* respecify window limits */
     hints.flags = PMaxSize | PMinSize;
-    hints.min_width = width; hints.max_width = width;
-    hints.min_height = height; hints.max_height = height;
+    hints.min_width = sys->wwidth; hints.max_width = sys->wwidth;
+    hints.min_height = sys->wheight; hints.max_height = sys->wheight;
     XSetWMNormalHints(display,sys->impl->window,&hints);
     /* edit the frame size and title */
     XResizeWindow(display,
         sys->impl->window,
-        width,
-        height);
+        sys->wwidth,
+        sys->wheight);
     XStoreName(display,sys->impl->window,sys->title.buf);
 }
 void close_frame(struct pok_graphics_subsystem* sys)
@@ -427,10 +426,8 @@ void create_textures(struct pok_graphics_subsystem* sys)
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
-    float black[3];
     int framerate = 0;
     useconds_t sleepamt = 0;
-    uint32_t wwidth, wheight;
 
     /* initialize global X11 connection */
     do_x_init();
@@ -442,17 +439,8 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
         pok_error(pok_error_fatal,"fail glXMakeCurrent()");
 
-    /* compute black pixel */
-    black[0] = blackPixel.rgb[0] / 255.0;
-    black[1] = blackPixel.rgb[1] / 255.0;
-    black[2] = blackPixel.rgb[2] / 255.0;
-
-    /* compute window view dimensions */
-    wwidth = sys->dimension * sys->windowSize.columns;
-    wheight = sys->dimension * sys->windowSize.rows;
-
     /* call function to setup OpenGL */
-    gl_init(black,wwidth,wheight);
+    gl_init(sys->wwidth,sys->wheight);
 
     /* begin rendering loop */
     while (sys->impl->rendering) {
@@ -471,9 +459,9 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
             else if (evnt.type == ConfigureNotify) {
                 /* center the image */
                 int32_t x, y;
-                x = evnt.xconfigure.width / 2 - wwidth / 2;
-                y = evnt.xconfigure.height / 2 - wheight / 2;
-                glViewport(x,y,wwidth,wheight);
+                x = evnt.xconfigure.width / 2 - sys->wwidth / 2;
+                y = evnt.xconfigure.height / 2 - sys->wheight / 2;
+                glViewport(x,y,sys->wwidth,sys->wheight);
             }
             else if (evnt.type == KeyRelease) {
                 KeySym sym = XLookupKeysym(&evnt.xkey,0);

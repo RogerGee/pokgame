@@ -90,6 +90,10 @@ void pok_character_context_set_update(struct pok_character_context* context,
                 break;
             }
         }
+        /* 'context->update' will act as a counter that determines when
+           the animation frames change; it is set to +1 the granularity
+           so that we can wait one cycle before applying the animation
+           frame */
         context->update = context->granularity + 1;
     }
 
@@ -115,8 +119,10 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                     inc = times;
                 else
                     inc *= times;
-                /* update character frame if at the right point in the sequence */
+                /* update character frame if at the right point in the sequence; we
+                   have waited one cycle if so */
                 if (context->update == context->granularity)
+                    /* increment the frame alteration counter so that up/down animation frames alternate */
                     context->frame = context->resolveFrame + 1 + context->frameAlt++ % (context->character->direction <= 1 ? 2 : 1);
                 /* update animation offset */
                 if (context->offset[0] < 0) {

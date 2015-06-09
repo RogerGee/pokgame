@@ -11,9 +11,8 @@ VOID DestroyMainWindow(struct pok_graphics_subsystem* sys);
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys);
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
 static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
-    float black[],
-    uint32_t viewWidth,
-    uint32_t viewHeight);
+    int32_t viewWidth,
+    int32_t viewHeight);
 
 struct _pok_graphics_subsystem_impl
 {
@@ -224,24 +223,12 @@ void create_textures(struct pok_graphics_subsystem* sys)
 
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 {
-    float black[3];
-    uint32_t wwidth, wheight;
-
     /* make window and OpenGL context; bind the context to this thread */
     CreateMainWindow(sys);
     wglMakeCurrent(sys->impl->hDC, sys->impl->hOpenGLContext);
 
-    /* compute black pixel */
-    black[0] = blackPixel.rgb[0] / (float)255.0;
-    black[1] = blackPixel.rgb[1] / (float)255.0;
-    black[2] = blackPixel.rgb[2] / (float)255.0;
-
-    /* compute window view dimensions */
-    wwidth = sys->dimension * sys->windowSize.columns;
-    wheight = sys->dimension * sys->windowSize.rows;
-
     /* call function to setup OpenGL */
-    gl_init(black, wwidth, wheight);
+    gl_init(sys->wwidth, sys->wheight);
 
     while (sys->impl->rendering) {
         MSG msg;
@@ -360,9 +347,9 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
 
     /* calculate window size */
     winrect.left = 0;
-    winrect.right = sys->windowSize.columns * sys->dimension;
+    winrect.right = sys->wwidth;
     winrect.top = 0;
-    winrect.bottom = sys->windowSize.rows * sys->dimension;
+    winrect.bottom = sys->wheight;
     dwStyle = WS_OVERLAPPEDWINDOW ^ WS_SIZEBOX ^ WS_MAXIMIZEBOX;
     AdjustWindowRectEx(&winrect, dwStyle, FALSE, WS_EX_CLIENTEDGE);
 
@@ -397,11 +384,10 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
 
 VOID EditMainWindow(struct pok_graphics_subsystem* sys)
 {
-    int wwidth, wheight;
-    wwidth = sys->windowSize.columns * sys->dimension;
-    wheight = sys->windowSize.columns * sys->dimension;
+    sys->wwidth = sys->windowSize.columns * sys->dimension;
+    sys->wheight = sys->windowSize.columns * sys->dimension;
     /* resize window */
-    SetWindowPos(sys->impl->hWnd, NULL, 0, 0, wwidth, wheight, SWP_NOZORDER | SWP_NOMOVE);
+    SetWindowPos(sys->impl->hWnd, NULL, 0, 0, sys->wwidth, sys->wheight, SWP_NOZORDER | SWP_NOMOVE);
     /* reset window text */
     SetWindowText(sys->impl->hWnd, sys->title.buf);
 }

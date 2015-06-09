@@ -8,7 +8,9 @@
 
 /* define the black pixel used for the background (black tile); we don't want a true
    harsh black, but a 'lighter' black */
-static const union pixel blackPixel = {{20,20,20}};
+#define BLACK_COMPONENT 20
+const union pixel BLACK_PIXEL = {{BLACK_COMPONENT, BLACK_COMPONENT, BLACK_COMPONENT}};
+const float BLACK_PIXEL_FLOAT[3] = {BLACK_COMPONENT / (float)255.0, BLACK_COMPONENT / (float)255.0, BLACK_COMPONENT / (float)255.0};
 
 /* implementation-specific api; we can assume that the implementation will run
    a graphical frame and other graphics operations on a separate thread; the
@@ -61,6 +63,8 @@ static void pok_graphics_subsystem_zeroset_parameters(struct pok_graphics_subsys
     sys->_playerLocationInv.row = 0;
     sys->playerOffsetX = 0;
     sys->playerOffsetY = 0;
+    sys->wwidth = 0;
+    sys->wheight = 0;
 }
 void pok_graphics_subsystem_init(struct pok_graphics_subsystem* sys)
 {
@@ -88,6 +92,8 @@ static void pok_graphics_subsystem_after_assign(struct pok_graphics_subsystem* s
        sys->_playerLocationInv field tells how many columns/rows are to the right/below the player */
     sys->_playerLocationInv.column = sys->windowSize.columns - sys->playerLocation.column - 1;
     sys->_playerLocationInv.row = sys->windowSize.rows - sys->playerLocation.row - 1;
+    sys->wwidth = sys->windowSize.columns * sys->dimension;
+    sys->wheight = sys->windowSize.rows * sys->dimension;
 }
 void pok_graphics_subsystem_reset(struct pok_graphics_subsystem* sys)
 {
@@ -115,7 +121,7 @@ bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys)
     sys->playerOffsetY = DEFAULT_PLAYER_OFFSET_Y;
     pok_graphics_subsystem_after_assign(sys);
     pok_string_concat(&sys->title,"default");
-    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,blackPixel)) == NULL)
+    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;
 }
@@ -152,7 +158,7 @@ bool_t pok_graphics_subsystem_assign(struct pok_graphics_subsystem* sys,uint16_t
     sys->playerOffsetY = playerOffsetY;
     pok_graphics_subsystem_after_assign(sys);
     pok_string_concat(&sys->title,title);
-    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,blackPixel)) == NULL)
+    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;
 }
@@ -178,7 +184,7 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
                 pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_dimension);
                 return pok_net_failed_protocol;
             }
-            if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,blackPixel)) == NULL)
+            if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
                 return pok_net_failed_internal; /* exception is inherited */
         }
     }

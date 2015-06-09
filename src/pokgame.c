@@ -129,17 +129,15 @@ void pok_game_unlock(void* object)
     gamelock_down(glock);
 }
 
-/* timeout_interval */
-
-void timeout_interval_reset(struct timeout_interval* t,uint32_t mseconds)
+/* pok_timeout_interval */
+void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds)
 {
     t->mseconds = mseconds;
     t->useconds = mseconds * 1000;
     t->elapsed = 0;
 }
 
-/* pok game module - intialization and closing */
-
+/* pok_game_info */
 struct pok_game_info* pok_game_new()
 {
     struct pok_game_info* game;
@@ -147,14 +145,17 @@ struct pok_game_info* pok_game_new()
     if (game == NULL)
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
-    timeout_interval_reset(&game->ioTimeout,100);
-    timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
+    pok_timeout_interval_reset(&game->ioTimeout,100);
+    pok_timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
     /* initialize graphics subsystem */
     game->sys = pok_graphics_subsystem_new();
     if (game->sys == NULL)
         pok_error_fromstack(pok_error_fatal);
+    /* initialize effects */
+    pok_fadeout_effect_init(&game->fadeout);
+    game->fadeout.keep = TRUE;
     /* initialize tile and sprite image managers */
     game->tman = pok_tile_manager_new(game->sys);
     if (game->tman == NULL)
@@ -198,11 +199,13 @@ void pok_game_register(struct pok_game_info* game)
     /* the order of the graphics routines is important */
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }
 void pok_game_unregister(struct pok_game_info* game)
 {
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }
 void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus)
 {

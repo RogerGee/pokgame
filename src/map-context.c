@@ -174,11 +174,16 @@ bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,c
 }
 static bool_t is_impassable(const struct pok_tile_manager* tman,struct pok_map_chunk* chunk,uint16_t column,uint16_t row)
 {
+    /* check to see if the data specifies a warp for the tile in question; a
+       warp location is always passable */
+    if (chunk->data[row][column].data.warpKind != pok_tile_warp_none)
+        return FALSE;
     if (chunk->data[row][column].data.tileid <= tman->impassability) {
+        /* make sure there is not an exception to impassability rule */
         if ( !chunk->data[row][column].pass )
             return TRUE;
     }
-    else if ( chunk->data[row][column].impass )
+    else if ( chunk->data[row][column].impass ) /* check for exception */
         return TRUE;
     return FALSE;
 }
