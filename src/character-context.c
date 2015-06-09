@@ -102,22 +102,43 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
         /* update character context based on which effect is being applied; make sure enough elapsed time
            has occurred before performing the update operation */
         if (context->eff == pok_character_normal_effect) {
+            uint32_t amt = context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt;
             context->aniTicks += ticks;
-            if (context->aniTicks >= (context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt)) {
-                int inc = dimension / context->granularity;
-                if (inc == 0) /* granularity was too fine */
-                    inc = 1;
+            if (context->aniTicks >= amt) {
+                int inc;
+                int times;
+                /* compute increment amount and number of times to apply it */
+                inc = dimension / context->granularity;
+                times = context->aniTicks / amt;
+                if (inc == 0)
+                    /* granularity was too fine */
+                    inc = times;
+                else
+                    inc *= times;
+                /* update character frame if at the right point in the sequence */
                 if (context->update == context->granularity)
                     context->frame = context->resolveFrame + 1 + context->frameAlt++ % (context->character->direction <= 1 ? 2 : 1);
-                if (context->offset[0] < 0)
+                /* update animation offset */
+                if (context->offset[0] < 0) {
                     context->offset[0] += inc;
-                else if (context->offset[0] > 0)
+                    if (context->offset[0] > 0)
+                        context->offset[0] = 0;
+                }
+                else if (context->offset[0] > 0) {
                     context->offset[0] -= inc;
-                else if (context->offset[1] < 0)
+                    if (context->offset[0] < 0)
+                        context->offset[0] = 0;
+                }
+                else if (context->offset[1] < 0) {
                     context->offset[1] += inc;
-                else if (context->offset[1] > 0)
+                    if (context->offset[1] > 0)
+                        context->offset[1] = 0;
+                }
+                else if (context->offset[1] > 0) {
                     context->offset[1] -= inc;
-
+                    if (context->offset[1] < 0)
+                        context->offset[1] = 0;
+                }
                 /* check to see if we are finished; opt out of the last frame
                    (it's the same as the start of the next sequence) */
                 if (--context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
@@ -126,13 +147,8 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                     context->frame = context->resolveFrame;
                     return TRUE;
                 }
-
-                /* handle case where remainder will cause infinite oscillation */
-                if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
-                    context->offset[0] = inc;
-                if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
-                    context->offset[1] = inc;
-                context->aniTicks = 0;
+                /* remember any leftover ticks so that we can keep time */
+                context->aniTicks %= amt;
             }
         }
 

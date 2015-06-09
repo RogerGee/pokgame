@@ -176,6 +176,7 @@ struct pok_game_info* pok_game_new()
     game->player = pok_character_new();
     if (game->player == NULL)
         pok_error_fromstack(pok_error_fatal);
+    game->player->isPlayer = TRUE;
     game->playerContext = pok_character_render_context_add_ex(game->charRC,game->player);
     if (game->playerContext == NULL)
         pok_error_fromstack(pok_error_fatal);

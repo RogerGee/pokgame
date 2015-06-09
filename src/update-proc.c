@@ -9,9 +9,21 @@
    should exit before the rendering procedure */
 
 /* constant update parameters */
-#define MAP_GRANULARITY          8
+#ifdef POKGAME_WIN32
+/* Windows doesn't have a very accurate timeout resolution like Linux, therefore different
+   values are required to demonstrate the correct behavior */
+
+#define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
+#define MAP_SCROLL_TIME          300 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
+
+#else
+
+#define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
 #define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
+
+#endif
 
 /* globals */
 static struct
@@ -47,7 +59,7 @@ int update_proc(struct pok_game_info* info)
 
         /* perform update operations; if an update operation just completed, then skip the timeout */
         skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,info->updateTimeout.elapsed)
-            || pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
+            + pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
@@ -100,9 +112,8 @@ void update_key_input(struct pok_game_info* info)
     static bool_t running = FALSE;
     enum pok_direction direction = pok_direction_none;
 
-    pok_game_lock(info->sys);
+    /* make sure the subsystem is running (window is up and game not paused) */
     if ( pok_graphics_subsystem_is_running(info->sys) ) {
-        pok_game_unlock(info->sys);
 
         /* perform a no-op query to refresh the keyboard state information */
         pok_graphics_subsystem_keyboard_query(info->sys,-1,TRUE);
@@ -136,11 +147,14 @@ void update_key_input(struct pok_game_info* info)
                 info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
                 info->playerContext->aniTicksAmt = globals.mapTicksNormal;
             }
-            
 
             if (direction != pok_direction_none) {
                 if (direction == info->player->direction || info->mapRC->groove) { /* player facing update direction */
                     if (!info->playerContext->update) {
+                        /* lock the graphics subsystem: this prevents rendering momentarily so that
+                           we can update the player and the map at the same time without a race */
+                        pok_graphics_subsystem_lock(info->sys);
+
                         /* update player context for animation (direction does not change) */
                         pok_game_modify_enter(info->playerContext);
                         pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,info->sys->dimension);
@@ -164,6 +178,8 @@ void update_key_input(struct pok_game_info* info)
                                 info->playerContext->slowDown = TRUE;
                             pok_game_modify_exit(info->mapRC);
                         }
+
+                        pok_graphics_subsystem_unlock(info->sys);
                     }
                 }
                 else if (!info->playerContext->update) {
@@ -178,6 +194,4 @@ void update_key_input(struct pok_game_info* info)
             }
         }
     }
-    else
-        pok_game_unlock(info->sys);
 }

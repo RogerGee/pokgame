@@ -318,32 +318,47 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
             /* updating map render context by incrementing the map offset in
                the correct direction */
             int inc;
-            context->scrollTicks = 0; /* reset scroll ticks for next time */
+            int times;
+            /* compute increment amount and the number of times to do it */
             inc = dimension / context->granularity;
+            times = context->scrollTicks / context->scrollTicksAmt;
             if (inc == 0) /* granularity was too fine */
-                inc = 1;
-            if (context->offset[0] < 0)
+                inc = times;
+            else
+                inc *= times;
+            /* reset scroll ticks for next time; keep leftover ticks if any to keep accurate time */
+            context->scrollTicks %= context->scrollTicksAmt;
+            /* update scroll offset */
+            if (context->offset[0] < 0) {
                 context->offset[0] += inc;
-            else if (context->offset[0] > 0)
+                if (context->offset[0] > 0)
+                    context->offset[0] = 0;
+            }
+            else if (context->offset[0] > 0) {
                 context->offset[0] -= inc;
-            else if (context->offset[1] < 0)
+                if (context->offset[0] < 0)
+                    context->offset[0] = 0;
+            }
+            else if (context->offset[1] < 0) {
                 context->offset[1] += inc;
-            else if (context->offset[1] > 0)
+                if (context->offset[1] > 0)
+                    context->offset[1] = 0;
+            }
+            else if (context->offset[1] > 0) {
                 context->offset[1] -= inc;
+                if (context->offset[1] < 0)
+                    context->offset[1] = 0;
+            }
+            /* check if completed */
             if (context->offset[0] == 0 && context->offset[1] == 0) {
                 /* done: return TRUE to denote that the process finished */
                 context->update = FALSE;
                 context->groove = TRUE;
                 return TRUE;
             }
-            /* handle case where remainder will cause infinite oscillation */
-            if (context->offset[0] != 0 && abs(context->offset[0]) < inc)
-                context->offset[0] = inc;
-            if (context->offset[1] != 0 && abs(context->offset[1]) < inc)
-                context->offset[1] = inc;
         }
     }
-    else if (context->groove && context->scrollTicks >= context->scrollTicksAmt * context->granularity)
+    else if (context->groove && context->scrollTicks >= context->scrollTicksAmt * (context->granularity-1))
         /* we lost our groove */
         context->groove = FALSE;
     return FALSE;

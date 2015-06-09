@@ -270,6 +270,22 @@ bool_t pok_graphics_subsystem_has_window(struct pok_graphics_subsystem* sys)
     /* the window is up if the 'rendering' flag is true */
     return sys->impl != NULL && sys->impl->rendering;
 }
+void pok_graphics_subsystem_lock(struct pok_graphics_subsystem* sys)
+{
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
+    pthread_mutex_lock(&sys->impl->mutex);
+}
+void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
+{
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
+    pthread_mutex_unlock(&sys->impl->mutex);
+}
 
 /* x11 functions */
 void do_x_init()

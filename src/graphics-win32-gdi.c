@@ -176,6 +176,14 @@ bool_t pok_graphics_subsystem_has_window(struct pok_graphics_subsystem* sys)
     /* the window is up if the 'rendering' flag is true */
     return sys->impl != NULL && sys->impl->rendering;
 }
+void pok_graphics_subsystem_lock(struct pok_graphics_subsystem* sys)
+{
+    WaitForSingleObject(sys->impl->mutex, INFINITE);
+}
+void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
+{
+    ReleaseMutex(sys->impl->mutex);
+}
 
 /* OpenGL functions */
 void create_textures(struct pok_graphics_subsystem* sys)
@@ -257,6 +265,7 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
             if (msg.message == WM_QUIT) {
                 sys->impl->rendering = FALSE;
                 sys->impl->gameRendering = FALSE;
+                break;
             }
             else {
                 TranslateMessage(&msg);

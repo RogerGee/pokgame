@@ -20,6 +20,7 @@ struct pok_character* pok_character_new()
     character->chunkPos.Y = 0;
     character->tilePos.column = 0;
     character->tilePos.row = 0;
+    character->isPlayer = FALSE;
     return character;
 }
 struct pok_character* pok_character_new_ex(uint16_t spriteIndex,uint32_t mapNo,
@@ -37,6 +38,7 @@ struct pok_character* pok_character_new_ex(uint16_t spriteIndex,uint32_t mapNo,
     character->mapNo = mapNo;
     character->chunkPos = *chunkPos;
     character->tilePos = *tilePos;
+    character->isPlayer = FALSE;
     return character;
 }
 void pok_character_free(struct pok_character* character)

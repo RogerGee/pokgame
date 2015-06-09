@@ -82,5 +82,5 @@ void timeout(struct timeout_interval* interval)
     clock_gettime(CLOCK_MONOTONIC,&before);
     usleep(interval->useconds);
     clock_gettime(CLOCK_MONOTONIC,&after);
-    interval->elapsed = (after.tv_nsec - before.tv_nsec) / 1000000;
+    interval->elapsed = ((uint64_t)1000000000 * (after.tv_sec - before.tv_sec) + (after.tv_nsec - before.tv_nsec)) / 1000000;
 }
