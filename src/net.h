@@ -63,6 +63,7 @@ struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_f
 byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,size_t* bytesRead);
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead);
 char pok_data_source_peek(struct pok_data_source* dsrc); /* these return (char) -1 on failure so use them for plain text */
+char pok_data_source_peek_ex(struct pok_data_source* dsrc,size_t lookahead);
 char pok_data_source_pop(struct pok_data_source* dsrc);
 bool_t pok_data_source_write(struct pok_data_source* dsrc,const byte_t* buffer,size_t size,size_t* bytesWritten);
 void pok_data_source_buffering(struct pok_data_source* dsrc,bool_t on);
@@ -140,6 +141,7 @@ bool_t pok_netobj_readinfo_alloc_next(struct pok_netobj_readinfo* info);
 enum pok_netobj_kind
 {
     pok_netobj_unknown,
+    pok_netobj_world,
     pok_netobj_map,
     pok_netobj_mapchunk,
     pok_netobj_character

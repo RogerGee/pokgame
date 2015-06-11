@@ -24,6 +24,8 @@ enum pok_character_effect
 struct pok_character_context
 {
     struct pok_character* character;  /* the character to be drawn */
+    struct pok_map* map;              /* cache a reference to the current map */
+    struct pok_map_chunk* chunk;      /* cache a reference to the current map chunk */
     uint8_t frame;                    /* which frame is used to render the character (direction is implied here) */
     int offset[2];                    /* x/y offset from current position (in pixels; used for moving sprites/effects) */
     bool_t shadow;                    /* if non-zero, a shadow is drawn on the occupied tile */
@@ -36,6 +38,7 @@ struct pok_character_context
     uint8_t frameAlt;                 /* sprite frame alternation counter */
     bool_t update;                    /* is the character context being updated? */
 };
+bool_t pok_character_context_move(struct pok_character_context* context,enum pok_direction direction);
 void pok_character_context_set_player(struct pok_character_context* context,struct pok_map_render_context* mapRC);
 void pok_character_context_set_update(struct pok_character_context* context,
     enum pok_direction direction,

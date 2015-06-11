@@ -113,7 +113,7 @@ $(OBJDIR)/map-context.o: src/map-context.c $(MAP_CONTEXT_H) $(PROTOCOL_H) $(POKG
 $(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(ERROR) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/character-context.o src/character-context.c
 
-$(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(ERROR_H)
+$(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(PROTOCOL_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
 $(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/io-proc.o src/io-proc.c
@@ -127,7 +127,7 @@ $(OBJDIR)/net.o: src/net.c src/net-posix.c $(NET_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/net.o src/net.c
 $(OBJDIR)/types.o: src/types.c $(TYPES_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/types.o src/types.c
-$(OBJDIR)/parser.o: src/parser.c $(PARSER_H) $(ERROR_H)
+$(OBJDIR)/parser.o: src/parser.c $(PARSER_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/parser.o src/parser.c
 $(OBJDIR)/pok-util.o: src/pok-util.c $(POK_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/pok-util.o src/pok-util.c

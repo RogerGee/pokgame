@@ -67,7 +67,9 @@ static char const* const* POK_ERROR_MESSAGES[] = {
     (const char* []) { /* pok_ex_map */
         "the specified chunk size was incorrect", /* pok_ex_map_bad_chunk_size */
         "a zero amount of chunks was specified", /* pok_ex_map_zero_chunks */
-        "map information was incorrect" /* pok_ex_map_bad_format */
+        "the operation could not complete because the map was already loaded", /* pok_ex_map_already */
+        "map information was incorrect", /* pok_ex_map_bad_format */
+        "a new chunk was created at an already allocated position on the map" /* pok_ex_map_non_unique_chunk */
     }
 };
 
@@ -103,9 +105,11 @@ void pok_error_fromstack(enum pok_errorkind kind)
             fprintf(stderr,": line %d\n",ex->lineno);
         else
             fputc('\n',stderr);
-        if (kind == pok_error_fatal)
-            exit(EXIT_FAILURE);
     }
+    else
+        fprintf(stderr,"%s: error stack was empty!\n",POKGAME_NAME);
+    if (kind == pok_error_fatal)
+        exit(EXIT_FAILURE);
 }
 
 /* pok exception handling; record exceptions on a per-thread basis */

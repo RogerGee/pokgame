@@ -37,7 +37,7 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
     uint32_t time,
     uint8_t kind,
     bool_t reverse);
-void pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks);
+bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks);
 void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct pok_fadeout_effect* effect);
 
 #endif

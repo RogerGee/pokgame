@@ -1,6 +1,7 @@
 /* character-context.c - pokgame */
 #include "character-context.h"
 #include "error.h"
+#include "pokgame.h"
 #include <stdlib.h>
 
 /* pok_character_context */
@@ -13,6 +14,11 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
         return NULL;
     }
     context->character = character;
+    /* set map and chunk references to NULL initially; they will be used by the
+       implementation; if they remain NULL, then this means that the character
+       should not be managed by the update functionality (such as with the user's character) */
+    context->map = NULL;
+    context->chunk = NULL;
     /* get frame based on initial direction */
     context->frame = pok_to_frame_direction(character->direction);
     context->offset[0] = 0;
@@ -240,11 +246,15 @@ bool_t pok_character_render_context_remove(struct pok_character_render_context* 
 /* rendering routine */
 void pok_character_render(const struct pok_graphics_subsystem* sys,struct pok_character_render_context* context)
 {
+    /* go through each character context and render it; we must lock for read access so that we don't
+       access the dynamic array member while in an invalidated state */
     size_t i;
+    pok_game_lock(context);
     for (i = 0;i < context->chars.da_top;++i)
         pok_character_context_render(
             context->chars.da_data[i],
             context->mapRC,
             context->sman,
             sys );
+    pok_game_unlock(context);
 }

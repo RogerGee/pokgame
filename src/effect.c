@@ -51,6 +51,9 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
     effect->kind = kind;
     effect->reverse = reverse;
     effect->_base.ticksAmt = time / FADEOUT_EFFECT_GRANULARITY;
+    if (effect->_base.ticksAmt == 0)
+        /* we'll have to approximate */
+        effect->_base.ticksAmt = 1;
     if (kind == pok_fadeout_black_screen) {
         /* if we go in reverse, start with fully opaque black background, otherwise
            start fully transparent */
@@ -73,7 +76,7 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
         effect->d[1] = sys->wheight / 2.0 / time; /* top and bottom */
         if (reverse) {
             effect->d[0] *= -1;
-            effect->d[0] *= -1;
+            effect->d[1] *= -1;
         }
     }
 #ifdef POKGAME_DEBUG
@@ -82,7 +85,7 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
 #endif
     effect->_base.update = TRUE;
 }
-void pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks)
+bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks)
 {
     if (effect->_base.update) {
         uint32_t i, times = pok_effect_elapsed(&effect->_base,ticks);
@@ -91,10 +94,10 @@ void pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks)
                will add time to the sequence */
             effect->delay = ticks > effect->delay ? 0 : effect->delay - ticks;
             if (effect->delay > 0)
-                return;
+                return FALSE;
         }
         if (times == 0)
-            return;
+            return FALSE;
         switch (effect->kind) {
         case pok_fadeout_black_screen: {
                 float d = effect->alpha;
@@ -141,7 +144,10 @@ void pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks)
         /* keep the effect only if we were dimming and the operation
            is complete (the screen is completely black) and the user
            had marked keep */
-        if ( !effect->_base.update )
+        if ( !effect->_base.update ) {
             effect->keep = !effect->reverse && effect->keep;
+            return TRUE;
+        }
     }
+    return FALSE;
 }

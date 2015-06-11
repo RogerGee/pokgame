@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* pok_string */
 static char dummyBuffer[16];
 struct pok_string* pok_string_new()
 {
@@ -136,4 +137,19 @@ void pok_string_reset(struct pok_string* str)
 {
     str->len = 0;
     pok_string_realloc(str,16);
+}
+
+/* pok_point */
+int pok_point_compar(struct pok_point* left,struct pok_point* right)
+{
+    /* compare points by X-coordinates; break ties with Y-coordinates */
+    if (left->X < right->X)
+        return -1;
+    if (left->X > right->X)
+        return 1;
+    if (left->Y < right->Y)
+        return -1;
+    if (left->Y > right->Y)
+        return 1;
+    return 0;
 }

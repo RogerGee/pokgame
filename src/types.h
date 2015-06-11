@@ -59,6 +59,7 @@ struct pok_point
     int32_t X;
     int32_t Y;
 };
+int pok_point_compar(struct pok_point* left,struct pok_point* right);
 
 /* define fundamental direction */
 enum pok_direction

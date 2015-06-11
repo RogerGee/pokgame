@@ -344,7 +344,7 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
     wc.cbClsExtra = 0;
     wc.cbWndExtra = 0;
     wc.hbrBackground = NULL;
-    wc.hCursor = LoadCursor(hInst, IDC_ARROW);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hIcon = NULL; /* TODO: load pokgame icon */
     wc.hInstance = hInst;
     wc.lpfnWndProc = WindowProc;

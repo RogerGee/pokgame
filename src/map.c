@@ -6,7 +6,6 @@
 #include <stdlib.h>
 
 /* structs used by the implementation */
-
 struct chunk_insert_hint
 {
     struct pok_location pos;
@@ -27,37 +26,59 @@ static void chunk_insert_hint_init(struct chunk_insert_hint* hint,uint16_t cCnt,
 struct chunk_adj_info
 {
     uint16_t n;
-    uint8_t a[MAX_INITIAL_CHUNKS];
-    struct pok_map_chunk* c[MAX_INITIAL_CHUNKS];
+    uint8_t a[pok_max_initial_chunks];
+    struct pok_point p[pok_max_initial_chunks];
+    struct pok_map_chunk* c[pok_max_initial_chunks];
 };
 
 struct chunk_recursive_info
 {
     struct pok_data_source* dsrc;
-    struct pok_size* chunkSize;
+    struct pok_map* map;
     bool_t complexTiles;
 };
 
-/* pok_map_chunk */
-
-static struct pok_map_chunk* pok_map_chunk_new(const struct pok_size* size)
+struct chunk_key
 {
-    uint16_t i;
+    struct pok_point pos;
+    struct pok_map_chunk* chunk;
+};
+
+static bool_t chunk_key_create(struct pok_map* map,struct pok_map_chunk* chunk,struct pok_point* point)
+{
+    struct chunk_key* key = malloc(sizeof(struct chunk_key));
+    if (key == NULL) {
+        pok_exception_flag_memory_error();
+        return FALSE;
+    }
+    key->pos = *point;
+    key->chunk = chunk;
+    if (treemap_insert(&map->loadedChunks,key) != 0) {
+        /* a chunk key already exists with the same position */
+        pok_exception_new_ex(pok_ex_map,pok_ex_map_non_unique_chunk);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/* pok_map_chunk */
+static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,struct pok_point* position)
+{
+    uint16_t i, j;
     struct pok_map_chunk* chunk;
     chunk = malloc(sizeof(struct pok_map_chunk));
     if (chunk == NULL) {
         pok_exception_flag_memory_error();
         return NULL;
     }
-    chunk->data = malloc(sizeof(struct pok_tile*) * size->rows);
+    chunk->data = malloc(sizeof(struct pok_tile*) * map->chunkSize.rows);
     if (chunk->data == NULL) {
         pok_exception_flag_memory_error();
         return NULL;
     }
-    for (i = 0;i < size->rows;++i) {
-        chunk->data[i] = malloc(sizeof(struct pok_tile) * size->columns);
+    for (i = 0;i < map->chunkSize.rows;++i) {
+        chunk->data[i] = malloc(sizeof(struct pok_tile) * map->chunkSize.columns);
         if (chunk->data[i] == NULL) {
-            uint16_t j;
             for (j = 0;j < i;++j)
                 free(chunk->data[j]);
             free(chunk->data);
@@ -69,10 +90,17 @@ static struct pok_map_chunk* pok_map_chunk_new(const struct pok_size* size)
         chunk->adjacent[i] = NULL;
     chunk->flags = pok_map_chunk_flag_none;
     chunk->discov = FALSE;
+    /* add the chunk to the map's treemap (if 'position' is specified); if this fails, then destroy the chunk */
+    if (position != NULL && !chunk_key_create(map,chunk,position)) {
+        for (i = 0;i < map->chunkSize.rows;++i)
+            free(chunk->data[i]);
+        free(chunk->data);
+        return NULL; /* exception is inherited */
+    }
     pok_netobj_default_ex(&chunk->_base,pok_netobj_mapchunk);
     return chunk;
 }
-static struct pok_map_chunk* pok_map_chunk_new_ex(uint16_t rows,bool_t byref)
+static struct pok_map_chunk* pok_map_chunk_new_ex(struct pok_map* map,struct pok_point* position,bool_t byref)
 {
     /* this chunk only allocates space for pointers to row data and
        assumes the row data is allocated by another context; the caller
@@ -85,15 +113,20 @@ static struct pok_map_chunk* pok_map_chunk_new_ex(uint16_t rows,bool_t byref)
         pok_exception_flag_memory_error();
         return NULL;
     }
-    chunk->data = malloc(sizeof(struct pok_tile*) * rows);
-    for (i = 0;i < rows;++i)
+    chunk->data = malloc(sizeof(struct pok_tile*) * map->chunkSize.rows);
+    for (i = 0;i < map->chunkSize.rows;++i)
         chunk->data[i] = NULL;
     for (i = 0;i < 4;++i)
         chunk->adjacent[i] = NULL;
     chunk->flags = byref ? pok_map_chunk_flag_byref : pok_map_chunk_flag_none;
     chunk->discov = FALSE;
+    /* add the chunk to the map's treemap; if this fails, then destroy the chunk */
+    if ( !chunk_key_create(map,chunk,position) ) {
+        free(chunk->data);
+        return NULL; /* exception is inherited */
+    }
     pok_netobj_default_ex(&chunk->_base,pok_netobj_mapchunk);
-    return chunk;    
+    return chunk;
 }
 static void pok_map_chunk_free(struct pok_map_chunk* chunk,uint16_t rows)
 {
@@ -148,8 +181,8 @@ static bool_t pok_map_chunk_save(struct pok_map_chunk* chunk,struct chunk_recurs
         }
     }
     /* write chunk data */
-    for (r = 0;r < info->chunkSize->rows;++r) {
-        for (c = 0;c < info->chunkSize->columns;++c) {
+    for (r = 0;r < info->map->chunkSize.rows;++r) {
+        for (c = 0;c < info->map->chunkSize.columns;++c) {
             if (info->complexTiles) {
                 if ( !pok_tile_save(chunk->data[r] + c,info->dsrc) )
                     return FALSE;
@@ -160,7 +193,7 @@ static bool_t pok_map_chunk_save(struct pok_map_chunk* chunk,struct chunk_recurs
     }
     return TRUE;
 }
-static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recursive_info* info)
+static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recursive_info* info,struct pok_point point)
 {
     /* fields:
         [byte] bitmask specifying adjacencies to load (use 'enum pok_direction'+1 to mask)
@@ -168,11 +201,12 @@ static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recurs
         [n bytes] tile data
 
         This is a depth first way of reading chunk information. The representation is still a graph,
-        but it does not have any cycles.
+        but it does not have any cycles. The chunk position is assigned into the pok_map's treemap here.
     */
     int i;
     byte_t adj;
     uint16_t c, r;
+    static struct pok_point ptmp;
     /* read adjacency bitmask */
     if ( !pok_data_stream_read_byte(info->dsrc,&adj) )
         return FALSE;
@@ -193,10 +227,22 @@ static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recurs
             else if (chunk->adjacent[orthog2] != NULL && chunk->adjacent[orthog2]->adjacent[i] != NULL
                     && chunk->adjacent[orthog2]->adjacent[i]->adjacent[orthog1] != NULL)
                 chunk->adjacent[i] = chunk->adjacent[orthog2]->adjacent[i]->adjacent[orthog1];
-            if (chunk->adjacent[i] == NULL) {
-                chunk->adjacent[i] = pok_map_chunk_new(info->chunkSize);
+            if (chunk->adjacent[i] == NULL) { /* create new chunk */
+                /* compute the chunk's position */
+                ptmp = point;
+                if (i == pok_direction_up)
+                    --ptmp.Y;
+                else if (i == pok_direction_down)
+                    ++ptmp.Y;
+                else if (i == pok_direction_left)
+                    --ptmp.X;
+                else /*if (i == pok_direction_right)*/
+                    ++ptmp.X;
+                chunk->adjacent[i] = pok_map_chunk_new(info->map,&ptmp);
                 chunk->adjacent[i]->adjacent[op] = chunk;
-                if ( !pok_map_chunk_open(chunk->adjacent[i],info) )
+                /* recursively build chunk; ptmp is a static variable whose value
+                   is copied onto the stack */
+                if ( !pok_map_chunk_open(chunk->adjacent[i],info,ptmp) )
                     return FALSE;
             }
             else
@@ -204,8 +250,8 @@ static bool_t pok_map_chunk_open(struct pok_map_chunk* chunk,struct chunk_recurs
         }
     }
     /* base case: read chunk data */
-    for (r = 0;r < info->chunkSize->rows;++r) {
-        for (c = 0;c < info->chunkSize->columns;++c) {
+    for (r = 0;r < info->map->chunkSize.rows;++r) {
+        for (c = 0;c < info->map->chunkSize.columns;++c) {
             if (!info->complexTiles) {
                 uint16_t id;
                 if ( !pok_data_stream_read_uint16(info->dsrc,&id) )
@@ -248,7 +294,7 @@ static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk
 fail:
     return result;
 }
-enum pok_network_result pok_map_chunk_netupdate(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
+static enum pok_network_result pok_map_chunk_netupdate(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
     const struct pok_netobj_readinfo* info)
 {
     enum pok_network_result result = pok_net_already;
@@ -276,21 +322,22 @@ void pok_map_free(struct pok_map* map)
 void pok_map_init(struct pok_map* map)
 {
     map->mapNo = 0;
-    map->chunk = NULL;
     map->origin = NULL;
     map->chunkSize.columns = map->chunkSize.rows = 0;
     map->originPos.X = map->originPos.Y = 0;
     map->flags = pok_map_flag_none;
+    treemap_init(&map->loadedChunks,(key_comparator)pok_point_compar,free); /* does not delete chunks, just the keys */
     pok_netobj_default_ex(&map->_base,pok_netobj_map);
 }
 void pok_map_delete(struct pok_map* map)
 {
     pok_netobj_delete(&map->_base);
-    map->chunk = NULL;
     if (map->origin != NULL) {
+        /* this will recursively delete the adjacent chunks */
         pok_map_chunk_free(map->origin,map->chunkSize.rows);
         map->origin = NULL;
     }
+    treemap_delete(&map->loadedChunks);
 }
 bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t complex)
 {
@@ -308,7 +355,7 @@ bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t comp
         bool_t result;
         struct chunk_recursive_info info;
         info.dsrc = dsrc;
-        info.chunkSize = &map->chunkSize;
+        info.map = map;
         info.complexTiles = complex;
         if (!pok_data_stream_write_byte(dsrc,complex) || !pok_data_stream_write_uint32(dsrc,map->mapNo)
             || !pok_data_stream_write_uint16(dsrc,map->chunkSize.columns)
@@ -346,8 +393,8 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
         if (!pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns) || !pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows))
             return FALSE;
         /* ensure chunk dimensions are correct */
-        if (map->chunkSize.columns == 0 || map->chunkSize.columns > MAX_MAP_CHUNK_DIMENSION
-            || map->chunkSize.rows == 0 || map->chunkSize.rows > MAX_MAP_CHUNK_DIMENSION) {
+        if (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension
+            || map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return FALSE;
         }
@@ -355,16 +402,13 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
         if (!pok_data_stream_read_int32(dsrc,&map->originPos.X) || !pok_data_stream_read_int32(dsrc,&map->originPos.Y))
             return FALSE;
         /* read origin chunk; this will recursively read all chunks in the map */
-        map->origin = pok_map_chunk_new(&map->chunkSize);
+        map->origin = pok_map_chunk_new(map,&map->originPos);
         if (map->origin == NULL)
             return FALSE;
         info.dsrc = dsrc;
-        info.chunkSize = &map->chunkSize;
-        if ( pok_map_chunk_open(map->origin,&info) ) {
-            map->chunk = map->origin;
-            /* measure the map by traversing from the origin */
+        info.map = map;
+        if ( pok_map_chunk_open(map->origin,&info,map->originPos) )
             return TRUE;
-        }
     }
     return FALSE;
 }
@@ -410,7 +454,7 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
         struct pok_size lefttop, rightbottom;
         const uint16_t* td[3];
         struct chunk_insert_hint hint;
-        mapArea = pok_util_compute_chunk_size(columns,rows,MAX_MAP_CHUNK_DIMENSION,&map->chunkSize,&lefttop,&rightbottom);
+        mapArea = pok_util_compute_chunk_size(columns,rows,pok_max_map_chunk_dimension,&map->chunkSize,&lefttop,&rightbottom);
         chunk_insert_hint_init(&hint,mapArea.columns,mapArea.rows);
         td[0] = tiledata;
         for (i = 0;i < mapArea.rows;++i) {
@@ -418,7 +462,11 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
             td[1] = td[0];
             for (j = 0;j < mapArea.columns;++j) {
                 uint16_t k, l, m, n, o;
-                struct pok_map_chunk* chunk = pok_map_chunk_new(&map->chunkSize);
+                struct pok_point position;
+                struct pok_map_chunk* chunk;
+                position.X = i;
+                position.Y = j;
+                chunk = pok_map_chunk_new(map,&position);
                 if (chunk == NULL)
                     return FALSE;
                 td[2] = td[1];
@@ -463,10 +511,8 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
                 /* advance to the next chunk in the row of chunks */
                 td[1] += size.columns;
                 /* add the chunk to the graph */
-                if (map->origin == NULL) {
+                if (map->origin == NULL)
                     map->origin = chunk;
-                    map->chunk = chunk;
-                }
                 else
                     pok_map_insert_chunk(map,chunk,&hint);
             }
@@ -495,12 +541,13 @@ bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename)
                 result = FALSE;
             }
             else
-                result = pok_map_load_simple(map,info.words,info.qwords[0],info.qwords[1]);            
+                result = pok_map_load_simple(map,info.words,info.qwords[0],info.qwords[1]);
         }
         pok_data_source_free(info.dsrc);
         pok_parser_info_delete(&info);
         return result;
     }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
 bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename)
@@ -527,15 +574,27 @@ bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename)
         pok_parser_info_delete(&info);
         return result;
     }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
-static void pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* info)
+struct pok_map_chunk* pok_map_get_chunk(struct pok_map* map,const struct pok_point* pos)
+{
+    struct chunk_key* key;
+    key = treemap_lookup(&map->loadedChunks,pos);
+    if (key == NULL)
+        return NULL;
+    return key->chunk;
+}
+static bool_t pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* info)
 {
     /* configure a map's chunks based on an adjacency list; the adjacency list specifies
        adjacencies in a breadth-first way; adjacencies may imply adjacencies not specified */
     int i, j, k;
     /* set origin chunk */
-    map->chunk = map->origin = info->c[0];
+    map->origin = info->c[0];
+    info->p[0] = map->originPos;
+    if ( !chunk_key_create(map,map->origin,&map->originPos) )
+        return FALSE;
     /* setup adjacencies */
     for (i = 0,j = 1;i < info->n;++i) {
         for (k = 0;k < 4;++k) {
@@ -559,13 +618,28 @@ static void pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* inf
                    next assignable chunk in the list of unassigned chunks; if this list is exhausted then the previous
                    code should have found a chunk that was already assigned in a previous operation (chunk != NULL) */
                 if (j < info->n) {
+                    struct pok_point pos;
                     if (chunk != NULL) {
                         /* two chunks have been specified in the same place (peer made an error); delete the unassigned
                            chunk and continue (we want to handle this gracefully) */
                         pok_map_chunk_free(info->c[j++],map->chunkSize.rows);
                         continue;
                     }
+                    /* compute chunk position */
+                    pos = info->p[i];
+                    if (k == pok_direction_up)
+                        --pos.Y;
+                    else if (k == pok_direction_down)
+                        ++pos.Y;
+                    else if (k == pok_direction_left)
+                        --pos.X;
+                    else /* if (k == pok_direction_right) */
+                        ++pos.X;
+                    info->p[j] = pos; /* save position for later */
                     chunk = info->c[j++];
+                    /* add the new chunk to the map's treemap */
+                    if ( !chunk_key_create(map,chunk,&pos) )
+                        return FALSE;
                 }
                 else if (chunk == NULL) {
                     /* the peer should have specified a chunk in this direction, but they didn't; we gracefully
@@ -575,11 +649,13 @@ static void pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* inf
                 /* assign the adjacency; also assign the adjacency in the reverse direction */
                 info->c[i]->adjacent[k] = chunk;
                 chunk->adjacent[op] = info->c[i];
+                
             }
         }
     }
+    return TRUE;
 }
-enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
+static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info)
 {
     /* fields
         [super class]
@@ -594,7 +670,7 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
         [n chunks]
           [...] netread chunk
 
-        The peer is expected to send less than or equal to MAX_INITIAL_CHUNKS. The chunks are preceeded by
+        The peer is expected to send less than or equal to pok_max_initial_chunks. The chunks are preceeded by
         an adjacency list (of adjacency bitmasks). The list of adjacency bitmasks is parallel to the list of
         chunks
     */
@@ -613,8 +689,8 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
     if (info->fieldProg == 3) { /* chunk size width */
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns);
         result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed && 
-            (map->chunkSize.columns == 0 || map->chunkSize.columns > MAX_MAP_CHUNK_DIMENSION)) {
+        if (result == pok_net_completed &&
+            (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension)) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
@@ -622,8 +698,8 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
     if (info->fieldProg == 4) { /* chunk size height */
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows);
         result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed && 
-            (map->chunkSize.rows == 0 || map->chunkSize.rows > MAX_MAP_CHUNK_DIMENSION)) {
+        if (result == pok_net_completed &&
+            (map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension)) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
@@ -668,7 +744,7 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
     }
     if (info->fieldProg == 9) { /* read chunks */
         while (info->depth[0] < adj->n) {
-            if (adj->c[info->depth[0]]==NULL && (adj->c[info->depth[0]] = pok_map_chunk_new(&map->chunkSize)) == NULL)
+            if (adj->c[info->depth[0]]==NULL && (adj->c[info->depth[0]] = pok_map_chunk_new(map,NULL)) == NULL)
                 return pok_net_failed_internal;
             if (!pok_netobj_readinfo_alloc_next(info))
                 return pok_net_failed_internal;
@@ -678,12 +754,98 @@ enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_data_sour
             ++info->depth[0];
         }
         /* all chunks successfully read here; setup map chunks according to adjacencies */
-        pok_map_configure_adj(map,adj);
+        if ( !pok_map_configure_adj(map,adj) )
+            return pok_net_failed_internal;
     }
 fail:
     return result;
 }
-int pok_map_compar(struct pok_map* left,struct pok_map* right)
+static int pok_map_compar(struct pok_map* left,struct pok_map* right)
 {
     return left->mapNo - right->mapNo;
+}
+
+/* pok_world */
+struct pok_world* pok_world_new()
+{
+    struct pok_world* world = malloc(sizeof(struct pok_world));
+    if (world == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    pok_world_init(world);
+    return world;
+}
+void pok_world_free(struct pok_world* world)
+{
+    pok_world_delete(world);
+    free(world);
+}
+void pok_world_init(struct pok_world* world)
+{
+    pok_netobj_default_ex(&world->_base,pok_netobj_world);
+    treemap_init(&world->loadedMaps,(key_comparator)pok_map_compar,(destructor)pok_map_free);
+}
+void pok_world_delete(struct pok_world* world)
+{
+    treemap_delete(&world->loadedMaps);
+    pok_netobj_delete(&world->_base);
+}
+struct pok_map* pok_world_get_map(struct pok_world* world,uint32_t mapNo)
+{
+    /* we have to use a 'struct pok_map' as the key since 'pok_map::mapNo'
+       is NOT the first member to the structure */
+    struct pok_map dummyMap;
+    dummyMap.mapNo = mapNo;
+    return treemap_lookup(&world->loadedMaps,&dummyMap);
+}
+bool_t pok_world_fromfile_warps(struct pok_world* world,const char* filename)
+{
+    /* read warps from the specified file and apply them to the map; silently fail
+       if any specified map does not exist within the world at this point */
+    struct pok_data_source* fin;
+    fin = pok_data_source_new_file(filename,pok_filemode_open_existing,pok_iomode_read);
+    if (fin != NULL) {
+        bool_t result;
+        struct pok_parser_info parser;
+        pok_parser_info_init(&parser);
+        parser.dsrc = fin;
+        if ((result = pok_parse_map_warps(&parser))) {
+            size_t i, j;
+            for (i = 0,j = 0;i < parser.bytes_c[0];++i,j += 10) {
+                struct pok_map* map;
+                struct pok_point chunkpos;
+                struct pok_location relpos;
+                chunkpos.X = parser.qwords[j+2];
+                chunkpos.Y = parser.qwords[j+3];
+                relpos.column = parser.qwords[j+6];
+                relpos.row = parser.qwords[j+7];
+                if ((map = pok_world_get_map(world,parser.qwords[j])) != NULL) {
+                    struct pok_map_chunk* chunk;
+                    if ((chunk = pok_map_get_chunk(map,&chunkpos)) != NULL) {
+                        if (relpos.column < map->chunkSize.columns && relpos.row < map->chunkSize.rows) {
+                            struct pok_tile_data* data;
+                            data = &chunk->data[relpos.row][relpos.column].data;
+                            data->warpKind = parser.bytes[i];
+                            data->warpMap = parser.qwords[j+1];
+                            data->warpChunk.X = parser.qwords[j+4];
+                            data->warpChunk.Y = parser.qwords[j+5];
+                            data->warpLocation.column = parser.qwords[j+8];
+                            data->warpLocation.row = parser.qwords[j+9];
+                        }
+                    }
+                }
+            }
+        }
+        pok_parser_info_delete(&parser);
+        pok_data_source_free(fin);
+        return result;
+    }
+    return FALSE;
+}
+enum pok_network_result pok_world_netread(struct pok_world* world,struct pok_data_source* dsrc,struct pok_netobj_readinfo* readinfo)
+{
+    enum pok_network_result result = pok_net_already;
+
+    return result;
 }

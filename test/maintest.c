@@ -1,6 +1,7 @@
 /* maintest.c -- pokgame main test bed */
 #include "pokgame.h"
 #include "error.h"
+#include "pok.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -52,7 +53,6 @@ void init()
     load_maps();
     assert( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&START_LOCATION) );
     pok_character_context_set_player(game->playerContext,game->mapRC);
-    game->gameContext = pok_game_world_context;
     assert( pok_graphics_subsystem_begin(game->sys) );
     pok_graphics_subsystem_create_textures(
         game->sys,
@@ -65,12 +65,26 @@ void init()
 
 void load_maps()
 {
-    /* load maps; focus on start map */
+    /* load start map and focus on it */
     struct pok_map* map;
     map = pok_map_new();
     if (map == NULL)
         pok_error_fromstack(pok_error_fatal);
+    map->mapNo = 1;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapA.csv") )
         pok_error_fromstack(pok_error_fatal);
-    pok_game_add_map(game,map,TRUE);
+    pok_world_add_map(game->world,map);
+    pok_map_render_context_set_map(game->mapRC,map);
+    /* load map B */
+    map = pok_map_new();
+    if (map == NULL)
+        pok_error_fromstack(pok_error_fatal);
+    map->mapNo = 2;
+    if ( !pok_map_fromfile_csv(map,"test/maps/mapB.csv") )
+        pok_error_fromstack(pok_error_fatal);
+    pok_world_add_map(game->world,map);
+
+    /* load warps for all maps */
+    if ( !pok_world_fromfile_warps(game->world,"test/maps/warps") )
+        pok_error_fromstack(pok_error_fatal);
 }

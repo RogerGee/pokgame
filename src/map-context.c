@@ -29,6 +29,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
     context->relpos.column = context->relpos.row = 0;
     context->chunkpos.X = 0;
     context->chunkpos.Y = 0;
+    context->chunk = NULL;
     context->map = NULL;
     context->tman = tman;
     for (i = 0;i < 4;++i)
@@ -43,6 +44,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
 }
 void pok_map_render_context_set_map(struct pok_map_render_context* context,struct pok_map* map)
 {
+    /* set map and reset the other information */
     int i, j;
     context->focus[0] = context->focus[1] = 0;
     context->offset[0] = context->offset[1] = 0;
@@ -52,7 +54,7 @@ void pok_map_render_context_set_map(struct pok_map_render_context* context,struc
     context->relpos.column = context->relpos.row = 0;
     context->chunkpos.X = map->originPos.X;
     context->chunkpos.Y = map->originPos.Y;
-    map->chunk = map->origin;
+    context->chunk = map->origin;
     context->map = map;
     context->changed = TRUE;
 }
@@ -60,116 +62,49 @@ void pok_map_render_context_align(struct pok_map_render_context* context)
 {
     /* compute surrounding chunks; place the current chunk in the center */
     context->focus[0] = context->focus[1] = 1;
-    context->viewingChunks[1][1] = context->map->chunk;
-    context->viewingChunks[1][0] = context->map->chunk->adjacent[pok_direction_up];
-    context->viewingChunks[1][2] = context->map->chunk->adjacent[pok_direction_down];
-    context->viewingChunks[0][1] = context->map->chunk->adjacent[pok_direction_left];
-    context->viewingChunks[2][1] = context->map->chunk->adjacent[pok_direction_right];
+    context->viewingChunks[1][1] = context->chunk;
+    context->viewingChunks[1][0] = context->chunk->adjacent[pok_direction_up];
+    context->viewingChunks[1][2] = context->chunk->adjacent[pok_direction_down];
+    context->viewingChunks[0][1] = context->chunk->adjacent[pok_direction_left];
+    context->viewingChunks[2][1] = context->chunk->adjacent[pok_direction_right];
     context->viewingChunks[0][0] = context->viewingChunks[1][0] != NULL ? context->viewingChunks[1][0]->adjacent[pok_direction_left] : NULL;
     context->viewingChunks[2][0] = context->viewingChunks[1][0] != NULL ? context->viewingChunks[1][0]->adjacent[pok_direction_right] : NULL;
     context->viewingChunks[0][2] = context->viewingChunks[1][2] != NULL ? context->viewingChunks[1][2]->adjacent[pok_direction_left] : NULL;
     context->viewingChunks[2][2] = context->viewingChunks[1][2] != NULL ? context->viewingChunks[1][2]->adjacent[pok_direction_right] : NULL;
     context->changed = TRUE;
 }
-/* bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_location* location) */
-/* { */
-/*     int d[2]; */
-/*     enum pok_direction dirs[2]; */
-/*     struct pok_location pos; */
-/*     struct pok_map_chunk* chunk; */
-/*     /\* find the chunk that bounds 'location'; it may not exist, in which case the map's */
-/*        current chunk remains unchanged and the function returns FALSE *\/ */
-/*     pos = context->map->pos; */
-/*     chunk = context->map->chunk; */
-/*     /\* find direction that needs to be moved in each dimension *\/ */
-/*     d[0] = pos.column > location->column */
-/*         ? (dirs[0] = pok_direction_left, -context->map->chunkSize.columns) : (dirs[0] = pok_direction_right, context->map->chunkSize.columns);*/
-/*     d[1] = pos.row > location->row */
-/*         ? (dirs[1] = pok_direction_up, -context->map->chunkSize.rows) : (dirs[1] = pok_direction_down, context->map->chunkSize.rows); */
-/*     /\* locate the chunk that contains the desired location; note that the map can be irregular (e.g. not rectangular) *\/ */
-/*     do { */
-/*         bool_t fA, fB; */
-/*         struct pok_map_chunk* A, *B; */
-/*         fA = FALSE; A = NULL; */
-/*         fB = FALSE; B = NULL; */
-/*         /\* advance along the width of the map if needed *\/ */
-/*         if (pok_unsigned_diff(location->column,pos.column) >= context->map->chunkSize.columns) { */
-/*             pos.column += d[0]; */
-/*             A = chunk->adjacent[dirs[0]]; */
-/*             fA = TRUE; */
-/*         } */
-/*         /\* advance along the height of the map if needed *\/ */
-/*         if (pok_unsigned_diff(location->row,pos.row) >= context->map->chunkSize.rows) { */
-/*             pos.row += d[1]; */
-/*             B = chunk->adjacent[dirs[1]]; */
-/*             fB = TRUE; */
-/*         } */
-/*         if (!fA && !fB) */
-/*             break; /\* we found it! *\/ */
-/*         if ((fA && A == NULL) || (fB && B == NULL)) */
-/*             return FALSE; /\* we pushed outside the map *\/ */
-/*         if (A != NULL && B != NULL) /\* choose the diagonal (column and row were not yet sufficient) *\/ */
-/*             chunk = A->adjacent[dirs[1]]; /\* equivilent to B->adjacent[dirs[0]] (they are orthogonal) *\/ */
-/*         else if (A != NULL) */
-/*             chunk = A; */
-/*         else */
-/*             chunk = B; */
-/*     } while (chunk != NULL); */
-/*     if (chunk == NULL) */
-/*         return FALSE; */
-/*     context->map->pos = *location; */
-/*     context->map->chunk = chunk; */
-/*     /\* align the context on the new position *\/ */
-/*     pok_map_render_context_align(context,TRUE); */
-/*     return TRUE; */
-/* } */
 bool_t pok_map_render_context_center_on(struct pok_map_render_context* context,const struct pok_point* chunkpos,const struct pok_location* relpos)
 {
-    /* center the context on the specified chunk; if the chunk does not exist, then FALSE
-       is returned and the context is not updated */
-    int32_t x, y;
-    int d1, d2, i1, i2;
-    struct pok_map_chunk* chunk = context->map->chunk;
-    x = chunkpos->X - context->chunkpos.X;
-    y = chunkpos->Y - context->chunkpos.Y;
-    if (x != 0 || y != 0) {
-        /* walk along the chunk grid to get the correct chunk */
-        if (x < 0) {
-            d1 = pok_direction_left;
-            i1 = 1;
-        }
-        else if (x > 0) {
-            d1 = pok_direction_right;
-            i1 = -1;
-        }
-        if (y < 0) {
-            d2 = pok_direction_up;
-            i2 = 1;
-        }
-        else if (y > 0) {
-            d2 = pok_direction_down;
-            i2 = -1;
-        }
-        do {
-            if (x != 0 && chunk->adjacent[d1] != NULL) {
-                chunk = chunk->adjacent[d1];
-                x += i1;
-            }
-            else if (y != 0 && chunk->adjacent[d2] != NULL) {
-                chunk = chunk->adjacent[d2];
-                y += i2;
-            }
-            else
-                /* the specified chunk did not exist */
-                return FALSE;
-        } while (x != 0 || y != 0);
-        /* operation was successful */
-        context->map->chunk = chunk;
-        context->chunkpos = *chunkpos;
-    }
-    /* realign the context and set the relative position */
-    pok_map_render_context_align(context); /* flags change */
+    /* center the context on the specified chunk and location; if the chunk does not exist, 
+       then FALSE is returned and the context is not updated */
+    struct pok_map_chunk* chunk = pok_map_get_chunk(context->map,chunkpos);
+    if (chunk == NULL)
+        return FALSE;
+    /* make sure the position within the chunk is valid */
+    if (relpos->column >= context->map->chunkSize.columns || relpos->row >= context->map->chunkSize.rows)
+        return FALSE;
+    /* realign the context and set relative position */
+    context->chunk = chunk;
+    context->chunkpos = *chunkpos;
     context->relpos = *relpos;
+    /* the next call sets 'context->changed'; this needs to be the final operation (for thread-safety) */
+    pok_map_render_context_align(context);
+    return TRUE;
+}
+bool_t pok_map_render_context_set_position(struct pok_map_render_context* context,
+    struct pok_map* map,
+    const struct pok_point* chunkpos,
+    const struct pok_location* relpos)
+{
+    struct pok_map* oldMap;
+    /* perform 'set_map' then 'center_on'; if 'center_on' fails, restore the previous configuration */
+    oldMap = context->map;
+    context->map = map;
+    if ( !pok_map_render_context_center_on(context,chunkpos,relpos) ) {
+        context->map = oldMap;
+        return FALSE;
+    }
+    /* 'context->changed' was flagged in the previous function call */
     return TRUE;
 }
 static bool_t is_impassable(const struct pok_tile_manager* tman,struct pok_map_chunk* chunk,uint16_t column,uint16_t row)
@@ -198,7 +133,7 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
     if (dir == pok_direction_up) {
         if (context->relpos.row > 0) {
             next = context->relpos.row - 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk,context->relpos.column,next))
+            if (checkPassable && is_impassable(context->tman,context->chunk,context->relpos.column,next))
                 return FALSE;
             context->relpos.row = next;
             if (context->focus[1] == 0 && context->relpos.row <= context->map->chunkSize.rows/2)
@@ -210,18 +145,18 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
         else {
             /* focus on the new chunk */
             next = context->map->chunkSize.rows - 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk->adjacent[dir],context->relpos.column,next))
+            if (checkPassable && is_impassable(context->tman,context->chunk->adjacent[dir],context->relpos.column,next))
                 return FALSE;
             context->relpos.row = next;
             --context->chunkpos.Y;
             --context->focus[1];
-            context->map->chunk = context->map->chunk->adjacent[dir];
+            context->chunk = context->chunk->adjacent[dir];
         }
     }
     else if (dir == pok_direction_down) {
         if (context->relpos.row < context->map->chunkSize.rows-1) {
             next = context->relpos.row + 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk,context->relpos.column,next))
+            if (checkPassable && is_impassable(context->tman,context->chunk,context->relpos.column,next))
                 return FALSE;
             context->relpos.row = next;
             if (context->focus[1] == 2 && context->relpos.row >= context->map->chunkSize.rows/2)
@@ -232,18 +167,18 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
             return FALSE; /* there is not a chunk to the south */
         else {
             /* focus on the new chunk */
-            if (checkPassable && is_impassable(context->tman,context->map->chunk->adjacent[dir],context->relpos.column,0))
+            if (checkPassable && is_impassable(context->tman,context->chunk->adjacent[dir],context->relpos.column,0))
                 return FALSE;
             context->relpos.row = 0;
             ++context->chunkpos.Y;
             ++context->focus[1];
-            context->map->chunk = context->map->chunk->adjacent[dir];
+            context->chunk = context->chunk->adjacent[dir];
         }
     }
     else if (dir == pok_direction_left) {
         if (context->relpos.column > 0) {
             next = context->relpos.column - 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk,next,context->relpos.row))
+            if (checkPassable && is_impassable(context->tman,context->chunk,next,context->relpos.row))
                 return FALSE;
             context->relpos.column = next;
             if (context->focus[0] == 0 && context->relpos.column <= context->map->chunkSize.columns/2)
@@ -255,18 +190,18 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
         else {
             /* focus on the new chunk */
             next = context->map->chunkSize.columns - 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk->adjacent[dir],next,context->relpos.row))
+            if (checkPassable && is_impassable(context->tman,context->chunk->adjacent[dir],next,context->relpos.row))
                 return FALSE;
             context->relpos.column = next;
             --context->chunkpos.X;
             --context->focus[0];
-            context->map->chunk = context->map->chunk->adjacent[dir];
+            context->chunk = context->chunk->adjacent[dir];
         }
     }
     else if (dir == pok_direction_right) {
         if (context->relpos.column < context->map->chunkSize.columns-1) {
             next = context->relpos.column + 1;
-            if (checkPassable && is_impassable(context->tman,context->map->chunk,next,context->relpos.row))
+            if (checkPassable && is_impassable(context->tman,context->chunk,next,context->relpos.row))
                 return FALSE;
             context->relpos.column = next;
             if (context->focus[0] == 2 && context->relpos.column >= context->map->chunkSize.columns/2)
@@ -277,12 +212,12 @@ bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum p
             return FALSE; /* there is no chunk to the east */
         else {
             /* focus on the new chunk */
-            if (checkPassable && is_impassable(context->tman,context->map->chunk->adjacent[dir],0,context->relpos.row))
+            if (checkPassable && is_impassable(context->tman,context->chunk->adjacent[dir],0,context->relpos.row))
                 return FALSE;
             context->relpos.column = 0;
             ++context->chunkpos.X;
             ++context->focus[0];
-            context->map->chunk = context->map->chunk->adjacent[dir];
+            context->chunk = context->chunk->adjacent[dir];
         }
     }
     else
@@ -391,7 +326,7 @@ void compute_chunk_render_info(struct pok_map_render_context* context,const stru
     context->info[0].across = sys->windowSize.columns + 2;
     context->info[0].down = sys->windowSize.rows + 2;
     context->info[0].chunkPos = context->chunkpos;
-    context->info[0].chunk = context->map->chunk;
+    context->info[0].chunk = context->chunk;
     d[0] = context->focus[0]; d[1] = context->focus[1];
     i = (int)context->relpos.column - (int)sys->playerLocation.column - 1; /* compute left column position within chunk */
     if (i < 0) {
@@ -498,7 +433,9 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
 {
     int i;
     if (context->changed) {
-        /* compute dimensions of draw spaces */
+        /* compute dimensions of draw spaces (only if the context was changed; this flag helps
+           provide thread safety as well; anothe thread may change the map or position, then flag
+           'context->changed' to make the changes go into effect) */
         compute_chunk_render_info(context,sys);
         context->changed = FALSE;
     }

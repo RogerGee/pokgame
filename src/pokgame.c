@@ -1,13 +1,18 @@
 /* pokgame.c - pokgame */
 #include "pokgame.h"
 #include "error.h"
+#include <dstructs/hashmap.h>
 #include <stdlib.h>
 
 #ifndef POKGAME_TEST
 
+const char* POKGAME_NAME;
+
 /* pokgame entry point */
 int main(int argc,const char* argv[])
 {
+    POKGAME_NAME = argv[0];
+
     /* load all modules */
     pok_exception_load_module();
     pok_game_load_module();
@@ -164,13 +169,14 @@ struct pok_game_info* pok_game_new()
     if (game->sman == NULL)
         pok_error_fromstack(pok_error_fatal);
     /* initialize maps */
-    game->loadedMaps = treemap_new((key_comparator)pok_map_compar,(destructor)pok_map_free);
-    if (game->loadedMaps == NULL)
-        pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
+    game->world = pok_world_new();
+    if (game->world == NULL)
+        pok_error_fromstack(pok_error_fatal);
+    game->mapTrans = NULL;
+    game->exitDirection = pok_direction_none;
     game->mapRC = pok_map_render_context_new(game->tman);
     if (game->mapRC == NULL)
         pok_error_fromstack(pok_error_fatal);
-    pok_map_init(&game->dummyMap);
     /* initialize character render context */
     game->charRC = pok_character_render_context_new(game->mapRC,game->sman);
     /* initialize player and add it to the character render context */
@@ -187,8 +193,8 @@ void pok_game_free(struct pok_game_info* game)
 {
     pok_character_free(game->player);
     pok_character_render_context_free(game->charRC);
+    pok_world_free(game->world);
     pok_map_render_context_free(game->mapRC);
-    treemap_free(game->loadedMaps);
     pok_sprite_manager_free(game->sman);
     pok_tile_manager_free(game->tman);
     pok_graphics_subsystem_free(game->sys);
@@ -206,10 +212,4 @@ void pok_game_unregister(struct pok_game_info* game)
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
-}
-void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus)
-{
-    treemap_insert(game->loadedMaps,map);
-    if (focus)
-        pok_map_render_context_set_map(game->mapRC,map);
 }

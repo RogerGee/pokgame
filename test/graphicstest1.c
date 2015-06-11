@@ -114,7 +114,7 @@ int graphics_main_test1()
             compute_chunk_render_info(globals.mcxt,sys);
             printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunkpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
                 globals.mcxt->map->chunkSize.rows,globals.mcxt->focus[0],globals.mcxt->focus[1],globals.mcxt->relpos.column,
-                globals.mcxt->relpos.row,globals.mcxt->chunkpos.X,globals.mcxt->chunkpos.Y,globals.mcxt->map->chunk->data[0][0].data.tileid);
+                globals.mcxt->relpos.row,globals.mcxt->chunkpos.X,globals.mcxt->chunkpos.Y,globals.mcxt->chunk->data[0][0].data.tileid);
             for (j = 0;j < 3;++j) { /* rows */
                 for (i = 0;i < 3;++i) /* columns */
                     printf("%d   ",globals.mcxt->viewingChunks[i][j]==NULL ? -1 : globals.mcxt->viewingChunks[i][j]->data[0][0].data.tileid);

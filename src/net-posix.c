@@ -274,6 +274,15 @@ char pok_data_source_peek(struct pok_data_source* dsrc)
         return dsrc->bufferRead[--dsrc->itRead];
     return (char) -1;
 }
+char pok_data_source_peek_ex(struct pok_data_source* dsrc,size_t lookahead)
+{
+    size_t bytesRead;
+    if (dsrc->szRead > lookahead)
+        return dsrc->bufferRead[dsrc->itRead + lookahead];
+    if (pok_data_source_read(dsrc,lookahead - dsrc->szRead,&bytesRead) && bytesRead >= lookahead)
+        return dsrc->bufferRead[dsrc->itRead -= bytesRead];
+    return (char) -1;
+}
 char pok_data_source_pop(struct pok_data_source* dsrc)
 {
     size_t bytesRead;

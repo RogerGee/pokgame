@@ -8,8 +8,6 @@
 #include "map-context.h"
 #include "character-context.h"
 #include "effect.h"
-#include <dstructs/hashmap.h>
-#include <dstructs/treemap.h>
 
 /* timeout_interval: structure to represent game time */
 struct pok_timeout_interval
@@ -29,7 +27,13 @@ void pok_timeout(struct pok_timeout_interval* interval);
 enum pok_game_context
 {
     pok_game_intro_context, /* the game is processing the intro screen */
-    pok_game_world_context  /* the game is handling map logic */
+    pok_game_world_context,  /* the game is handling map logic */
+    pok_game_warp_fadeout_context, /* the game is handling a warp fadeout */
+    pok_game_warp_fadeout_cave_context, /* the game is handling a cave exit warp */
+    pok_game_warp_latent_fadeout_context, /* the game is handling a latent warp fadeout */
+    pok_game_warp_latent_fadeout_cave_context, /* the game is handling a latent cave exit warp */
+    pok_game_warp_fadein_context, /* the game is handling a warp fadein */
+
 };
 
 /* this structure stores all of the top-level game information */
@@ -58,8 +62,9 @@ struct pok_game_info
     struct pok_sprite_manager* sman;
 
     /* maps */
-    struct pok_map dummyMap; /* used as key to 'loadedMaps' */
-    struct treemap* loadedMaps;
+    struct pok_world* world;
+    struct pok_tile_data* mapTrans;
+    enum pok_direction exitDirection;
     struct pok_map_render_context* mapRC;
 
     /* character render context */
@@ -92,6 +97,5 @@ struct pok_game_info* pok_game_new();
 void pok_game_free(struct pok_game_info* game);
 void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);
-void pok_game_add_map(struct pok_game_info* game,struct pok_map* map,bool_t focus);
 
 #endif

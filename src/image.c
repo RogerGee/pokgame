@@ -25,7 +25,7 @@ struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pi
     struct pok_image* img;
     d = width*height;
     n = d * sizeof(union pixel);
-    if (d > MAX_IMAGE_SIZE) {
+    if (d > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -45,7 +45,7 @@ struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union a
     struct pok_image* img;
     d = width * height;
     n = d * sizeof(union alpha_pixel);
-    if (n > MAX_IMAGE_SIZE) {
+    if (n > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -67,7 +67,7 @@ struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const b
     struct pok_image* img;
     sz = width * height;
     imgSz = sz * sizeof(union pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -101,7 +101,7 @@ struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const 
     struct pok_image* img;
     sz = width * height;
     imgSz = sz * sizeof(union alpha_pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return NULL;
     }
@@ -262,7 +262,7 @@ bool_t pok_image_open(struct pok_image* img,struct pok_data_source* dsrc)
         return FALSE;
     img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     imgSz = (alpha ? sizeof (union alpha_pixel) : sizeof (union pixel)) * img->width * img->height;
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return FALSE;
     }
@@ -288,7 +288,7 @@ bool_t pok_image_fromfile_rgb(struct pok_image* img,const char* file)
         return FALSE;
     }
     imgSz = img->width * img->height * sizeof(union pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_data_source_free(fin);
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return FALSE;
@@ -306,7 +306,7 @@ bool_t pok_image_fromfile_rgb_ex(struct pok_image* img,const char* file,uint32_t
     size_t imgSz;
     struct pok_data_source* fin;
     imgSz = width * height * sizeof(union pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return FALSE;
     }
@@ -343,7 +343,7 @@ bool_t pok_image_fromfile_rgba(struct pok_image* img,const char* file)
         return FALSE;
     }
     imgSz = img->width * img->height * sizeof(union alpha_pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_data_source_free(fin);
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return FALSE;
@@ -362,7 +362,7 @@ bool_t pok_image_fromfile_rgba_ex(struct pok_image* img,const char* file,uint32_
     size_t imgSz;
     struct pok_data_source* fin;
     imgSz = width * height * sizeof(union alpha_pixel);
-    if (imgSz > MAX_IMAGE_SIZE) {
+    if (imgSz > pok_max_image_size) {
         pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
         return FALSE;
     }
@@ -417,7 +417,7 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
             size_t amt = allocation * img->width * img->height;
-            if (amt > MAX_IMAGE_SIZE) {
+            if (amt > pok_max_image_size) {
                 pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
                 return pok_net_failed;
             }
@@ -481,7 +481,7 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
             amount = allocation * width * height;
-            if (amount > MAX_IMAGE_SIZE) {
+            if (amount > pok_max_image_size) {
                 pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
                 return pok_net_failed;
             }

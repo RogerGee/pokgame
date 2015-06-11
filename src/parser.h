@@ -11,16 +11,19 @@ struct pok_parser_info
     long long int number;
     int lineno;
 
+    /* the parser extracts elements into these dynamic arrays */
     uint8_t* bytes;
     uint16_t* words;
     uint32_t* qwords;
     struct pok_string** strings;
 
+    /* dynamic array lengths (index 0) and allocation limits (index 1) */
     size_t bytes_c[2];
     size_t words_c[2];
     size_t qwords_c[2];
     size_t strings_c[2];
 
+    /* when specified by a grammar, the parser will use a variable separator character */
     char separator;
 };
 struct pok_parser_info* pok_parser_info_new();
@@ -31,5 +34,6 @@ void pok_parser_info_reset(struct pok_parser_info* info);
 
 /* pok_map **********************************************************************/
 bool_t pok_parse_map_simple(struct pok_parser_info* info);
+bool_t pok_parse_map_warps(struct pok_parser_info* info);
 
 #endif
