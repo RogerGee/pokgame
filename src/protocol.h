@@ -23,7 +23,11 @@ enum pok_tile_warp_kind
     pok_tile_warp_latent_down, /* the game may draw an arrow indicating the direction */
     pok_tile_warp_latent_left,
     pok_tile_warp_latent_right,
-    pok_tile_warp_latent_cave_up, /* cave variants use different fadeout/in */
+    pok_tile_warp_latent_door_up, /* door variants prompt animation upon exit */
+    pok_tile_warp_latent_door_down,
+    pok_tile_warp_latent_door_left,
+    pok_tile_warp_latent_door_right,
+    pok_tile_warp_latent_cave_up, /* cave variants use different fadeout/in (needs to be last latent series) */
     pok_tile_warp_latent_cave_down,
     pok_tile_warp_latent_cave_left,
     pok_tile_warp_latent_cave_right,

@@ -31,6 +31,7 @@ enum pok_game_context
     pok_game_warp_fadeout_context, /* the game is handling a warp fadeout */
     pok_game_warp_fadeout_cave_context, /* the game is handling a cave exit warp */
     pok_game_warp_latent_fadeout_context, /* the game is handling a latent warp fadeout */
+    pok_game_warp_latent_fadeout_door_context, /* the game is handling a latent door exit warp */
     pok_game_warp_latent_fadeout_cave_context, /* the game is handling a latent cave exit warp */
     pok_game_warp_fadein_context, /* the game is handling a warp fadein */
 

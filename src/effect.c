@@ -57,23 +57,23 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
     if (kind == pok_fadeout_black_screen) {
         /* if we go in reverse, start with fully opaque black background, otherwise
            start fully transparent */
-        effect->alpha = reverse ? MAX_ALPHA : MIN_ALPHA;
+        effect->alpha = (float) (reverse ? MAX_ALPHA : MIN_ALPHA);
     }
     else if (kind == pok_fadeout_to_center) {
         /* heights of quads: top, bottom, left, right */
         if (reverse) {
-            effect->hs[0] = effect->hs[1] = sys->wheight / 2.0;
-            effect->hs[2] = effect->hs[3] = sys->wwidth / 2.0;
+            effect->hs[0] = effect->hs[1] = sys->wheight / (float)2.0;
+            effect->hs[2] = effect->hs[3] = sys->wwidth / (float)2.0;
         }
         else {
             effect->hs[0] = 0.0;
-            effect->hs[1] = sys->wheight;
+            effect->hs[1] = (float)sys->wheight;
             effect->hs[2] = 0.0;
-            effect->hs[3] = sys->wwidth;
+            effect->hs[3] = (float)sys->wwidth;
         }
         /* distance deltas */
-        effect->d[0] = sys->wwidth / 2.0 / time; /* left and right */
-        effect->d[1] = sys->wheight / 2.0 / time; /* top and bottom */
+        effect->d[0] = (float) (sys->wwidth / 2.0 / time); /* left and right */
+        effect->d[1] = (float) (sys->wheight / 2.0 / time); /* top and bottom */
         if (reverse) {
             effect->d[0] *= -1;
             effect->d[1] *= -1;
@@ -88,7 +88,7 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
 bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks)
 {
     if (effect->_base.update) {
-        uint32_t i, times = pok_effect_elapsed(&effect->_base,ticks);
+        uint32_t times = pok_effect_elapsed(&effect->_base,ticks);
         if (effect->reverse) {
             /* apply the delay if we are going in the reverse direction; this
                will add time to the sequence */
@@ -103,7 +103,7 @@ bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t tick
                 float d = effect->alpha;
                 if (effect->reverse) {
                     /* alpha component --> 0 */
-                    d -= (2.0 / FADEOUT_EFFECT_GRANULARITY) * times;
+                    d -= ((float)2.0 / FADEOUT_EFFECT_GRANULARITY) * times;
                     /* assign and check for completion */
                     if (d <= MIN_ALPHA) {
                         effect->alpha = MIN_ALPHA;
@@ -114,7 +114,7 @@ bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t tick
                 }
                 else {
                     /* alpha component --> 0xff */
-                    d += (2.0 / FADEOUT_EFFECT_GRANULARITY) * times;
+                    d += ((float)2.0 / FADEOUT_EFFECT_GRANULARITY) * times;
                     /* assign and check for completion */
                     if (d >= MAX_ALPHA) {
                         effect->alpha = MAX_ALPHA;

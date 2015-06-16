@@ -492,7 +492,7 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
        allocated vector in 'argvOut'; the caller must free this later */
     size_t i;
     int state = 0;
-    const char* p;
+    const char* p = cmdline;
     size_t top = 0, alloc = 8;
     const char** argv = malloc(sizeof(const char*) * alloc);
     if (argv == NULL) {
@@ -788,13 +788,29 @@ static pstatus_t map_warps_warp_elem(struct pok_parser_info* info)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_left;
                                     else if (strcmp(label->buf,"WARP_LATENT_RIGHT") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_right;
+                                    else if (strcmp(label->buf,"WARP_LATENT_CAVE_UP") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_cave_up;
+                                    else if (strcmp(label->buf,"WARP_LATENT_CAVE_DOWN") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_cave_down;
+                                    else if (strcmp(label->buf,"WARP_LATENT_CAVE_LEFT") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_cave_left;
+                                    else if (strcmp(label->buf,"WARP_LATENT_CAVE_RIGHT") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_cave_right;
+                                    else if (strcmp(label->buf,"WARP_LATENT_DOOR_UP") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_door_up;
+                                    else if (strcmp(label->buf,"WARP_LATENT_DOOR_DOWN") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_door_down;
+                                    else if (strcmp(label->buf,"WARP_LATENT_DOOR_LEFT") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_door_left;
+                                    else if (strcmp(label->buf,"WARP_LATENT_DOOR_RIGHT") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_door_right;
                                     else if (strcmp(label->buf,"WARP_SPIN") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_spin;
                                     else if (strcmp(label->buf,"WARP_FALL") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_fall;
                                     else {
-                                        pok_exception_new_ex2(info->lineno,"parse map warps: expected one of WARP_INSTANT, WARP_LATENT_UP, \
-WARP_LATENT_DOWN, WARP_LATENT_LEFT, WARP_LATENT_RIGHT, WARP_SPIN or WARP_FALL for warp kind");
+                                        pok_exception_new_ex2(info->lineno,"parse map warps: expected one of WARP_INSTANT, WARP_LATENT_*_UP, \
+WARP_LATENT_*_DOWN, WARP_LATENT_*_LEFT, WARP_LATENT_*_RIGHT, WARP_SPIN or WARP_FALL for warp kind");
                                         return FAIL_WITH_ERROR;
                                     }
                                     ++info->bytes_c[0];

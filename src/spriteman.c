@@ -79,7 +79,7 @@ static bool_t pok_sprite_manager_from_data(struct pok_sprite_manager* sman,const
 {
     uint16_t i;
     size_t length;
-    struct pok_image* img;
+    struct pok_image* img = NULL;
     length = sman->sys->dimension * sman->sys->dimension * sizeof(union alpha_pixel);
     for (i = 0;i < sman->imagecnt;++i) {
         uint16_t r = i % 12;
@@ -103,7 +103,6 @@ bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t flags,ui
 {
     /* read sprite data from memory; since sprite images must match the 'sman->sys->dimension' value, the data is
        assumed to be of the correct length for the given value of 'flags' and 'spriteCnt' */
-    uint16_t i, r;
     if (sman->spritesets != NULL) {
         pok_exception_new_ex(pok_ex_spriteman,pok_ex_spriteman_already);
         return FALSE;

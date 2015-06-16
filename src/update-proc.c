@@ -289,7 +289,8 @@ void fadeout_update(struct pok_game_info* info)
                 TRUE );
             info->gameContext = pok_game_warp_fadein_context;
         }
-        else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context) {
+        else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
+                || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
             /* we just finished a fadeout for a latent warp; now finish the transition */
             if (info->mapTrans != NULL) {
                 /* update the map and player contexts; if the warp information is incorrect then silently fail */
@@ -304,21 +305,26 @@ void fadeout_update(struct pok_game_info* info)
                         /* save exit direction and update player */
                         enum pok_direction direction = (info->mapTrans->warpKind - pok_tile_warp_latent_up) % 4;
                         pok_graphics_subsystem_lock(info->sys);
-                        pok_game_modify_enter(info->mapRC);
-                        pok_map_render_context_set_update(
-                            info->mapRC,
-                            direction,
-                            info->sys->dimension );
-                        pok_game_modify_exit(info->mapRC);
                         pok_game_modify_enter(info->playerContext);
                         pok_character_context_set_player(info->playerContext,info->mapRC);
-                        info->playerContext->slowDown = FALSE;
-                        pok_character_context_set_update(
-                            info->playerContext,
-                            direction,
-                            pok_character_normal_effect,
-                            info->sys->dimension);
                         pok_game_modify_exit(info->playerContext);
+                        if (info->gameContext != pok_game_warp_latent_fadeout_context) {
+                            /* we do an animation if exiting a building or cave */
+                            pok_game_modify_enter(info->playerContext);
+                            info->playerContext->slowDown = FALSE;
+                            pok_character_context_set_update(
+                                info->playerContext,
+                                direction,
+                                pok_character_normal_effect,
+                                info->sys->dimension);
+                            pok_game_modify_exit(info->playerContext);
+                            pok_game_modify_enter(info->mapRC);
+                            pok_map_render_context_set_update(
+                                info->mapRC,
+                                direction,
+                                info->sys->dimension );
+                            pok_game_modify_exit(info->mapRC);
+                        }
                         pok_graphics_subsystem_unlock(info->sys);
                         /* pause the map scrolling until the fadein effect completes */
                         globals.pausePlayerMap = TRUE;
@@ -374,26 +380,28 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
     /* check to see if the current location has a latent warp; a latent warp is delayed; the
        player must first walk onto the tile, then walk in the specified direction */
     struct pok_tile_data* tdata;
+    enum pok_tile_warp_kind kind;
     tdata = &info->mapRC->chunk->data[info->mapRC->relpos.row][info->mapRC->relpos.column].data;
-    if ((((tdata->warpKind == pok_tile_warp_latent_up || tdata->warpKind == pok_tile_warp_latent_cave_up)
+    kind = tdata->warpKind;
+    if ((((kind == pok_tile_warp_latent_up || kind == pok_tile_warp_latent_cave_up || kind == pok_tile_warp_latent_door_up)
             && direction == pok_direction_up)
-        || ((tdata->warpKind == pok_tile_warp_latent_down || tdata->warpKind == pok_tile_warp_latent_cave_down)
+        || ((kind == pok_tile_warp_latent_down || kind == pok_tile_warp_latent_cave_down || kind == pok_tile_warp_latent_door_down)
             && direction == pok_direction_down)
-        || ((tdata->warpKind == pok_tile_warp_latent_left || tdata->warpKind == pok_tile_warp_latent_cave_left)
+        || ((kind == pok_tile_warp_latent_left || kind == pok_tile_warp_latent_cave_left || kind == pok_tile_warp_latent_door_left)
             && direction == pok_direction_left)
-        || ((tdata->warpKind == pok_tile_warp_latent_right || tdata->warpKind == pok_tile_warp_latent_cave_right)
+        || ((kind == pok_tile_warp_latent_right || kind == pok_tile_warp_latent_cave_right || kind == pok_tile_warp_latent_door_right)
             && direction == pok_direction_right)) && direction == info->player->direction) {
-        struct pok_map* map;
         /* set warp effect (latent warps always fadeout) */
         pok_fadeout_effect_set_update(
             &info->fadeout,
             info->sys,
             WARP_FADEOUT_TIME,
-            tdata->warpKind >= pok_tile_warp_latent_cave_up ? pok_fadeout_to_center : pok_fadeout_black_screen,
+            kind >= pok_tile_warp_latent_cave_up ? pok_fadeout_to_center : pok_fadeout_black_screen,
             FALSE );
         /* set game context; test to see if this is a cave warp or not */
-        info->gameContext = tdata->warpKind >= pok_tile_warp_latent_cave_up
-            ? pok_game_warp_latent_fadeout_cave_context : pok_game_warp_latent_fadeout_context;
+        info->gameContext = kind >= pok_tile_warp_latent_cave_up
+            ? pok_game_warp_latent_fadeout_cave_context : (kind >= pok_tile_warp_latent_door_up 
+                ? pok_game_warp_latent_fadeout_door_context : pok_game_warp_latent_fadeout_context);
         /* cache a reference to the tile data; it will be used to change the map render context
            after the transition has finished */
         info->mapTrans = tdata;
