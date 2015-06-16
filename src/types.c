@@ -8,12 +8,16 @@ static char dummyBuffer[16];
 struct pok_string* pok_string_new()
 {
     struct pok_string* str = malloc(sizeof(struct pok_string));
+    if (str == NULL)
+        return NULL;
     pok_string_init(str);
     return str;
 }
 struct pok_string* pok_string_new_ex(size_t initialCapacity)
 {
     struct pok_string* str = malloc(sizeof(struct pok_string));
+    if (str == NULL)
+        return NULL;
     pok_string_init_ex(str,initialCapacity);
     return str;
 }

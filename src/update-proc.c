@@ -58,6 +58,7 @@ int update_proc(struct pok_game_info* info)
 {
     int r = 0;
     uint32_t tileAniTicks = 0;
+    uint64_t gameTime = 0;
 
     /* setup parameters */
     set_defaults(info);
@@ -94,6 +95,7 @@ int update_proc(struct pok_game_info* info)
             /* perform timeout and update tile animation ticks */
             pok_timeout(&info->updateTimeout);
             tileAniTicks += info->updateTimeout.elapsed;
+            gameTime += info->updateTimeout.elapsed;
         }
         else
             info->updateTimeout.elapsed = 0;
@@ -210,9 +212,14 @@ void update_key_input(struct pok_game_info* info)
                                 /* the player ran into something; animate slower for effect */
                                 info->playerContext->slowDown = TRUE;
 
-                            /* update player context for animation (direction does not change) */
+                            /* update player context for animation (direction does not change); if
+                               slowDown is true, then the player does not move (so don't set parameter) */
                             pok_game_modify_enter(info->playerContext);
-                            pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,info->sys->dimension);
+                            pok_character_context_set_update(
+                                info->playerContext,
+                                direction,
+                                pok_character_normal_effect,
+                                info->playerContext->slowDown ? 0 : info->sys->dimension );
                             pok_game_modify_exit(info->playerContext);
                         }
                         pok_game_modify_exit(info->mapRC);
@@ -254,7 +261,9 @@ void fadeout_update(struct pok_game_info* info)
         else if (info->gameContext == pok_game_warp_fadeout_context || info->gameContext == pok_game_warp_fadeout_cave_context) {
             /* we just finished a fadeout for a warp; now finish the transition */
             if (info->mapTrans != NULL) {
+                pok_game_lock(info->world);
                 map = pok_world_get_map(info->world,info->mapTrans->warpMap);
+                pok_game_unlock(info->world);
                 /* if we can't find the map (or subsequently the chunk/position) then silently fail; the
                    player will find that they arrived where they left and be disappointed */
                 if (map != NULL) {
@@ -284,7 +293,9 @@ void fadeout_update(struct pok_game_info* info)
             /* we just finished a fadeout for a latent warp; now finish the transition */
             if (info->mapTrans != NULL) {
                 /* update the map and player contexts; if the warp information is incorrect then silently fail */
+                pok_game_lock(info->world);
                 map = pok_world_get_map(info->world,info->mapTrans->warpMap);
+                pok_game_unlock(info->world);
                 if (map != NULL) {
                     pok_game_modify_enter(info->mapRC);
                     result = pok_map_render_context_set_position(info->mapRC,map,&info->mapTrans->warpChunk,&info->mapTrans->warpLocation);
@@ -301,6 +312,7 @@ void fadeout_update(struct pok_game_info* info)
                         pok_game_modify_exit(info->mapRC);
                         pok_game_modify_enter(info->playerContext);
                         pok_character_context_set_player(info->playerContext,info->mapRC);
+                        info->playerContext->slowDown = FALSE;
                         pok_character_context_set_update(
                             info->playerContext,
                             direction,
@@ -334,8 +346,27 @@ void fadeout_update(struct pok_game_info* info)
 
 bool_t check_collisions(struct pok_game_info* info)
 {
+    size_t iter;
+    bool_t status = TRUE;
+    /* check against all player contexts in the character render context; this
+       procedure assumes that the map render context is currently locked */
+    pok_game_lock(info->charRC);
+    for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
+        struct pok_character_context* ctx;
+        ctx = info->charRC->chars.da_data[iter];
+        if (ctx->character->mapNo == info->mapRC->map->mapNo
+            && ctx->character->chunkPos.X == info->mapRC->chunkpos.X
+            && ctx->character->chunkPos.Y == info->mapRC->chunkpos.Y
+            && ctx->character->tilePos.column == info->mapRC->relpos.column
+            && ctx->character->tilePos.row == info->mapRC->relpos.row)
+        {
+            status = FALSE;
+            break;
+        }
+    }
+    pok_game_unlock(info->charRC);
 
-    return TRUE;
+    return status;
 }
 
 bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction)

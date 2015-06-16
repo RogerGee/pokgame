@@ -5,6 +5,14 @@
 
 #define SEMAPHORE_MAX 10
 
+#ifdef POKGAME_DEBUG
+#define CHECK_SUCCESS(call) \
+    if (call != 0) \
+        pok_error(pok_error_fatal,"fail '"#call"'")
+#else
+#define CHECK_SUCCESS(call) call
+#endif
+
 struct gamelock
 {
     void* object;          /* we need to provide synchronization for this object */
@@ -33,46 +41,46 @@ void gamelock_free(struct gamelock* lock)
 }
 inline void gamelock_aquire(struct gamelock* lock)
 {
-    sem_wait(&lock->modify);
+    CHECK_SUCCESS( sem_wait(&lock->modify) );
 }
 void gamelock_release(struct gamelock* lock)
 {
-    sem_post(&lock->modify);
+    CHECK_SUCCESS( sem_post(&lock->modify) );
 }
 void gamelock_up(struct gamelock* lock)
 {
     /* make the following region executes atomically */
-    pthread_mutex_lock(&lock->atom);
+    CHECK_SUCCESS( pthread_mutex_lock(&lock->atom) );
     {
         int value;
-        sem_getvalue(&lock->readOnly,&value);
+        CHECK_SUCCESS( sem_getvalue(&lock->readOnly,&value) );
         /* if no one has entered the readOnly context, then seal off the modify context
            before entering the readOnly context */
         if (value == SEMAPHORE_MAX) {
-            sem_wait(&lock->modify);
-            sem_wait(&lock->readOnly);
-            pthread_mutex_unlock(&lock->atom);
+            CHECK_SUCCESS( sem_wait(&lock->modify) );
+            CHECK_SUCCESS( sem_wait(&lock->readOnly) );
+            CHECK_SUCCESS( pthread_mutex_unlock(&lock->atom) );
             return;
         }
     }
-    pthread_mutex_unlock(&lock->atom);
+    CHECK_SUCCESS( pthread_mutex_unlock(&lock->atom) );
     /* default: enter read only context (this could but probably won't block) */
-    sem_wait(&lock->readOnly);
+    CHECK_SUCCESS( sem_wait(&lock->readOnly) );
 }
 void gamelock_down(struct gamelock* lock)
 {
     /* make sure the following region executes atomically */
-    pthread_mutex_lock(&lock->atom);
+    CHECK_SUCCESS( pthread_mutex_lock(&lock->atom) );
     {
         int value;
-        sem_post(&lock->readOnly);
-        sem_getvalue(&lock->readOnly,&value);
+        CHECK_SUCCESS( sem_post(&lock->readOnly) );
+        CHECK_SUCCESS( sem_getvalue(&lock->readOnly,&value) );
         /* if we are the last to leave the readOnly context,
            then yield access to the modify context */
         if (value == SEMAPHORE_MAX)
-            sem_post(&lock->modify);
+            CHECK_SUCCESS( sem_post(&lock->modify) );
     }
-    pthread_mutex_unlock(&lock->atom);
+    CHECK_SUCCESS( pthread_mutex_unlock(&lock->atom) );
 }
 
 /* implement 'pok_timeout' from 'pokgame.h' */

@@ -1,7 +1,7 @@
 /* spriteman.h - pokgame */
 #ifndef POKGAME_SPRITEMAN_H
 #define POKGAME_SPRITEMAN_H
-#include "net.h"
+#include "netobj.h"
 #include "image.h"
 #include "graphics.h"
 
@@ -22,15 +22,17 @@ enum pok_sprite_frame_direction
     sprite_down_ani1,
     sprite_down_ani2,
     sprite_left,
-    sprite_left_ani,
+    sprite_left_ani1,
+    sprite_left_ani2,
     sprite_right,
-    sprite_right_ani
+    sprite_right_ani1,
+    sprite_right_ani2
 };
 
 #define pok_to_frame_direction(dir) (dir == pok_direction_up ? sprite_up : (dir == pok_direction_down ? sprite_down \
             : (dir == pok_direction_left ? sprite_left : sprite_right)))
 #define pok_from_frame_direction(frame) (frame < 3 ? pok_direction_up : (frame < 6 ? pok_direction_down \
-            : (frame < 8 ? pok_direction_left : pok_direction_right)))
+            : (frame < 9 ? pok_direction_left : pok_direction_right)))
 
 /* the sprite manager is responsible for representing character sprite images objects; it
    provides a way to associate images into sprite sets */
@@ -38,6 +40,7 @@ struct pok_sprite_manager
 {
     const struct pok_graphics_subsystem* sys;
 
+    uint16_t flags; /* determines how the sprite frames are configured */
     uint16_t spritecnt; /* number of logical sprites */
     uint16_t imagecnt; /* number of images allocated by sprite manager (spritecnt * 8) */
 
@@ -51,6 +54,11 @@ struct pok_sprite_manager
        that make up a single character set */
     struct pok_image*** spriteassoc;
 
+    /* special sprite sets */
+    uint16_t flySprite;
+    uint16_t surfSprite;
+    uint16_t lavaSprite;
+
     /* reserved for implementation */
     struct pok_image* _sheet;
 };
@@ -60,8 +68,8 @@ void pok_sprite_manager_init(struct pok_sprite_manager* sman,const struct pok_gr
 void pok_sprite_manager_delete(struct pok_sprite_manager* sman);
 bool_t pok_sprite_manager_save(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
 bool_t pok_sprite_manager_open(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
-bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t imgc,const byte_t* data,bool_t byRef);
-bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* file);
+bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t flags,uint16_t spriteCnt,const byte_t* data,bool_t byRef);
+bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* file,uint16_t flags);
 enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 

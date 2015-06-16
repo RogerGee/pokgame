@@ -3,8 +3,15 @@
 #ifndef POKGAME_PROTOCOL_H
 #define POKGAME_PROTOCOL_H
 
-/* protocol flags/enumerators for network objects: do not change
+/* enumerators for network objects properties: do not change
    the order of elements in these enumerations */
+
+enum pok_sprite_manager_flags
+{ /* sprite manager flags determine how animation frames are configured */
+    pok_sprite_manager_no_alt = 0x00,          /* the sprite manager has no alternate animation frames */
+    pok_sprite_manager_updown_alt = 0x01,    /* the sprite manager has an alternate up and down animation frame */
+    pok_sprite_manager_leftright_alt = 0x02, /* the sprite manager has an alternate left and right animation frame */
+};
 
 enum pok_tile_warp_kind
 { /* enumerates the different kinds of warps performed by a tile */
@@ -25,16 +32,25 @@ enum pok_tile_warp_kind
     pok_tile_warp_BOUND
 };
 
-enum pok_map_chunk_flags
-{
-    pok_map_chunk_flag_none = 0x00,
-    pok_map_chunk_flag_byref = 0x01
-};
-
 enum pok_map_flags
 {
     pok_map_flag_none = 0x00,
     pok_map_flag_dynamic = 0x01 /* make requests to obtain more chunks */
+};
+
+/* protocol method enumerators: represent the set of operations on network objects that can
+   be performed during a 'netupdate'; each method expects zero or more arguments */
+
+enum pok_map_chunk_methods
+{
+    pok_map_chunk_update_tile,   /* a tile was updated at a specified location */
+    pok_map_chunk_update_region  /* a specified region was updated with a constant tile id */
+};
+
+enum pok_map_methods
+{
+    pok_map_method_add_chunk,   /* add a specified map chunk to the map with specified chunk position */
+    pok_map_method_remove_chunk /* remove specified chunk from map */
 };
 
 /* protocol limits */

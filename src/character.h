@@ -1,7 +1,7 @@
 /* character.h - pokgame */
 #ifndef POKGAME_CHARACTER_H
 #define POKGAME_CHARACTER_H
-#include "net.h"
+#include "netobj.h"
 
 /* pok_character: */
 struct pok_character

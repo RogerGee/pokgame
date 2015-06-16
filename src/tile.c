@@ -74,22 +74,24 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
         [2 bytes] warp column
         [2 bytes] warp row */
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
+    switch (info->fieldProg) {
+    case 0:
         pok_data_stream_read_uint16(dsrc,&tile->data.tileid);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 1) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 1:
         pok_data_stream_read_byte(dsrc,&tile->data.warpKind);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && tile->data.warpKind>=pok_tile_warp_BOUND) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (tile->data.warpKind >= pok_tile_warp_BOUND) {
             pok_exception_new_ex(pok_ex_tile,pok_ex_tile_bad_warp_kind);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 2) {
+    case 2:
         if (tile->data.warpKind != pok_tile_warp_none) {
             pok_data_stream_read_uint32(dsrc,&tile->data.warpMap);
-            result = pok_netobj_readinfo_process(info);
+            if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+                break;
         }
         else {
             /* these values will be ignored since tile->warpKind==none */
@@ -101,22 +103,22 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
             info->fieldProg = 5; /* skip other fields */
             return pok_net_completed;
         }
-    }
-    if (info->fieldProg == 3) {
+    case 3:
         pok_data_stream_read_int32(dsrc,&tile->data.warpChunk.X);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 4) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 4:
         pok_data_stream_read_int32(dsrc,&tile->data.warpChunk.Y);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 5) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 5:
         pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.column);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 6) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 6:
         pok_data_stream_read_uint16(dsrc,&tile->data.warpLocation.row);
-        result = pok_netobj_readinfo_process(info);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
     }
     return result;
 }

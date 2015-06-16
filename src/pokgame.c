@@ -15,10 +15,12 @@ int main(int argc,const char* argv[])
 
     /* load all modules */
     pok_exception_load_module();
+    pok_network_object_load_module();
     pok_game_load_module();
 
     /* unload all modules */
     pok_game_unload_module();
+    pok_network_object_unload_module();
     pok_exception_unload_module();
 
     return 0;
@@ -143,7 +145,7 @@ void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds
 }
 
 /* pok_game_info */
-struct pok_game_info* pok_game_new()
+struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys)
 {
     struct pok_game_info* game;
     game = malloc(sizeof(struct pok_game_info));
@@ -154,10 +156,8 @@ struct pok_game_info* pok_game_new()
     pok_timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
-    /* initialize graphics subsystem */
-    game->sys = pok_graphics_subsystem_new();
-    if (game->sys == NULL)
-        pok_error_fromstack(pok_error_fatal);
+    /* assign graphics subsystem */
+    game->sys = sys;
     /* initialize effects */
     pok_fadeout_effect_init(&game->fadeout);
     game->fadeout.keep = TRUE;
@@ -173,7 +173,6 @@ struct pok_game_info* pok_game_new()
     if (game->world == NULL)
         pok_error_fromstack(pok_error_fatal);
     game->mapTrans = NULL;
-    game->exitDirection = pok_direction_none;
     game->mapRC = pok_map_render_context_new(game->tman);
     if (game->mapRC == NULL)
         pok_error_fromstack(pok_error_fatal);
@@ -197,7 +196,6 @@ void pok_game_free(struct pok_game_info* game)
     pok_map_render_context_free(game->mapRC);
     pok_sprite_manager_free(game->sman);
     pok_tile_manager_free(game->tman);
-    pok_graphics_subsystem_free(game->sys);
     free(game);
 }
 void pok_game_register(struct pok_game_info* game)

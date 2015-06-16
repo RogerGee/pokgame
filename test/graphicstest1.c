@@ -53,7 +53,7 @@ int graphics_main_test1()
     /* load up tiles for this test */
     tman = pok_tile_manager_new(sys);
     contexts[0] = tman;
-    tileimg = get_tile_image(1);
+    tileimg = get_tile_image(0);
     if (tileimg == NULL) {
         fprintf(stderr,"%s: couldn't load test tile image\n",POKGAME_NAME);
         return 1;

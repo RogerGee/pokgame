@@ -49,7 +49,7 @@ static void compile(const char* outputFile,int option);
 static void add(const char* sourceFile,size_t columns,size_t rows);
 static void rm(const char* argv[],int number);
 static void pass(const char* argv[],int number);
-static void mv(const char* source,const char* destination);
+static void mv(const char* source[],const char* destination[],int number);
 
 int main(int argc,const char* argv[])
 {
@@ -119,12 +119,28 @@ int main(int argc,const char* argv[])
         pass(argv+2,argc-2);
     }
     else if (strcmp(argv[1],"mv") == 0) {
+        int i, number;
+        const char** source, **dest;
         if (argc < 4) {
             fprintf(stderr,"%s: mv src-index dst-index\n",argv[0]);
             return 1;
         }
+        number = argc - 2;
+        if (number % 2 != 0) {
+            fprintf(stderr,"%s: mv: expected an even number of arguments\n",argv[0]);
+            return 1;
+        }
+        number /= 2;
         read_config();
-        mv(argv[2],argv[3]);
+        source = malloc(sizeof(const char*) * number);
+        dest = malloc(sizeof(const char*) * number);
+        for (i = 0;i < number;++i) {
+            source[i] = argv[2+i*2];
+            dest[i] = argv[3+i*2];
+        }
+        mv(source,dest,number);
+        free(source);
+        free(dest);
     }
     else {
         fprintf(stderr,"%s: the command '%s' was not recognized\n",argv[0],argv[1]);
@@ -557,74 +573,124 @@ void pass(const char* argv[],int number)
     dynamic_array_free_ex(arry,free);
 }
 
-static void mv_recursive(const char* src,const char* dst)
-{ /* recursively insert 'src' to 'dst' */
-    static struct stat st;
-    if (stat(dst,&st) == 0) {
-        /* destination exists; move the destination to the next available space
-           by renaming it recursively */
-        int a;
-        char name[16];
-        a = from_tile_name(dst) + 1;
-        if (isalpha(dst[0]))
-            snprintf(name,sizeof(name),"%c%d",dst[0],a);
-        else
-            snprintf(name,sizeof(name),"%d",a);
-        mv_recursive(dst,name);
-        /* fall through to rename 'src' to 'dst' */
-    }
-    else if (errno != ENOENT) {
-        fprintf(stderr,"%s: could not stat file '%s'\n",programName,dst);
+/* static void mv_recursive(const char* src,const char* dst) */
+/* { /\* recursively insert 'src' to 'dst' *\/ */
+/*     static struct stat st; */
+/*     if (stat(dst,&st) == 0) { */
+/*         /\* destination exists; move the destination to the next available space */
+/*            by renaming it recursively *\/ */
+/*         int a; */
+/*         char name[16]; */
+/*         a = from_tile_name(dst) + 1; */
+/*         if (isalpha(dst[0])) */
+/*             snprintf(name,sizeof(name),"%c%d",dst[0],a); */
+/*         else */
+/*             snprintf(name,sizeof(name),"%d",a); */
+/*         mv_recursive(dst,name); */
+/*         /\* fall through to rename 'src' to 'dst' *\/ */
+/*     } */
+/*     else if (errno != ENOENT) { */
+/*         fprintf(stderr,"%s: could not stat file '%s'\n",programName,dst); */
+/*         exit(EXIT_FAILURE); */
+/*     } */
+/*     /\* else: file doesn't exist; control will fall through to move the file *\/ */
+/*     if (rename(src,dst) == -1) */
+/*         fprintf(stderr,"%s: could not rename '%s' to '%s': %s\n",programName,src,dst,strerror(errno)); */
+/*     printf("%s -> %s\n",src,dst); */
+/* } */
+static inline void rename_ex(const char* oldPath,const char* newPath)
+{
+    if (rename(oldPath,newPath) == -1) {
+        fprintf(stderr,"%s: exception: failed to rename files: %s\n",programName,strerror(errno));
         exit(EXIT_FAILURE);
     }
-    /* else: file doesn't exist; control will fall through to move the file */
-    if (rename(src,dst) == -1)
-        fprintf(stderr,"%s: couldnot rename '%s' to '%s': %s\n",programName,src,dst,strerror(errno));
-    printf("%s -> %s\n",src,dst);
+    printf("%s --> %s\n",oldPath,newPath);
 }
-void mv(const char* source,const char* destination)
+void mv(const char** source,const char** destination,int number)
 {
+    int i, j;
     int top;
-    int src, dst;
-    const char* srcName;
-    const char* dstName;
     struct dynamic_array* arry;
+    const char** newlist;
+    /* get tile file list and copy it into a new list */
     arry = get_tile_files(&top);
-    src = atoi(source)-1;
-    dst = atoi(destination)-1;
+    newlist = malloc(sizeof(const char*) * arry->da_top);
+    for (i = 0;i < arry->da_top;++i)
+        newlist[i] = arry->da_data[i];
     if (chdir(TILEDIR) != 0) {
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
     }
-    if (src<0 || dst<0 || src>=arry->da_top || dst>=arry->da_top) {
-        fprintf(stderr,"%s: bad src./dest. positions\n",programName);
-        exit(EXIT_FAILURE);
+    /* move elements around in the new list based on the arguments */
+    for (i = 0;i < number;++i) {
+        int src, dst;
+        const char* srcName;
+        const char* dstName;
+        src = atoi(source[i])-1;
+        dst = atoi(destination[i])-1;
+        if (dst < 0 || dst >= arry->da_top) {
+            fprintf(stderr,"%s: bad dest position %d\n",programName,dst);
+            exit(EXIT_FAILURE);
+        }
+        if (dst < 0 || dst >= arry->da_top) {
+            fprintf(stderr,"%s: bad src position %d\n",programName,src);
+            exit(EXIT_FAILURE);
+        }
+        if (src == dst)
+            continue;
+        srcName = arry->da_data[src];
+        dstName = arry->da_data[dst];
+        if (isalpha(srcName[0]) && !isalpha(dstName[0])) {
+            fprintf(stderr,"%s: cannot move passable tile to impassable section\n",programName);
+            exit(EXIT_FAILURE);
+        }
+        else if (!isalpha(srcName[0]) && isalpha(dstName[0])) {
+            fprintf(stderr,"%s: cannot move impassable tile to passable section\n",programName);
+            exit(EXIT_FAILURE);
+        }
+        /* find 'src' and 'dst' in 'newlist' */
+        for (j = 0;j < arry->da_top;++j) {
+            if (strcmp(srcName,newlist[j]) == 0)
+                src = j;
+            else if (strcmp(dstName,newlist[j]) == 0)
+                dst = j;
+        }
+        /* insert src into dst */
+        if (src > dst)
+            for (j = src-1;j >= dst;--j)
+                newlist[j+1] = newlist[j];
+        else /* dst > src */ {
+            --dst; /* always insert before element */
+            for (j = src+1;j <= dst;++j)
+                newlist[j-1] = newlist[j];
+        }
+        newlist[dst] = srcName;
     }
-    if (src == dst) {
-        fprintf(stderr,"%s: src. and dest. are the same\n",programName);
-        exit(EXIT_FAILURE);
+    /* rename files to maintain a sorted order using an insertion-like technique */
+    for (i = 1;i < arry->da_top;++i) {
+        for (j = i-1;j>=0 && int_fn_compar(&newlist[j],&newlist[i])>0;--j);
+        ++j;
+        if (j < i) {
+            /* rename to transition file */
+            int k = j;
+            const char* name = newlist[j];
+            rename_ex(name,"trans");
+            for (;j < i;++j) {
+                const char* tmp = newlist[j+1];
+                rename_ex(tmp,name);
+                newlist[j+1] = name;
+                name = tmp;
+            }
+            /* rename transition file to final destination */
+            rename_ex("trans",name);
+            newlist[k] = name;
+        }
     }
-    srcName = (const char*)arry->da_data[src];
-    dstName = (const char*)arry->da_data[dst];
-    if (isalpha(srcName[0]) && !isalpha(dstName[0])) {
-        fprintf(stderr,"%s: cannot move passable tile to impassable section\n",programName);
-        exit(EXIT_FAILURE);
-    }
-    else if (!isalpha(srcName[0]) && isalpha(dstName[0])) {
-        fprintf(stderr,"%s: cannot move impassable tile to passable section\n",programName);
-        exit(EXIT_FAILURE);
-    }
-    /* rename source name to 'trans' so that it can be recycled */
-    if (rename(srcName,"trans") == -1) {
-        fprintf(stderr,"%s: fail rename()\n",programName);
-        exit(EXIT_FAILURE);
-    }
-    /* recursively rename 'trans' to dest. */
-    mv_recursive("trans",dstName);
     if (chdir("..") != 0) {
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
     }
-    puts("tile moved");
+    puts("tiles moved");
     dynamic_array_free_ex(arry,free);
+    free(newlist);
 }

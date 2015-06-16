@@ -51,7 +51,7 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
    map render context to draw characters */
 struct pok_character_render_context
 {
-    /* dynamic array of 'pok_character' instances */
+    /* dynamic array of 'pok_character_context' instances */
     struct dynamic_array chars;
 
     /* character render context must have reference to map render context and sprite manager */

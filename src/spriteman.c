@@ -1,6 +1,7 @@
 /* spriteman.c - pokgame */
 #include "spriteman.h"
 #include "error.h"
+#include "protocol.h"
 #include <stdlib.h>
 
 struct pok_sprite_manager* pok_sprite_manager_new(const struct pok_graphics_subsystem* sys)
@@ -22,18 +23,27 @@ void pok_sprite_manager_free(struct pok_sprite_manager* sman)
 void pok_sprite_manager_init(struct pok_sprite_manager* sman,const struct pok_graphics_subsystem* sys)
 {
     sman->sys = sys; /* store a reference to the subsystem; we do not own this object */
+    sman->flags = pok_sprite_manager_no_alt;
     sman->spritecnt = 0;
     sman->imagecnt = 0;
     sman->spritesets = NULL;
     sman->spriteassoc = NULL;
+    sman->flySprite = 0;
+    sman->surfSprite = 0;
+    sman->lavaSprite = 0;
     sman->_sheet = NULL;
 }
 void pok_sprite_manager_delete(struct pok_sprite_manager* sman)
 {
     if (sman->imagecnt > 0 && sman->spritesets != NULL) {
         uint16_t i;
-        for (i = 0;i < sman->imagecnt;++i)
-            pok_image_free(sman->spritesets[i]);
+        struct pok_image* old = NULL;
+        for (i = 0;i < sman->imagecnt;++i) {
+            if (sman->spritesets[i] != old) {
+                pok_image_free(sman->spritesets[i]);
+                old = sman->spritesets[i];
+            }
+        }
         free(sman->spritesets);
     }
     if (sman->spriteassoc != NULL)
@@ -43,7 +53,8 @@ void pok_sprite_manager_delete(struct pok_sprite_manager* sman)
 }
 static bool_t pok_sprite_manager_assoc(struct pok_sprite_manager* sman)
 {
-    /* configure the sprite association */
+    /* configure the sprite association: there are 12 frames for sprites (some may
+       be duplicates depending on the configuration) */
     uint16_t i;
     if (sman->spriteassoc != NULL)
         free(sman->spriteassoc);
@@ -53,7 +64,7 @@ static bool_t pok_sprite_manager_assoc(struct pok_sprite_manager* sman)
         return FALSE;
     }
     for (i = 0;i < sman->spritecnt;++i)
-        sman->spriteassoc[i] = sman->spritesets + i*10;
+        sman->spriteassoc[i] = sman->spritesets + i*12;
     return TRUE;
 }
 bool_t pok_sprite_manager_save(struct pok_sprite_manager* sman,struct pok_data_source* dscr)
@@ -64,54 +75,59 @@ bool_t pok_sprite_manager_open(struct pok_sprite_manager* sman,struct pok_data_s
 {
     return FALSE;
 }
-bool_t pok_sprite_manager_from_data(struct pok_sprite_manager* sman,uint16_t imgc,const byte_t* data,bool_t byRef)
+static bool_t pok_sprite_manager_from_data(struct pok_sprite_manager* sman,const byte_t* data,bool_t byRef)
 {
     uint16_t i;
     size_t length;
+    struct pok_image* img;
     length = sman->sys->dimension * sman->sys->dimension * sizeof(union alpha_pixel);
-    for (i = 0;i < imgc;++i) {
-        struct pok_image* img;
-        if (byRef)
-            img = pok_image_new_byref_rgba(sman->sys->dimension,sman->sys->dimension,data);
-        else
-            img = pok_image_new_byval_rgba(sman->sys->dimension,sman->sys->dimension,data);
-        if (img == NULL)
-            return FALSE;
-        data += length;
+    for (i = 0;i < sman->imagecnt;++i) {
+        uint16_t r = i % 12;
+        if (((r != sprite_up_ani2 && r != sprite_down_ani2) || (sman->flags & pok_sprite_manager_updown_alt))
+            && ((r != sprite_left_ani2 && r != sprite_right_ani2) || (sman->flags & pok_sprite_manager_leftright_alt)))
+        {
+            if (byRef)
+                img = pok_image_new_byref_rgba(sman->sys->dimension,sman->sys->dimension,data);
+            else
+                img = pok_image_new_byval_rgba(sman->sys->dimension,sman->sys->dimension,data);
+            if (img == NULL)
+                return FALSE;
+            data += length;
+        }
+        /* else use the previous image */
         sman->spritesets[i] = img;
     }
     return TRUE;
 }
-bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t imgc,const byte_t* data,bool_t byRef)
+bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t flags,uint16_t spriteCnt,const byte_t* data,bool_t byRef)
 {
     /* read sprite data from memory; since sprite images must match the 'sman->sys->dimension' value, the data is
-       assumed to be of the correct length for the given value of 'imgc' */
+       assumed to be of the correct length for the given value of 'flags' and 'spriteCnt' */
     uint16_t i, r;
     if (sman->spritesets != NULL) {
         pok_exception_new_ex(pok_ex_spriteman,pok_ex_spriteman_already);
         return FALSE;
     }
     /* allocate frames */
-    r = imgc % 10;
-    sman->imagecnt = r==0 ? imgc : imgc+(10-r); /* nearest multiple of 10 >= 'imgc' */
-    sman->spritecnt = sman->imagecnt / 10;
+    sman->flags = flags;
+    sman->imagecnt = spriteCnt * 12;
+    sman->spritecnt = spriteCnt;
     sman->spritesets = malloc(sman->imagecnt * sizeof(struct pok_image*));
     if (sman->spritesets == NULL) {
         pok_exception_flag_memory_error();
         return FALSE;
     }
     /* load frames */
-    if ( !pok_sprite_manager_from_data(sman,imgc,data,byRef) )
+    if ( !pok_sprite_manager_from_data(sman,data,byRef) )
         return FALSE;
-    for (i = imgc;i < sman->imagecnt;++i) {
-        /* refer to the black tile image provided globally in case a bad number of sprite images
-           were specified */
-        sman->spritesets[i] = sman->sys->blacktile;
-    }
     return pok_sprite_manager_assoc(sman);
 }
-bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* file)
+bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* file,uint16_t flags)
 {
+    /* load the sprite images from a file; the user specifies flags to indicate how many
+       frames to expect */
+    uint16_t per;
+    uint32_t hlen;
     struct pok_image* img;
     if (sman->_sheet != NULL || sman->spritesets != NULL) {
         pok_exception_new_ex(pok_ex_spriteman,pok_ex_spriteman_already);
@@ -124,14 +140,17 @@ bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* f
         pok_image_free(img);
         return FALSE;
     }
-    /* check image dimensions; it must support at least a single sprite set */
-    if (img->width != sman->sys->dimension || img->height < (uint16_t)(sman->sys->dimension*10) || img->height % sman->sys->dimension != 0) {
+    /* check image dimensions; it must support at least a single sprite set with minimal requirements (8 frames) */
+    per = 2 * (2 + ((flags & pok_sprite_manager_updown_alt) == 0)
+            + 2 + ((flags & pok_sprite_manager_leftright_alt) == 0));
+    hlen = per * sman->sys->dimension;
+    if (img->width != sman->sys->dimension || img->height < hlen || img->height % hlen != 0) {
         pok_exception_new_ex(pok_ex_spriteman,pok_ex_spriteman_bad_image_dimension);
         pok_image_free(img);
         return FALSE;
     }
     /* tell the sprite manager to load up images by reference from the sprite sheet */
-    if ( !pok_sprite_manager_load(sman,img->height / sman->sys->dimension,img->pixels.data,TRUE) ) {
+    if ( !pok_sprite_manager_load(sman,flags,img->height / hlen,img->pixels.data,TRUE) ) {
         pok_image_free(img);
         return FALSE;
     }
@@ -142,43 +161,74 @@ enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sm
     struct pok_netobj_readinfo* info)
 {
     /* read sprite info substructure from data source:
-        [2 bytes] number of sprite sets (there are 10 sprites per set)
-        [n bytes] pok image containing all sprites; the image's dimensions must be 10*dim by dim*number-of-sets */
+        [2 bytes] flags specifying sprite frame configuration
+        [2 bytes] number of sprite sets (there are 12 sprites per set (some may be redundant depending on flags))
+        [n bytes] pok image containing all sprites; the image's dimensions must be 10*dim by dim*number-of-sets
+        [2 bytes] sprite id of fly sprite
+        [2 bytes] sprite id of surf sprite
+        [2 bytes] sprite id of lava sprite
+    */
+    size_t i;
+    uint32_t actualImageCnt;
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
+    switch (info->fieldProg) {
+    case 0:
+        pok_data_stream_read_uint16(dsrc,&sman->flags);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 1:
+        /* number of sprite sets */
         pok_data_stream_read_uint16(dsrc,&sman->spritecnt);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed) {
-            /* allocate sprite frame pointers */
-            size_t i;
-            sman->imagecnt = sman->spritecnt * 10;
-            sman->spritesets = malloc(sizeof(struct pok_image*) * sman->imagecnt);
-            if (sman->spritesets == NULL) {
-                pok_exception_flag_memory_error();
-                return pok_net_failed_internal;
-            }
-            for (i = 0;i < sman->imagecnt;++i)
-                sman->spritesets[i] = NULL;
-            /* allocate sprite sheet image */
-            sman->_sheet = pok_image_new();
-            if (sman->_sheet == NULL) {
-                pok_exception_flag_memory_error();
-                return pok_net_failed_internal;
-            }
-            /* setup info next */
-            if ( !pok_netobj_readinfo_alloc_next(info) )
-                return pok_net_failed_internal;
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        /* allocate sprite frame pointers */
+        sman->imagecnt = sman->spritecnt * 12;
+        sman->spritesets = malloc(sizeof(struct pok_image*) * sman->imagecnt);
+        if (sman->spritesets == NULL) {
+            pok_exception_flag_memory_error();
+            return pok_net_failed_internal;
         }
-    }
-    if (info->fieldProg == 1) {
-        result = pok_image_netread_ex(sman->_sheet,sman->sys->dimension * (uint32_t)10,sman->sys->dimension * (uint32_t)sman->spritecnt,
-            dsrc,info->next);
-        if (result == pok_net_completed) {
-            if ( !pok_sprite_manager_from_data(sman,10*sman->spritecnt,sman->_sheet->pixels.data,TRUE) )
-                return pok_net_failed_internal;
-            if ( !pok_sprite_manager_assoc(sman) )
-                return pok_net_failed_internal;
+        for (i = 0;i < sman->imagecnt;++i)
+            sman->spritesets[i] = NULL;
+        /* allocate sprite sheet image */
+        sman->_sheet = pok_image_new();
+        if (sman->_sheet == NULL) {
+            pok_exception_flag_memory_error();
+            return pok_net_failed_internal;
         }
+        /* setup info next */
+        if ( !pok_netobj_readinfo_alloc_next(info) )
+            return pok_net_failed_internal;
+    case 2:
+        /* pok_image: the actual number of subimages is dependent on the flags the user sent; we
+           can infer the image dimensions using them */
+        actualImageCnt = 2 * (2 + ((sman->flags & pok_sprite_manager_updown_alt) == 0)
+            + 2 + ((sman->flags & pok_sprite_manager_leftright_alt) == 0));
+        if ((result = pok_image_netread_ex(
+                    sman->_sheet,
+                    sman->sys->dimension * actualImageCnt,
+                    sman->sys->dimension * (uint32_t)sman->spritecnt,
+                    dsrc,info->next)) != pok_net_completed)
+            break;
+        if ( !pok_sprite_manager_from_data(sman,sman->_sheet->pixels.data,TRUE) )
+            return pok_net_failed_internal;
+        if ( !pok_sprite_manager_assoc(sman) )
+            return pok_net_failed_internal;
+    case 3:
+        /* fly sprite */
+        pok_data_stream_read_uint16(dsrc,&sman->flySprite);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 4:
+        /* surf sprite */
+        pok_data_stream_read_uint16(dsrc,&sman->surfSprite);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 5:
+        /* lava sprite */
+        pok_data_stream_read_uint16(dsrc,&sman->lavaSprite);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
     }
     return result;
 }

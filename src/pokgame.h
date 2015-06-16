@@ -42,6 +42,10 @@ struct pok_game_info
     /* controls the io and update procedures */
     bool_t control;
 
+    /* version information */
+    struct pok_data_source* versionDsrc;
+    struct pok_proc* versionProc;
+
     /* timeouts for main game procedures (in thousandths of a second) */
     struct pok_timeout_interval ioTimeout;
     struct pok_timeout_interval updateTimeout;
@@ -49,7 +53,7 @@ struct pok_game_info
     /* flag what the game is currently doing */
     enum pok_game_context gameContext;
 
-    /* graphics */
+    /* graphics: we do not own this object; it is managed by another context */
     struct pok_graphics_subsystem* sys;
 
     /* effects */
@@ -62,16 +66,15 @@ struct pok_game_info
     struct pok_sprite_manager* sman;
 
     /* maps */
-    struct pok_world* world;
+    struct pok_world* world; /* owned by the engine, not the version */
     struct pok_tile_data* mapTrans;
-    enum pok_direction exitDirection;
     struct pok_map_render_context* mapRC;
 
     /* character render context */
     struct pok_character_render_context* charRC;
 
     /* player */
-    struct pok_character* player;
+    struct pok_character* player; /* owned by the engine, not the version */
     struct pok_character_context* playerContext; /* cached */
 };
 
@@ -93,7 +96,7 @@ void pok_game_load_module();
 void pok_game_unload_module();
 
 /* game initialization/closing */
-struct pok_game_info* pok_game_new();
+struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys);
 void pok_game_free(struct pok_game_info* game);
 void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);

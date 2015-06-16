@@ -258,7 +258,7 @@ bool_t pok_image_open(struct pok_image* img,struct pok_data_source* dsrc)
     }
     /* read image alpha status, width and height; check image dimensions */
     if (!pok_data_stream_read_byte(dsrc,&alpha) || !pok_data_stream_read_uint32(dsrc,&img->width)
-            || !pok_data_stream_read_uint32(dsrc,&img->height))
+        || !pok_data_stream_read_uint32(dsrc,&img->height))
         return FALSE;
     img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
     imgSz = (alpha ? sizeof (union alpha_pixel) : sizeof (union pixel)) * img->width * img->height;
@@ -387,41 +387,48 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
 {
     /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_readinfo' object
        to re-call this function to attempt to read the remaining data
-        - data structure sent over network: 
-           [1 byte] hasAlpha (true if non-zero)
-           [4 bytes] width
-           [4 bytes] height
-           [n bytes] pixel-data, where n = width*height * (4 if alpha channel, else 3) */
+       - data structure sent over network: 
+       [1 byte] hasAlpha (true if non-zero)
+       [4 bytes] width
+       [4 bytes] height
+       [n bytes] pixel-data, where n = width*height * (4 if alpha channel, else 3) */
+    byte_t* recv;
+    uint8_t alpha;
+    size_t amount;
+    byte_t* pixdata;
+    size_t allocation;
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) { /* read alpha flag */
-        uint8_t alpha;
+    switch (info->fieldProg) {
+    case 0:
+        /* read alpha flag */
         if (img->pixels.data != NULL) {
             pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
             return pok_net_failed;
         }
         pok_data_stream_read_byte(dsrc,&alpha);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed)
-            img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
-    }
-    if (info->fieldProg == 1) { /* read width */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
+    case 1:
+        /* read width */
         pok_data_stream_read_uint32(dsrc,&img->width);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 2) { /* read height */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 2:
+        /* read height */
         pok_data_stream_read_uint32(dsrc,&img->height);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 3) { /* read pixel-data */
-        byte_t* pixdata;
-        size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 3:
+        /* read pixel-data */
+        allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
-            size_t amt = allocation * img->width * img->height;
-            if (amt > pok_max_image_size) {
+            amount = allocation * img->width * img->height;
+            if (amount > pok_max_image_size) {
                 pok_exception_new_ex(pok_ex_image,pok_ex_image_too_big);
                 return pok_net_failed;
             }
-            img->pixels.data = malloc(amt);
+            img->pixels.data = malloc(amount);
             if (img->pixels.data == NULL) {
                 pok_exception_flag_memory_error();
                 return pok_net_failed;
@@ -429,8 +436,6 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
         }
         pixdata = (byte_t*)img->pixels.data + allocation * (info->depth[1]*img->width + info->depth[0]);
         while (info->depth[1] < img->height) {
-            byte_t* recv;
-            size_t amount;
             recv = pok_data_source_read(dsrc,allocation,&amount);
             if (recv != NULL) {
                 if (amount < allocation) {
@@ -447,7 +452,8 @@ enum pok_network_result pok_image_netread(struct pok_image* img,struct pok_data_
                 info->depth[0] = 0;
             }
         }
-        result = pok_netobj_readinfo_process(info);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
     }
     return result;
 }
@@ -457,14 +463,19 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
     /* read the image from a data source; incomplete transfers are flagged and the user can use a 'pok_netobj_readinfo' object
        to re-call this function to attempt to read the remaining data; this varient assumes the specified width and height
        and should be used when the image dimension is implied between peers
-        - data structure sent over network: 
-           [1 byte] alpha
-           [n bytes] pixel-data, where n = widht*height * (4 if alpha channel, else 3) */
+       - data structure sent over network: 
+       [1 byte] alpha
+       [n bytes] pixel-data, where n = width*height * (4 if alpha channel, else 3) */
+
+    uint8_t alpha;
     size_t amount;
+    byte_t* pixdata;
+    size_t allocation;
     enum pok_network_result result = pok_net_already;
     /* read flags */
-    if (info->fieldProg == 0) { /* read alpha flag */
-        uint8_t alpha;
+    switch (info->fieldProg) {
+    case 0:
+        /* read alpha flag */
         if (img->pixels.data != NULL) {
             pok_exception_new_ex(pok_ex_image,pok_ex_image_already_loaded);
             return pok_net_failed;
@@ -472,13 +483,12 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
         img->width = width;
         img->height = height;
         pok_data_stream_read_byte(dsrc,&alpha);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed)
-            img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
-    }
-    if (info->fieldProg == 1) { /* read pixel data */
-        byte_t* pixdata;
-        size_t allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        img->flags = alpha ? pok_image_flag_alpha : pok_image_flag_none;
+    case 1:
+        /* read pixel data */
+        allocation = (img->flags&pok_image_flag_alpha) ? sizeof(union alpha_pixel) : sizeof(union pixel);
         if (img->pixels.data == NULL) {
             amount = allocation * width * height;
             if (amount > pok_max_image_size) {
@@ -510,7 +520,8 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
                 info->depth[0] = 0;
             }
         }
-        result = pok_netobj_readinfo_process(info);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
     }
     return result;
 }

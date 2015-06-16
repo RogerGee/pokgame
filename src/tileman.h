@@ -1,7 +1,7 @@
 /* tileman.h - pokgame */
 #ifndef POKGAME_TILEMAN_H
 #define POKGAME_TILEMAN_H
-#include "net.h"
+#include "netobj.h"
 #include "image.h"
 #include "graphics.h"
 #include "tile.h"
@@ -48,6 +48,12 @@ struct pok_tile_manager
        configuration is optional; if loaded, any tileset[id] has some animation frame at
        tileset[tileani[id]] */
     struct pok_tile_ani_data* tileani;
+
+    /* special tile lists */
+    uint16_t waterTilesCnt;
+    uint16_t* waterTiles;
+    uint16_t lavaTilesCnt;
+    uint16_t* lavaTiles;
 
     /* reserved for the implementation */
     struct pok_image* _sheet;

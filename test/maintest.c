@@ -20,18 +20,28 @@ struct pok_tile_ani_data ANIDATA[] = {
 
 /* globals */
 static struct pok_game_info* game;
+static struct pok_character* friend;
+static struct pok_character* dude1;
 
 /* functions */
 static void init();
 static void load_maps();
+static void load_characters();
 
 /* entry point */
 int main_test()
 {
-    game = pok_game_new();
+    struct pok_graphics_subsystem* sys;
+    sys = pok_graphics_subsystem_new();
+    if (sys == NULL)
+        pok_error_fromstack(pok_error_fatal);
+    game = pok_game_new(sys);
     init();
     printf("finished: %d\n",update_proc(game));
     pok_game_free(game);
+    pok_character_free(friend);
+    pok_character_free(dude1);
+    pok_graphics_subsystem_free(sys);
     return 0;
 }
 
@@ -44,13 +54,14 @@ void init()
     fputs("doing init...",stdout);
     fflush(stdout);
     pok_graphics_subsystem_default(game->sys);
-    if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts1.data") )
+    if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts0.data") )
         pok_error_fromstack(pok_error_fatal);
     game->tman->impassability = 32;
     assert( pok_tile_manager_load_ani(game->tman,42,ANIDATA,TRUE) );
-    if ( !pok_sprite_manager_fromfile(game->sman,"test/img/sss1.data") )
+    if ( !pok_sprite_manager_fromfile(game->sman,"test/img/sss0.data",pok_sprite_manager_updown_alt) )
         pok_error_fromstack(pok_error_fatal);
     load_maps();
+    load_characters();
     assert( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&START_LOCATION) );
     pok_character_context_set_player(game->playerContext,game->mapRC);
     assert( pok_graphics_subsystem_begin(game->sys) );
@@ -87,4 +98,17 @@ void load_maps()
     /* load warps for all maps */
     if ( !pok_world_fromfile_warps(game->world,"test/maps/warps") )
         pok_error_fromstack(pok_error_fatal);
+}
+
+void load_characters()
+{
+    friend = pok_character_new();
+    friend->mapNo = 1;
+    friend->tilePos = (struct pok_location){22,16};
+    friend->direction = pok_direction_right;
+    dude1 = pok_character_new();
+    dude1->mapNo = 2;
+    dude1->tilePos = (struct pok_location){4,4};
+    assert( pok_character_render_context_add(game->charRC,friend) );
+    assert( pok_character_render_context_add(game->charRC,dude1) );
 }

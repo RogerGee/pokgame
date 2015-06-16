@@ -176,73 +176,72 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
         [n bytes] game title string (null terminated)
      */
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
+    switch (info->fieldProg) {
+    case 0:
         pok_data_stream_read_uint16(dsrc,&sys->dimension);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed) {
-            if (sys->dimension<pok_min_dimension || sys->dimension>pok_max_dimension) {
-                pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_dimension);
-                return pok_net_failed_protocol;
-            }
-            if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
-                return pok_net_failed_internal; /* exception is inherited */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->dimension<pok_min_dimension || sys->dimension>pok_max_dimension) {
+            pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_dimension);
+            return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 1) {
+        if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
+            return pok_net_failed_internal; /* exception is inherited */
+    case 1:
         pok_data_stream_read_uint16(dsrc,&sys->windowSize.columns);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && (sys->windowSize.columns==0 || sys->windowSize.columns*sys->dimension > MAX_WINDOW_PIXEL_WIDTH
-                || sys->windowSize.columns > pok_max_map_chunk_dimension)) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->windowSize.columns==0 || sys->windowSize.columns*sys->dimension > MAX_WINDOW_PIXEL_WIDTH
+                || sys->windowSize.columns > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_window_size);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 2) {
+    case 2:
         pok_data_stream_read_uint16(dsrc,&sys->windowSize.rows);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && (sys->windowSize.rows==0 || sys->windowSize.rows*sys->dimension > MAX_WINDOW_PIXEL_HEIGHT
-                || sys->windowSize.rows > pok_max_map_chunk_dimension)) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->windowSize.rows==0 || sys->windowSize.rows*sys->dimension > MAX_WINDOW_PIXEL_HEIGHT
+                || sys->windowSize.rows > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_window_size);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 3) {
+    case 3:
         pok_data_stream_read_uint16(dsrc,&sys->playerLocation.column);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && sys->playerLocation.column>=sys->windowSize.columns) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->playerLocation.column >= sys->windowSize.columns) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_location);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 4) {
+    case 4:
         pok_data_stream_read_uint16(dsrc,&sys->playerLocation.row);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && sys->playerLocation.row>=sys->windowSize.rows) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->playerLocation.row >= sys->windowSize.rows) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_location);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 5) {
+    case 5:
         pok_data_stream_read_int16(dsrc,&sys->playerOffsetX);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && sys->playerOffsetX>=sys->dimension) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->playerOffsetX >= sys->dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_offset);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 6) {
+    case 6:
         pok_data_stream_read_int16(dsrc,&sys->playerOffsetY);
-        result = pok_netobj_readinfo_process(info);
-        if (result==pok_net_completed && sys->playerOffsetY>=sys->dimension) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (sys->playerOffsetY >= sys->dimension) {
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_offset);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 7) {
+    case 7:
         pok_data_stream_read_string_ex(dsrc,&sys->title);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed)
-            pok_graphics_subsystem_after_assign(sys);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        pok_graphics_subsystem_after_assign(sys);
     }
     return result;
 }

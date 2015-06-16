@@ -1,7 +1,7 @@
 /* map.h - pokgame */
 #ifndef POKGAME_MAP_H
 #define POKGAME_MAP_H
-#include "net.h"
+#include "netobj.h"
 #include "tile.h"
 #include <dstructs/treemap.h>
 
@@ -57,8 +57,10 @@ bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename);
 bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename);
 struct pok_map_chunk* pok_map_get_chunk(struct pok_map* map,const struct pok_point* pos);
 
-/* pok_world: a world is a top-level collection of maps; a world is a dynamic network object;
-   its network requests consist entirely of obtaining and updating maps */
+/* pok_world: a world is a top-level collection of maps; a world is a dynamic network object
+   that provides an interface for updating maps and map chunks; a world has no updatable
+   network fields, but instead passes any requests/updates along to its maps (and the maps
+   may pass them along to their map chunks) */
 struct pok_world
 {
     struct pok_netobj _base;

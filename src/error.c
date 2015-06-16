@@ -37,6 +37,13 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "specified file already exists", /* pok_ex_net_file_already_exist */
         "cannot open specified file: permission denied", /* pok_ex_net_file_permission_denied */
         "the file path is incorrect" /* pok_ex_net_file_bad_path */
+        "couldn't create IO device (local)", /* pok_ex_net_could_not_create_local */
+        "couldn't create IO device (named local)", /* pok_ex_net_could_not_create_named_local */
+        "couldn't create IO device (remote)", /* pok_ex_net_could_not_create_remote */
+        "cannot create process", /* pok_ex_net_could_not_create_process */
+        "cannot execute program", /* pok_ex_net_bad_program */
+        "cannot execute program: file does not exist", /* pok_ex_net_program_not_found */
+        "cannot execute program: permission denied" /* pok_ex_net_execute_denied */
     },
     (const char* []) { /* pok_ex_graphics */
         "a bad dimension was specified to the graphics subsystem", /* pok_ex_graphics_bad_dimension */
@@ -156,7 +163,9 @@ void pok_exception_load_module()
 }
 void pok_exception_flag_memory_error()
 {
-    /* memory error is a global setting; any thread may pick it up at random */
+    /* memory error is a global setting; any thread may pick it up at random; we
+       don't really care which thread picks it up since (most likely) the program
+       will decide to terminate at that point */
     memory_error_flag = TRUE;
 }
 void pok_exception_unload_module()

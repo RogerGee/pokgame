@@ -62,6 +62,12 @@ static bool_t chunk_key_create(struct pok_map* map,struct pok_map_chunk* chunk,s
 }
 
 /* pok_map_chunk */
+enum pok_map_chunk_flags
+{
+    pok_map_chunk_flag_none = 0x00,
+    pok_map_chunk_flag_byref = 0x01
+};
+
 static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,struct pok_point* position)
 {
     uint16_t i, j;
@@ -272,17 +278,20 @@ static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk
         [width*height*n bytes] tile structures
     */
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) {
-        result = pok_netobj_netread(&chunk->_base,dsrc,info);
-        if (result==pok_net_completed && !pok_netobj_readinfo_alloc_next(info))
+    switch (info->fieldProg) {
+    case 0:
+        /* superclass: pok_netobj */
+        if ((result = pok_netobj_netread(&chunk->_base,dsrc,info)) != pok_net_completed)
+            break;
+        if ( !pok_netobj_readinfo_alloc_next(info) )
             return pok_net_failed_internal;
-    }
-    if (info->fieldProg == 1) {
+    case 1:
+        /* tile structures */
         while (info->depth[0] < size->rows) {
             while (info->depth[1] < size->columns) {
                 result = pok_tile_netread(chunk->data[info->depth[0]]+info->depth[1],dsrc,info->next);
                 if (result != pok_net_completed)
-                    goto fail;
+                    return result;
                 pok_netobj_readinfo_reset(info->next);
                 ++info->depth[1];
             }
@@ -291,10 +300,9 @@ static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk
         }
         ++info->fieldProg;
     }
-fail:
     return result;
 }
-static enum pok_network_result pok_map_chunk_netupdate(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
+static enum pok_network_result pok_map_chunk_netupread(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
     const struct pok_netobj_readinfo* info)
 {
     enum pok_network_result result = pok_net_already;
@@ -676,43 +684,51 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
     */
     struct chunk_adj_info* adj = (struct chunk_adj_info*) info->aux;
     enum pok_network_result result = pok_net_already;
-    if (info->fieldProg == 0) /* super class */
-        result = pok_netobj_netread(&map->_base,dsrc,info);
-    if (info->fieldProg == 1) { /* map flags */
+    switch (info->fieldProg) {
+    case 0:
+        /* super class */
+        if ((result = pok_netobj_netread(&map->_base,dsrc,info)) != pok_net_completed)
+            break;
+    case 1:
+        /* map flags */
         pok_data_stream_read_uint16(dsrc,&map->flags);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 2) { /* map number */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 2:
+        /* map number */
         pok_data_stream_read_uint32(dsrc,&map->mapNo);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 3) { /* chunk size width */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 3:
+        /* chunk size width */
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed &&
-            (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension)) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 4) { /* chunk size height */
+    case 4:
+        /* chunk size height */
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed &&
-            (map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension)) {
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 5) { /* origin chunk position X */
+    case 5:
+        /* origin chunk position X */
         pok_data_stream_read_int32(dsrc,&map->originPos.X);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 6) { /* origin chunk position Y */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 6:
+        /* origin chunk position Y */
         pok_data_stream_read_int32(dsrc,&map->originPos.Y);
-        result = pok_netobj_readinfo_process(info);
-    }
-    if (info->fieldProg == 7) { /* number of chunks */
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+    case 7:
+        /* number of chunks */
         if (info->aux == NULL) {
             /* we need to store chunk information in a separate substructure; this will
                be automatically deallocated by 'info' upon delete */
@@ -724,40 +740,43 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
             info->aux = adj;
         }
         pok_data_stream_read_uint16(dsrc,&adj->n);
-        result = pok_netobj_readinfo_process(info);
-        if (result == pok_net_completed) {
-            if (adj->n == 0) { /* zero chunks specified */
-                pok_exception_new_ex(pok_ex_map,pok_ex_map_zero_chunks);
-                return pok_net_failed_protocol;
-            }
-            info->depth[0] = 0;
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        if (adj->n == 0) { /* zero chunks specified */
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_zero_chunks);
+            return pok_net_failed_protocol;
         }
-    }
-    if (info->fieldProg == 8) { /* adjacency list */
+        info->depth[0] = 0;
+    case 8:
+        /* adjacency list */        
         while (info->depth[0] < adj->n) {
             pok_data_stream_read_byte(dsrc,adj->a + info->depth[0]);
             if ((result = pok_netobj_readinfo_process_depth(info,0)) != pok_net_completed)
-                goto fail;
+                return result;
         }
         ++info->fieldProg;
         info->depth[0] = 0;
-    }
-    if (info->fieldProg == 9) { /* read chunks */
+    case 9:
+        /* read chunks */
         while (info->depth[0] < adj->n) {
             if (adj->c[info->depth[0]]==NULL && (adj->c[info->depth[0]] = pok_map_chunk_new(map,NULL)) == NULL)
                 return pok_net_failed_internal;
             if (!pok_netobj_readinfo_alloc_next(info))
                 return pok_net_failed_internal;
-            result = pok_map_chunk_netread(adj->c[info->depth[0]],dsrc,info->next,&map->chunkSize);
-            if (result != pok_net_completed)
-                goto fail;
+            if ((result = pok_map_chunk_netread(adj->c[info->depth[0]],dsrc,info->next,&map->chunkSize)) != pok_net_completed)
+                return result;
             ++info->depth[0];
         }
         /* all chunks successfully read here; setup map chunks according to adjacencies */
         if ( !pok_map_configure_adj(map,adj) )
             return pok_net_failed_internal;
     }
-fail:
+    return result;
+}
+static enum pok_network_result pok_map_netupread(struct pok_map* map)
+{
+    enum pok_network_result result = pok_net_already;
+
     return result;
 }
 static int pok_map_compar(struct pok_map* left,struct pok_map* right)

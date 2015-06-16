@@ -1,7 +1,7 @@
 /* graphics.h - pokgame */
 #ifndef POKGAME_GRAPHICS_H
 #define POKGAME_GRAPHICS_H
-#include "net.h"
+#include "netobj.h"
 #include "image.h"
 
 /* constants */

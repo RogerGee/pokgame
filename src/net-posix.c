@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <ctype.h>
 
 /* pok_network_address */
 
@@ -75,8 +76,11 @@ struct pok_data_source* pok_data_source_new_local_named(const char* name)
         return NULL;
     }
     dsrc->fd[0] = socket(AF_UNIX,SOCK_STREAM,0);
-    if (dsrc->fd[0] == -1)
-        pok_error(pok_error_fatal,"cannot create socket resource");
+    if (dsrc->fd[0] == -1) {
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_named_local);
+        free(dsrc);
+        return NULL;
+    }
     /* attempt connect to socket name */
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path,name,sizeof(addr.sun_path));
@@ -98,7 +102,7 @@ struct pok_data_source* pok_data_source_new_local_anon()
         return NULL;
     }
     if (pipe(dsrc->fd) == -1) {
-
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_local);
         free(dsrc);
         return NULL;
     }
@@ -114,7 +118,14 @@ struct pok_data_source* pok_data_source_new_network(struct pok_network_address* 
         return NULL;
     }
     dsrc->fd[0] = socket(AF_INET,SOCK_STREAM,0);
+    if (dsrc->fd[0] == -1) {
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_remote);
+        free(dsrc);
+        return NULL;
+    }
+
     (void)(address);
+
     dsrc->mode = DS_MODE_DEFAULT;
     pok_data_source_init(dsrc,pok_iomode_full_duplex);
     return dsrc;
@@ -463,4 +474,157 @@ inline bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc)
 inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc)
 {
     return dsrc->mode & DS_MODE_REACH_EOF;
+}
+
+/* pok_process */
+struct pok_process
+{
+    int fd_read[2];
+    int fd_write[2];
+
+    pid_t pid;
+};
+
+static bool_t pok_process_prepare_environment(const char* environment,const char*** envp)
+{
+    const char** out;
+    size_t top = 0, alloc = 8;
+    out = malloc(sizeof(const char*) * alloc);
+    if (out == NULL) {
+        pok_exception_flag_memory_error();
+        return FALSE;
+    }
+    while (*environment) {
+        const char* p = environment + 1;
+        while (*p)
+            ++p;
+        if (top+1 >= alloc) {
+            const char** newout;
+            size_t newalloc = alloc << 1;
+            newout = realloc(out,sizeof(const char*) * newalloc);
+            if (newout == NULL) {
+                pok_exception_flag_memory_error();
+                free(out);
+                return FALSE;
+            }
+            out = newout;
+            alloc = newalloc;
+        }
+        out[top++] = environment;
+        environment = p + 1;
+    }
+    out[top] = NULL;
+    return TRUE;
+}
+struct pok_process* pok_process_new(const char* cmdline,const char* environment,pok_error_callback errorCallback)
+{
+    int i;
+    struct pok_process* proc;
+    struct pok_string argbuf;
+    const char** argv = NULL;
+    const char** envp = NULL;
+
+    proc = malloc(sizeof(struct pok_process));
+    if (proc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+
+    /* create IO devices */
+    if (pipe(proc->fd_read) == -1) {
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_local);
+        free(proc);
+        return NULL;
+    }
+    if (pipe(proc->fd_write) == -1) {
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_local);
+        for (i = 0;i < 2;++i)
+            close(proc->fd_read[i]);
+        free(proc);
+    }
+
+    /* parse 'cmdline'; the call to 'pok_parse_cmdline_ex' will always
+       allocate at least one argument (it may be the terminating NULL ptr) */
+    pok_string_init(&argbuf);
+    if ( !pok_parse_cmdline_ex(cmdline,&argbuf,&argv) )
+        goto fail;
+    if (argv[0] == NULL) {
+        pok_exception_new_ex2(0,"the command-line had no arguments!");
+        goto fail;
+    }
+
+    /* set up environment specified by the user */
+    if ( !pok_process_prepare_environment(cmdline,&envp) )
+        goto fail;
+
+    /* create process */
+    proc->pid = fork();
+    if (proc->pid == -1) {
+        pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_process);
+        goto fail;
+    }
+
+    /* handle child */
+    if (proc->pid == 0) {
+        /* attempt to execute program */
+        if (execve(argv[0],(char**)argv,(char**)envp) == -1) {
+            int id = pok_ex_net, kind;
+            switch (errno) {
+            case ENOENT:
+            case ENAMETOOLONG:
+            case ENOTDIR:
+                kind = pok_ex_net_program_not_found;
+                break;
+            case ENOEXEC:
+            case EISDIR:
+                kind = pok_ex_net_bad_program;
+                break;
+            case EACCES:
+            case EPERM:
+                kind = pok_ex_net_execute_denied;
+                break;
+            default:
+                id = pok_ex_default;
+                kind = pok_ex_default_undocumented;
+                break;
+            }
+            /* call the error callback so that the caller can handle
+               the error before we terminate */
+            (*errorCallback)(id,kind);
+            _exit(1);
+        }
+        /* control no longer in this program */
+    }
+
+    /* PARENT: close necessary file descriptors and free resources */
+    close(proc->fd_read[1]);
+    proc->fd_read[1] = -1;
+    close(proc->fd_write[0]);
+    proc->fd_write[0] = -1;
+    free(argv);
+    free(envp);
+    return proc;
+
+fail:
+    for (i = 0;i < 2;++i) {
+        close(proc->fd_read[i]);
+        close(proc->fd_write[i]);
+    }
+    if (argv != NULL)
+        free(argv);
+    if (envp != NULL)
+        free(envp);
+    free(proc);
+    return NULL;
+}
+void pok_process_free(struct pok_process* proc)
+{
+}
+struct pok_data_source* pok_process_stdio(struct pok_process* proc)
+{
+    return NULL;
+}
+bool_t pok_process_has_terminated(struct pok_process* proc)
+{
+    return FALSE;
 }

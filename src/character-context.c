@@ -50,14 +50,18 @@ static void pok_character_context_render(struct pok_character_context* context,c
                     if (rows >= 0 && rows < mapRC->info[i].down) { /* same viewable row space */
                         pok_image_render(
                             sman->spriteassoc[context->character->spriteIndex][context->frame],
-                            mapRC->info[i].px + cols * sys->dimension + sys->playerOffsetX,
-                            mapRC->info[i].py + rows * sys->dimension + sys->playerOffsetY );
+                            mapRC->info[i].px + cols * sys->dimension + sys->playerOffsetX + context->offset[0] + mapRC->offset[0],
+                            mapRC->info[i].py + rows * sys->dimension + sys->playerOffsetY + context->offset[1] + mapRC->offset[1]);
                         break;
                     }
                 }
             }
         }
     }
+}
+bool_t pok_character_context_move(struct pok_character_context* context,enum pok_direction direction)
+{
+    return FALSE;
 }
 void pok_character_context_set_player(struct pok_character_context* context,struct pok_map_render_context* mapRC)
 {
@@ -128,8 +132,8 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                 /* update character frame if at the right point in the sequence; we
                    have waited one cycle if so */
                 if (context->update == context->granularity)
-                    /* increment the frame alteration counter so that up/down animation frames alternate */
-                    context->frame = context->resolveFrame + 1 + context->frameAlt++ % (context->character->direction <= 1 ? 2 : 1);
+                    /* increment the frame alteration counter so that animation frames alternate */
+                    context->frame = context->resolveFrame + 1/*ani*/ + context->frameAlt++ % 2 /*alt-ani*/;
                 /* update animation offset */
                 if (context->offset[0] < 0) {
                     context->offset[0] += inc;

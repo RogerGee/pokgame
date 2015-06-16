@@ -60,22 +60,23 @@ PARSER_H = src/parser.h $(TYPES_H)
 POK_H = src/pok.h $(PROTOCOL_H) $(TYPES_H)
 ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
-IMAGE_H = src/image.h $(NET_H)
-GRAPHICS_H = src/graphics.h $(NET_H) $(IMAGE_H)
+NETOBJ_H = src/netobj.h $(NET_H)
+IMAGE_H = src/image.h $(NETOBJ_H)
+GRAPHICS_H = src/graphics.h $(NETOBJ_H) $(IMAGE_H)
 EFFECT_H = src/effect.h $(GRAPHICS_H)
-TILE_H = src/tile.h $(NET_H)
-TILEMAN_H = src/tileman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
-SPRITEMAN_H = src/spriteman.h $(NET_H) $(IMAGE_H) $(GRAPHICS_H)
-MAP_H = src/map.h $(NET_H) $(TILE_H)
+TILE_H = src/tile.h $(NETOBJ_H)
+TILEMAN_H = src/tileman.h $(NETOBJ_H) $(IMAGE_H) $(GRAPHICS_H) $(TILE_H)
+SPRITEMAN_H = src/spriteman.h $(NETOBJ_H) $(IMAGE_H) $(GRAPHICS_H)
+MAP_H = src/map.h $(NETOBJ_H) $(TILE_H)
 MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
-CHARACTER_H = src/character.h $(NET_H)
+CHARACTER_H = src/character.h $(NETOBJ_H)
 CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
 POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H)
 
 # object code files: library objects are used both by the game engine and game versions
 OBJECTS = pokgame.o graphics.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
-OBJECTS_LIB = image.o error.o net.o types.o parser.o pok-util.o tile.o map.o character.o
+OBJECTS_LIB = image.o error.o net.o netobj.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
 ifdef MAKE_TEST
 TEST_OBJECTS = main.o maintest.o nettest.o graphicstest1.o
@@ -106,13 +107,12 @@ $(OBJDIR)/effect.o: src/effect.c src/effect-GL.c $(EFFECT_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/effect.o src/effect.c
 $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/tileman.o src/tileman.c
-$(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H)
+$(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
 $(OBJDIR)/map-context.o: src/map-context.c $(MAP_CONTEXT_H) $(PROTOCOL_H) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map-context.o src/map-context.c
 $(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(ERROR) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/character-context.o src/character-context.c
-
 $(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(PROTOCOL_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
 $(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H)
@@ -123,8 +123,10 @@ $(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/image.o src/image.c
 $(OBJDIR)/error.o: src/error.c $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/error.o src/error.c
-$(OBJDIR)/net.o: src/net.c src/net-posix.c $(NET_H) $(ERROR_H)
+$(OBJDIR)/net.o: src/net.c src/net-posix.c $(NET_H) $(ERROR_H) $(PARSER_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/net.o src/net.c
+$(OBJDIR)/netobj.o: src/netobj.c $(NETOBJ_H) $(ERROR_H)
+	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/netobj.o src/netobj.c
 $(OBJDIR)/types.o: src/types.c $(TYPES_H) $(ERROR_H)
 	$(COMPILE_SHARED) $(OUT)$(OBJDIR)/types.o src/types.c
 $(OBJDIR)/parser.o: src/parser.c $(PARSER_H) $(ERROR_H) $(PROTOCOL_H)
