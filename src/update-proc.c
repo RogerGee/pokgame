@@ -18,19 +18,25 @@
 #define MAP_SCROLL_TIME          300 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
 
+#define INITIAL_FADEIN_DELAY     250
+#define INITIAL_FADEIN_TIME     1750
+#define WARP_FADEOUT_TIME        400
+#define WARP_FADEIN_TIME         400
+#define WARP_FADEIN_DELAY        350
+
 #else
 
 #define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
 #define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
 
-#endif
-
 #define INITIAL_FADEIN_DELAY     250
 #define INITIAL_FADEIN_TIME     1750
 #define WARP_FADEOUT_TIME        200
 #define WARP_FADEIN_TIME         200
 #define WARP_FADEIN_DELAY        400
+
+#endif
 
 /* globals */
 static struct
@@ -71,15 +77,18 @@ int update_proc(struct pok_game_info* info)
 
     /* game logic loop */
     do {
-        bool_t skip;
+        bool_t skip = 0;
 
         /* key input logic */
         update_key_input(info);
 
         if (!globals.pausePlayerMap) {
-            /* perform input-sensitive update operations; if an update operation just completed, then skip the timeout */
+            /* perform input-sensitive update operations; if an update operation just completed, then skip the timeout;
+               these must be performed at the same time before a frame is updated */
+            pok_graphics_subsystem_lock(info->sys);
             skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,info->updateTimeout.elapsed)
                 +  character_update(info);
+            pok_graphics_subsystem_unlock(info->sys);
         }
 
         /* perform fadeout update */
@@ -259,7 +268,16 @@ void fadeout_update(struct pok_game_info* info)
             /* the intro context is just a fadeout that leads to the world context */
             info->gameContext = pok_game_world_context;
         else if (info->gameContext == pok_game_warp_fadeout_context || info->gameContext == pok_game_warp_fadeout_cave_context) {
-            /* we just finished a fadeout for a warp; now finish the transition */
+            /* we just finished a fadeout for a warp; now finish the transition by setting a fadein effect; set the fadein
+               effect first so that we avoid a race condition */
+            info->fadeout.delay = WARP_FADEIN_DELAY;
+            pok_fadeout_effect_set_update(
+                &info->fadeout,
+                info->sys,
+                WARP_FADEIN_TIME,
+                info->gameContext == pok_game_warp_fadeout_context ? pok_fadeout_black_screen : pok_fadeout_to_center,
+                TRUE);
+            /* complete the map warp */
             if (info->mapTrans != NULL) {
                 pok_game_lock(info->world);
                 map = pok_world_get_map(info->world,info->mapTrans->warpMap);
@@ -279,19 +297,20 @@ void fadeout_update(struct pok_game_info* info)
                 }
                 info->mapTrans = NULL;
             }
-            /* set fadein effect */
+            info->gameContext = pok_game_warp_fadein_context;
+        }
+        else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
+                || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
+            /* we just finished a fadeout for a latent warp; now finish the transition by setting a fadein effect; set
+               the fadein effect first to avoid a race condition */
             info->fadeout.delay = WARP_FADEIN_DELAY;
             pok_fadeout_effect_set_update(
                 &info->fadeout,
                 info->sys,
                 WARP_FADEIN_TIME,
-                info->gameContext == pok_game_warp_fadeout_context ? pok_fadeout_black_screen : pok_fadeout_to_center,
-                TRUE );
-            info->gameContext = pok_game_warp_fadein_context;
-        }
-        else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
-                || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
-            /* we just finished a fadeout for a latent warp; now finish the transition */
+                info->gameContext == pok_game_warp_latent_fadeout_cave_context ? pok_fadeout_to_center : pok_fadeout_black_screen,
+                TRUE);
+            /* complete the map warp */
             if (info->mapTrans != NULL) {
                 /* update the map and player contexts; if the warp information is incorrect then silently fail */
                 pok_game_lock(info->world);
@@ -332,14 +351,6 @@ void fadeout_update(struct pok_game_info* info)
                 }
                 info->mapTrans = NULL;
             }
-            /* set fadein effect */
-            info->fadeout.delay = WARP_FADEIN_DELAY;
-            pok_fadeout_effect_set_update(
-                &info->fadeout,
-                info->sys,
-                WARP_FADEIN_TIME,
-                info->gameContext == pok_game_warp_latent_fadeout_cave_context ? pok_fadeout_to_center : pok_fadeout_black_screen,
-                TRUE );
             info->gameContext = pok_game_warp_fadein_context;
         }
         else if (info->gameContext == pok_game_warp_fadein_context) {

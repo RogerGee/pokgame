@@ -26,27 +26,27 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v120_xp</PlatformToolset>
+    <PlatformToolset>v120</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v120_xp</PlatformToolset>
+    <PlatformToolset>v120</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLib|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v120_xp</PlatformToolset>
+    <PlatformToolset>v120</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseLibGDI|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v120_xp</PlatformToolset>
+    <PlatformToolset>v120</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -76,7 +76,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>POKGAME_VISUAL_STUDIO;POKGAME_WIN32;POKGAME_WIN32_GDI;_CRT_SECURE_NO_WARNINGS;POKGAME_TEST;POKGAME_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>POKGAME_VISUAL_STUDIO;POKGAME_WIN32;POKGAME_OPENGL;_CRT_SECURE_NO_WARNINGS;POKGAME_TEST;POKGAME_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -142,12 +142,14 @@
   <ItemGroup>
     <ClCompile Include="src\character-context.c" />
     <ClCompile Include="src\character.c" />
+    <ClCompile Include="src\effect.c" />
     <ClCompile Include="src\error.c" />
     <ClCompile Include="src\graphics.c" />
     <ClCompile Include="src\image.c" />
     <ClCompile Include="src\map-context.c" />
     <ClCompile Include="src\map.c" />
     <ClCompile Include="src\net.c" />
+    <ClCompile Include="src\netobj.c" />
     <ClCompile Include="src\parser.c" />
     <ClCompile Include="src\pok-util.c" />
     <ClCompile Include="src\pokgame.c" />
@@ -160,12 +162,14 @@
   <ItemGroup>
     <ClInclude Include="src\character-render.h" />
     <ClInclude Include="src\character.h" />
+    <ClInclude Include="src\effect.h" />
     <ClInclude Include="src\error.h" />
     <ClInclude Include="src\graphics.h" />
     <ClInclude Include="src\image.h" />
     <ClInclude Include="src\map-render.h" />
     <ClInclude Include="src\map.h" />
     <ClInclude Include="src\net.h" />
+    <ClInclude Include="src\netobj.h" />
     <ClInclude Include="src\parser.h" />
     <ClInclude Include="src\pok.h" />
     <ClInclude Include="src\pokgame.h" />

@@ -5,6 +5,8 @@
 /* include platform specific code for render functions */
 #ifdef POKGAME_OPENGL
 #include "effect-GL.c"
+#elif defined(POKGAME_WIN32_GDI)
+#include "effect-GDI.c"
 #endif
 
 /* constant parameters for effects; time is in milliseconds */

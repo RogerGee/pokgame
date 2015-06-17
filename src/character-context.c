@@ -155,12 +155,18 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                     if (context->offset[1] < 0)
                         context->offset[1] = 0;
                 }
+                /* decrement update counter and see if it is time to resolve to
+                   our destination frame; check slightly before end of rendering
+                   sequence to allow more time to view the frame (in case the sequence
+                   starts back up immediately) */
+                if (--context->update == 2)
+                    context->frame = context->resolveFrame;
                 /* check to see if we are finished; opt out of the last frame
                    (it's the same as the start of the next sequence) */
-                if (--context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
-                    /* done: context->update is now false; return TRUE to mean
+                if (context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
+                    /* done: we skip the last frame because it is redundant; return TRUE to mean
                        that the process completed */
-                    context->frame = context->resolveFrame;
+                    context->update = FALSE;
                     return TRUE;
                 }
                 /* remember any leftover ticks so that we can keep time */

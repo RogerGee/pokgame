@@ -74,7 +74,7 @@ void pok_timeout(struct pok_timeout_interval* interval)
     LARGE_INTEGER after;
     static LARGE_INTEGER freq = { 0, 0 };
     if (freq.QuadPart == 0)
-        QueryPerformanceFrequency(&freq.QuadPart);
+        QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&before);
     Sleep(interval->mseconds);
     QueryPerformanceCounter(&after);

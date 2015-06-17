@@ -521,8 +521,8 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
                 state = 0;
             }
             else if (*p == '\\') {
-                ++p;
                 char escape;
+                ++p;
                 switch (*p) {
                 case 'n':
                     escape = '\n';
@@ -539,7 +539,7 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
                 }
                 if (escape == 0) {
                     pok_exception_new_ex2(0,"parse cmdline: expected escape character after '\\'");
-                    free(argv);
+                    free((void*)argv);
                     return FALSE;
                 }
                 pok_string_concat_char(buffer,escape);
@@ -554,7 +554,7 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
         pok_string_concat_char(buffer,0);
     else if (state == 2) {
         pok_exception_new_ex2(0,"parse cmdline: expected terminating quote");
-        free(argv);
+        free((void*)argv);
         return FALSE;
     }
     for (i = 0,p = buffer->buf;i < buffer->len;++i) {
@@ -563,10 +563,10 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
             if (top+1 >= alloc) {
                 const char** newargv;
                 size_t newalloc = alloc << 1;
-                newargv = realloc(argv,sizeof(const char*) * newalloc);
+                newargv = realloc((void*)argv,sizeof(const char*) * newalloc);
                 if (newargv == NULL) {
                     pok_exception_flag_memory_error();
-                    free(argv);
+                    free((void*)argv);
                     return FALSE;
                 }
                 argv = newargv;
