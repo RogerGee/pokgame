@@ -223,6 +223,9 @@ void create_textures(struct pok_graphics_subsystem* sys)
 
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 {
+    int framerate = 0;
+    DWORD sleepamt = 0;
+
     /* make window and OpenGL context; bind the context to this thread */
     CreateMainWindow(sys);
     wglMakeCurrent(sys->impl->hDC, sys->impl->hOpenGLContext);
@@ -277,22 +280,32 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
         }
 
         /* clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         /* rendering */
         if (sys->impl->gameRendering) {
             uint16_t index;
-            /* go through and call each render function */
+            /* go through and call each render function; make sure to
+               obtain a lock so that we can synchronize with the update
+               thread */
             WaitForSingleObject(sys->impl->mutex,INFINITE);
             for (index = 0; index < sys->routinetop; ++index)
                 (*sys->routines[index])(sys, sys->contexts[index]);
+            /* expose the backbuffer */
+            SwapBuffers(sys->impl->hDC);
             ReleaseMutex(sys->impl->mutex);
         }
+        else
+            /* expose the blank backbuffer */
+            SwapBuffers(sys->impl->hDC);
 
-        /* expose the backbuffer */
-        SwapBuffers(sys->impl->hDC);
+        /* check for framerate change */
+        if (framerate != sys->framerate) {
+            framerate = sys->framerate;
+            sleepamt = 1000 / framerate;
+        }
 
-        Sleep(sys->framerate);
+        Sleep(sleepamt);
     }
 
     /* cleanup */

@@ -15,7 +15,7 @@
    values are required to demonstrate the correct behavior */
 
 #define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
-#define MAP_SCROLL_TIME          300 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME          280 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
 
 #define INITIAL_FADEIN_DELAY     250

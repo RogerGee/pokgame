@@ -76,7 +76,9 @@ void pok_timeout(struct pok_timeout_interval* interval)
     if (freq.QuadPart == 0)
         QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&before);
-    Sleep(interval->mseconds);
-    QueryPerformanceCounter(&after);
-    interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
+    do {
+        Sleep(1);
+        QueryPerformanceCounter(&after);
+        interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
+    } while (interval->elapsed < interval->mseconds);
 }
