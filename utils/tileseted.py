@@ -11,6 +11,7 @@ TILES_DOWN = 10
 TILE_PADDING = 2
 WINDOW_PADDING = 32
 TILEDIR = ".tiles"
+TITLEBAR = "TileSet Editor - pokgame"
 
 # widgets
 win = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -110,7 +111,7 @@ def load_widgets():
     width += WINDOW_PADDING * 2
     height += WINDOW_PADDING * 2
     win.connect("delete-event",on_delete)
-    win.set_title("TileSet Editor - pokgame")
+    win.set_title(TITLEBAR)
     win.set_border_width(WINDOW_PADDING)
     win.set_geometry_hints(win,width,height,width,height,width,height,-1,-1,-1,-1)
     win.add(box)
@@ -136,10 +137,12 @@ def on_click(widget,event):
     if t >= len(index):
         selTile = -1
         widget.queue_draw()
+        win.set_title(TITLEBAR)
         return
 
     if selTile == -1:
         selTile = t
+        win.set_title(TITLEBAR + " (tile " + str(selTile+1) + ")")
     else:
         if files[index[selTile]][0].isalpha() and not files[index[t]][0].isalpha():
             error_box("Cannot move passable tile to impassable region")
@@ -151,6 +154,7 @@ def on_click(widget,event):
             else:
                 swap(selTile,t)
         selTile = -1
+        win.set_title(TITLEBAR)
 
     widget.queue_draw()
 

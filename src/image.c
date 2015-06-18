@@ -15,6 +15,7 @@ struct pok_image* pok_image_new()
     img->width = 0;
     img->height = 0;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->pixels.dataRGB = NULL;
     img->flags = pok_image_flag_none;
     return img;
@@ -30,13 +31,34 @@ struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pi
         return NULL;
     }
     img = malloc(sizeof(struct pok_image));
+    if (img == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_none;
     img->pixels.dataRGB = malloc(n);
     for (i = 0;i < d;++i)
         img->pixels.dataRGB[i] = fillPixel;
+    return img;
+}
+struct pok_image* pok_image_new_rgb_fillref(uint32_t width,uint32_t height,union pixel fillPixel)
+{
+    struct pok_image* img;
+    img = malloc(sizeof(struct pok_image));
+    if (img == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    img->width = width;
+    img->height = height;
+    img->texref = 0;
+    img->fillref = fillPixel;
+    img->flags = pok_image_flag_none;
+    img->pixels.data = NULL;
     return img;
 }
 struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union alpha_pixel fillPixel)
@@ -50,9 +72,14 @@ struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union a
         return NULL;
     }
     img = malloc(sizeof(struct pok_image));
+    if (img == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_none;
     img->pixels.dataRGBA = malloc(n);
     for (i = 0;i < d;++i)
@@ -79,6 +106,7 @@ struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const b
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_none;
     img->pixels.dataRGB = malloc(imgSz);
     if (img->pixels.data == NULL) {
@@ -113,6 +141,7 @@ struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const 
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_alpha;
     img->pixels.dataRGBA = malloc(imgSz);
     if (img->pixels.data == NULL) {
@@ -140,6 +169,7 @@ struct pok_image* pok_image_new_byref_rgb(uint32_t width,uint32_t height,const b
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_byref;
     img->pixels.dataRGB = (union pixel*)dataRGB;
     return img;
@@ -157,6 +187,7 @@ struct pok_image* pok_image_new_byref_rgba(uint32_t width,uint32_t height,const 
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = pok_image_flag_byref | pok_image_flag_alpha;
     img->pixels.dataRGBA = (union alpha_pixel*)dataRGBA;
     return img;
@@ -179,6 +210,7 @@ struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32
     img->width = width;
     img->height = height;
     img->texref = 0;
+    img->fillref.r = img->fillref.g = img->fillref.b = 0;
     img->flags = src->flags & ~pok_image_flag_byref; /* preserve all but byref flag */
     if (img->flags & pok_image_flag_alpha) {
         img->pixels.dataRGBA = malloc(sizeof(union alpha_pixel) * width * height);
@@ -213,6 +245,15 @@ void pok_image_free(struct pok_image* img)
     if ((img->flags&pok_image_flag_byref) == 0 && img->pixels.data != NULL)
         free(img->pixels.data);
     free(img);
+}
+void pok_image_unload(struct pok_image* img)
+{
+    /* the 'unload' function discards image data but preserves the image object; this
+       is useful when the image has been loaded as a texture and no longer requires its
+       pixel data */
+    if ((img->flags & pok_image_flag_byref) == 0 && img->pixels.data != NULL)
+        free(img->pixels.data);
+    img->pixels.data = NULL;
 }
 bool_t pok_image_save(struct pok_image* img,struct pok_data_source* dsrc)
 {

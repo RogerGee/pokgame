@@ -159,7 +159,7 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                    our destination frame; check slightly before end of rendering
                    sequence to allow more time to view the frame (in case the sequence
                    starts back up immediately) */
-                if (--context->update == 2)
+                if (--context->update == context->granularity / 4)
                     context->frame = context->resolveFrame;
                 /* check to see if we are finished; opt out of the last frame
                    (it's the same as the start of the next sequence) */

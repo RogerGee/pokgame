@@ -16,6 +16,7 @@ static void* graphics_loop(struct pok_graphics_subsystem* sys);
 static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
     int32_t viewWidth,
     int32_t viewHeight);
+static void gl_create_textures(struct pok_graphics_subsystem* sys);
 
 /* globals */
 static int screen;
@@ -385,44 +386,6 @@ void close_frame(struct pok_graphics_subsystem* sys)
     XDestroyWindow(display,sys->impl->window);
 }
 
-/* OpenGL functions */
-void create_textures(struct pok_graphics_subsystem* sys)
-{   
-    int i;
-    for (i = 0;i < sys->impl->texinfoCount;++i) {
-        int j;
-        GLuint names[sys->impl->texinfo[i].count];
-        glGenTextures(sys->impl->texinfo[i].count,names);
-        for (j = 0;j < sys->impl->texinfo[i].count;++j) {
-            struct pok_image* img = sys->impl->texinfo[i].images[j];
-            /* append texture name to collection */
-            if (sys->impl->textureCount >= sys->impl->textureAlloc) {
-                size_t nalloc;
-                void* ndata;
-                nalloc = sys->impl->textureAlloc << 1;
-                ndata = realloc(sys->impl->textureNames,nalloc * sizeof(GLuint));
-                if (ndata == NULL) {
-                    pok_error(pok_error_warning,"could not allocate memory in create_textures()");
-                    return;
-                }
-                sys->impl->textureNames = ndata;
-                sys->impl->textureAlloc = nalloc;
-            }
-            sys->impl->textureNames[sys->impl->textureCount++] = names[j];
-            /* create texture object */
-            glBindTexture(GL_TEXTURE_2D,names[j]);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-            if (img->flags & pok_image_flag_alpha)
-                glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,img->width,img->height,0,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
-            else
-                glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,img->width,img->height,0,GL_RGB,GL_UNSIGNED_BYTE,img->pixels.data);
-            /* assign the texture reference to the image */
-            img->texref = names[j];
-        }
-    } 
-}
-
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
@@ -491,7 +454,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
             pthread_mutex_lock(&sys->impl->mutex);
-            create_textures(sys);
+            gl_create_textures(sys);
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;
@@ -499,20 +462,26 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         }
 
         /* clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         /* rendering */
         if (sys->impl->gameRendering) {
             uint16_t index;
-            /* go through and call each render function */
+            /* go through and call each render function; we need to obtain
+               a lock for the right to render; this allows for synchronization
+               with the update process */
             pthread_mutex_lock(&sys->impl->mutex);
+
             for (index = 0;index < sys->routinetop;++index)
                 (*sys->routines[index])(sys,sys->contexts[index]);
+            /* expose the backbuffer */
+            glXSwapBuffers(display,sys->impl->window);
+
             pthread_mutex_unlock(&sys->impl->mutex);
         }
-
-        /* expose the backbuffer */
-        glXSwapBuffers(display,sys->impl->window);
+        else
+            /* expose just a black back buffer */
+            glXSwapBuffers(display,sys->impl->window);
 
         /* check for framerate updates */
         if (sys->framerate != framerate) {

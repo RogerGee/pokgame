@@ -19,9 +19,12 @@ struct pok_timeout_interval
     /* how many ticks actually elapsed since the last timeout;
     a tick is defined as a single millisecond */
     uint32_t elapsed;
+    uint64_t _before[2];
 };
 void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds);
 void pok_timeout(struct pok_timeout_interval* interval);
+void pok_timeout_grab_counter(struct pok_timeout_interval* interval);
+void pok_timeout_calc_elapsed(struct pok_timeout_interval* interval);
 
 /* pok_game_context: flag current game state */
 enum pok_game_context
@@ -37,6 +40,9 @@ enum pok_game_context
 
 };
 
+struct pok_game_info;
+typedef void (*pok_game_callback)(struct pok_game_info* info);
+
 /* this structure stores all of the top-level game information */
 struct pok_game_info
 {
@@ -44,8 +50,9 @@ struct pok_game_info
     bool_t control;
 
     /* version information */
-    struct pok_data_source* versionDsrc;
     struct pok_proc* versionProc;
+    pok_game_callback versionCBack;
+    struct pok_data_source* versionChannel;
 
     /* timeouts for main game procedures (in thousandths of a second) */
     struct pok_timeout_interval ioTimeout;

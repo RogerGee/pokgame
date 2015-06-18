@@ -156,6 +156,9 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys)
     pok_timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
+    game->versionProc = NULL;
+    game->versionCBack = NULL;
+    game->versionChannel = NULL;
     /* assign graphics subsystem */
     game->sys = sys;
     /* initialize effects */

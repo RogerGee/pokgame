@@ -1,4 +1,6 @@
-/* maintest.c -- pokgame main test bed */
+/* maintest.c -- pokgame main test bed; this
+   test only tests render and update functionality,
+   not the IO functionality */
 #include "pokgame.h"
 #include "error.h"
 #include "pok.h"

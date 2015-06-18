@@ -31,6 +31,8 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
     tman->waterTiles = NULL;
     tman->lavaTilesCnt = 0;
     tman->lavaTiles = NULL;
+    tman->waterfallTilesCnt = 0;
+    tman->waterfallTiles = NULL;
     tman->_sheet = NULL;
 }
 void pok_tile_manager_delete(struct pok_tile_manager* tman)
@@ -50,6 +52,8 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
         free(tman->waterTiles);
     if (tman->lavaTiles != NULL)
         free(tman->lavaTiles);
+    if (tman->waterfallTiles != NULL)
+        free(tman->waterfallTiles);
     if (tman->_sheet != NULL)
         pok_image_free(tman->_sheet);
 }
@@ -94,6 +98,9 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
            [1 byte] ani ticks
            [2 bytes] forward tile id
            [2 bytes] backward tile id
+        [2 bytes] number of water tiles
+        [n bytes] water tile ids
+        [2 bytes] number of lava tiles
     */
     if (tman->tileset != NULL) {
         uint16_t i;
@@ -371,6 +378,7 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
         [n bytes] tile animation data (optional if user sends zero as first field)
         [n bytes] water tiles (optional if user sends zero as first field)
         [n bytes] lava tiles (optional if user sends zero as first field)
+        [n bytes] waterfall tiles (optional if user sends zero as first field)
     */
     size_t i;
     enum pok_network_result result = pok_net_already;
@@ -423,17 +431,26 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
         /* animation data */
         if ((result = pok_tile_manager_netread_ani(tman,dsrc,info->next)) != pok_net_completed)
             break;
+        ++info->fieldProg;
         pok_netobj_readinfo_reset(info->next);
     case 4:
         /* water tiles */
         if ((result = pok_tile_manager_netread_special_tiles(&tman->waterTilesCnt,&tman->waterTiles,dsrc,info->next)) != pok_net_completed)
             break;
+        ++info->fieldProg;
         pok_netobj_readinfo_reset(info->next);
     case 5:
         /* lava tiles */
         if ((result = pok_tile_manager_netread_special_tiles(&tman->lavaTilesCnt,&tman->lavaTiles,dsrc,info->next)) != pok_net_completed)
             break;
+        ++info->fieldProg;
         pok_netobj_readinfo_reset(info->next);
+    case 6:
+        /* waterfall tiles */
+        if ((result = pok_tile_manager_netread_special_tiles(&tman->waterfallTilesCnt,
+                    &tman->waterfallTiles,dsrc,info->next)) != pok_net_completed)
+            break;
+        ++info->fieldProg;
     }
     return result;
 }

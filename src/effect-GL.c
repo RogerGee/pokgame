@@ -30,7 +30,7 @@ void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct p
                 glVertex2f(effect->hs[2],effect->hs[0]);
                 glVertex2f((GLfloat)sys->wwidth,0.0);
                 glVertex2f(effect->hs[3],effect->hs[0]);
-                glVertex2f((GLfloat)sys->wwidth,sys->wheight);
+                glVertex2f((GLfloat)sys->wwidth,(GLfloat)sys->wheight);
                 glVertex2f(effect->hs[3],effect->hs[1]);
                 glVertex2f(0.0,(GLfloat)sys->wheight);
                 glVertex2f(effect->hs[2],effect->hs[1]);

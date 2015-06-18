@@ -43,15 +43,23 @@ struct pok_image
     uint8_t flags;
     uint32_t width;
     uint32_t height;
-    uint32_t texref;
-    union { /* pixel data stored row by row */
+
+    /* pixel data stored row by row; may be NULL if
+       the image is a reference to something else */
+    union {
         void* data;
         union pixel* dataRGB;
         union alpha_pixel* dataRGBA;
     } pixels;
+
+    /* references: an image's pixel data may be NULL, in which case the following members
+       are considered */
+    uint32_t texref;     /* if non-zero, then the image is merely a texture reference */
+    union pixel fillref; /* otherwise, the image consists of a rectangle with the specified fill color */
 };
 struct pok_image* pok_image_new(); /* new empty image */
 struct pok_image* pok_image_new_rgb_fill(uint32_t width,uint32_t height,union pixel fillPixel);
+struct pok_image* pok_image_new_rgb_fillref(uint32_t width,uint32_t height,union pixel fillPixel);
 struct pok_image* pok_image_new_rgba_fill(uint32_t width,uint32_t height,union alpha_pixel fillPixel);
 struct pok_image* pok_image_new_byval_rgb(uint32_t width,uint32_t height,const byte_t* dataRGB);
 struct pok_image* pok_image_new_byval_rgba(uint32_t width,uint32_t height,const byte_t* dataRGBA);
@@ -59,6 +67,7 @@ struct pok_image* pok_image_new_byref_rgb(uint32_t width,uint32_t height,const b
 struct pok_image* pok_image_new_byref_rgba(uint32_t width,uint32_t height,const byte_t* dataRGBA);
 struct pok_image* pok_image_new_subimage(struct pok_image* src,uint32_t x,uint32_t y,uint32_t width,uint32_t height);
 void pok_image_free(struct pok_image* img);
+void pok_image_unload(struct pok_image* img);
 bool_t pok_image_save(struct pok_image* img,struct pok_data_source* dsrc);
 bool_t pok_image_open(struct pok_image* img,struct pok_data_source* dsrc);
 bool_t pok_image_fromfile_rgb(struct pok_image* img,const char* file);

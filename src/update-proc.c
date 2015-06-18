@@ -6,37 +6,19 @@
 /* the update procedure runs the game engine logic; it changes a global configuration that
    is handled by the other two game procedures (IO and graphics); this procedure must obtain
    locks when attempting to read/modify game information (from the 'pok_game_info' structure)
-   that would cause the other procedures to demonstrate undefined behavior; the update procedure
-   should exit before the rendering procedure */
+   that would cause the other procedures to demonstrate undefined behavior */
 
 /* constant update parameters */
-#ifdef POKGAME_WIN32
-/* Windows doesn't have a very accurate timeout resolution like Linux, therefore different
-   values are required to demonstrate the correct behavior */
 
 #define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
-#define MAP_SCROLL_TIME          280 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME          300 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
 
-#define INITIAL_FADEIN_DELAY     250
-#define INITIAL_FADEIN_TIME     1750
-#define WARP_FADEOUT_TIME        400
+#define INITIAL_FADEIN_DELAY     350 /* "initial fadein" happens before we show the game */
+#define INITIAL_FADEIN_TIME     2000
+#define WARP_FADEOUT_TIME        400 /* warp transitions */
 #define WARP_FADEIN_TIME         400
 #define WARP_FADEIN_DELAY        350
-
-#else
-
-#define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
-#define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
-#define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
-
-#define INITIAL_FADEIN_DELAY     250
-#define INITIAL_FADEIN_TIME     1750
-#define WARP_FADEOUT_TIME        200
-#define WARP_FADEIN_TIME         200
-#define WARP_FADEIN_DELAY        400
-
-#endif
 
 /* globals */
 static struct

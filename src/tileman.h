@@ -54,6 +54,8 @@ struct pok_tile_manager
     uint16_t* waterTiles;
     uint16_t lavaTilesCnt;
     uint16_t* lavaTiles;
+    uint16_t waterfallTilesCnt;
+    uint16_t* waterfallTiles;
 
     /* reserved for the implementation */
     struct pok_image* _sheet;

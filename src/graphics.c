@@ -121,7 +121,7 @@ bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys)
     sys->playerOffsetY = DEFAULT_PLAYER_OFFSET_Y;
     pok_graphics_subsystem_after_assign(sys);
     pok_string_concat(&sys->title,"default");
-    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
+    if ((sys->blacktile = pok_image_new_rgb_fillref(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;
 }
@@ -158,7 +158,7 @@ bool_t pok_graphics_subsystem_assign(struct pok_graphics_subsystem* sys,uint16_t
     sys->playerOffsetY = playerOffsetY;
     pok_graphics_subsystem_after_assign(sys);
     pok_string_concat(&sys->title,title);
-    if ((sys->blacktile = pok_image_new_rgb_fill(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
+    if ((sys->blacktile = pok_image_new_rgb_fillref(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;
 }
