@@ -65,7 +65,9 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     sys->impl->doHide = FALSE;
     sys->impl->texinfo = NULL;
     sys->impl->texinfoCount = 0;
-    /* spawn render loop thread */
+    /* spawn render loop thread; set 'sys->background' to TRUE to mean that we run
+       the window on a background thread */
+    sys->background = TRUE;
     sys->impl->hThread = CreateThread(
         NULL,
         0,

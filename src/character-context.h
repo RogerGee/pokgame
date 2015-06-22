@@ -43,7 +43,8 @@ void pok_character_context_set_player(struct pok_character_context* context,stru
 void pok_character_context_set_update(struct pok_character_context* context,
     enum pok_direction direction,
     enum pok_character_effect effect,
-    uint16_t parameter);
+    uint16_t parameter,
+    bool_t resetTime);
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks);
 
 /* pok_character_render_context: provides information for rendering a set 

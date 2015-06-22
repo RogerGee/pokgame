@@ -72,9 +72,10 @@ MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
 CHARACTER_H = src/character.h $(NETOBJ_H)
 CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
 POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H)
+DEFAULT_H = src/default.h $(POKGAME_H)
 
 # object code files: library objects are used both by the game engine and game versions
-OBJECTS = pokgame.o graphics.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o
+OBJECTS = pokgame.o graphics.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o io-proc.o default.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o netobj.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
@@ -115,8 +116,10 @@ $(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(
 	$(COMPILE) $(OUT)$(OBJDIR)/character-context.o src/character-context.c
 $(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(PROTOCOL_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
-$(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H)
+$(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H) $(PROTOCOL_H) $(DEFAULT_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/io-proc.o src/io-proc.c
+$(OBJDIR)/default.o: src/default.c $(DEFAULT_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/default.o src/default.c
 
 # src targets for the library
 $(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)

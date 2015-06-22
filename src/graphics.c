@@ -6,6 +6,9 @@
 #include <string.h>
 #include <stdarg.h>
 
+/* the initial framerate */
+#define INITIAL_FRAMERATE 60
+
 /* define the black pixel used for the background (black tile); we don't want a true
    harsh black, but a 'lighter' black */
 #define BLACK_COMPONENT 20
@@ -74,8 +77,8 @@ void pok_graphics_subsystem_init(struct pok_graphics_subsystem* sys)
     sys->blacktile = NULL;
     sys->impl = NULL;
     sys->framerate = INITIAL_FRAMERATE;
+    sys->background = FALSE;
     pok_string_init(&sys->title);
-    pok_string_assign(&sys->title,"pokgame: ");
 }
 void pok_graphics_subsystem_delete(struct pok_graphics_subsystem* sys)
 {
@@ -120,13 +123,13 @@ bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys)
     sys->playerOffsetX = DEFAULT_PLAYER_OFFSET_X;
     sys->playerOffsetY = DEFAULT_PLAYER_OFFSET_Y;
     pok_graphics_subsystem_after_assign(sys);
-    pok_string_concat(&sys->title,"default");
+    pok_graphics_subsystem_assign_title(sys,"default");
     if ((sys->blacktile = pok_image_new_rgb_fillref(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;
 }
 bool_t pok_graphics_subsystem_assign(struct pok_graphics_subsystem* sys,uint16_t dimension,uint16_t winCol,uint16_t winRow,
-    uint16_t playerCol,uint16_t playerRow,uint16_t playerOffsetX,uint16_t playerOffsetY,const char* title)
+    uint16_t playerCol,uint16_t playerRow,uint16_t playerOffsetX,uint16_t playerOffsetY)
 {
     /* check constraint on dimension */
     if (dimension > pok_max_dimension) {
@@ -157,10 +160,22 @@ bool_t pok_graphics_subsystem_assign(struct pok_graphics_subsystem* sys,uint16_t
     sys->playerOffsetX = playerOffsetX;
     sys->playerOffsetY = playerOffsetY;
     pok_graphics_subsystem_after_assign(sys);
-    pok_string_concat(&sys->title,title);
     if ((sys->blacktile = pok_image_new_rgb_fillref(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
+    if (sys->impl != NULL)
+        /* make changes to graphical frame */
+        impl_reload(sys);
     return TRUE;
+}
+void pok_graphics_subsystem_assign_title(struct pok_graphics_subsystem* sys,const char* title)
+{
+    if (title[0] == 0)
+        title = "unnamed";
+    pok_string_assign(&sys->title,"pokgame: ");
+    pok_string_concat(&sys->title,title);
+    if (sys->impl != NULL)
+        /* make changes to graphical frame */
+        impl_reload(sys);
 }
 enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsystem* sys,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
@@ -173,7 +188,6 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
         [2 bytes] player sprite location row offset
         [2 bytes] player pixel offset X
         [2 bytes] player pixel offset Y
-        [n bytes] game title string (null terminated)
      */
     enum pok_network_result result = pok_net_already;
     switch (info->fieldProg) {
@@ -237,20 +251,24 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
             pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_bad_player_offset);
             return pok_net_failed_protocol;
         }
-    case 7:
-        pok_data_stream_read_string_ex(dsrc,&sys->title);
-        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
-            break;
         pok_graphics_subsystem_after_assign(sys);
+        if (sys->impl != NULL)
+            /* the graphics parameters changed, so reload the subsystem; this will
+               cause the changes to take effect in the graphical frame */
+            impl_reload(sys);
     }
     return result;
 }
 bool_t pok_graphics_subsystem_begin(struct pok_graphics_subsystem* sys)
 {
-    if (!impl_new(sys))
-        return FALSE;
-    impl_map_window(sys);
-    return TRUE;
+    if (sys->impl == NULL) {
+        if (!impl_new(sys))
+            return FALSE;
+        impl_map_window(sys);
+        return TRUE;
+    }
+    pok_exception_new_ex(pok_ex_graphics,pok_ex_graphics_already_started);
+    return FALSE;
 }
 bool_t pok_graphics_subsystem_create_textures(struct pok_graphics_subsystem* sys,int count, ...)
 {

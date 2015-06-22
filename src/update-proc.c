@@ -11,7 +11,7 @@
 /* constant update parameters */
 
 #define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
-#define MAP_SCROLL_TIME          300 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME          280 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
 
 #define INITIAL_FADEIN_DELAY     350 /* "initial fadein" happens before we show the game */
@@ -69,7 +69,7 @@ int update_proc(struct pok_game_info* info)
                these must be performed at the same time before a frame is updated */
             pok_graphics_subsystem_lock(info->sys);
             skip = pok_map_render_context_update(info->mapRC,info->sys->dimension,info->updateTimeout.elapsed)
-                +  character_update(info);
+                +  pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
             pok_graphics_subsystem_unlock(info->sys);
         }
 
@@ -169,6 +169,8 @@ void update_key_input(struct pok_game_info* info)
             if (direction != pok_direction_none) {
                 if (direction == info->player->direction || info->mapRC->groove) { /* player facing update direction */
                     if (!info->playerContext->update && !info->mapRC->update) {
+                        bool_t groove = info->mapRC->groove;
+
                         /* lock the graphics subsystem: this prevents rendering momentarily so that
                            we can update the player and the map at the same time without a race */
                         pok_graphics_subsystem_lock(info->sys);
@@ -210,7 +212,8 @@ void update_key_input(struct pok_game_info* info)
                                 info->playerContext,
                                 direction,
                                 pok_character_normal_effect,
-                                info->playerContext->slowDown ? 0 : info->sys->dimension );
+                                info->playerContext->slowDown ? 0 : info->sys->dimension,
+                                !groove );
                             pok_game_modify_exit(info->playerContext);
                         }
                         pok_game_modify_exit(info->mapRC);
@@ -221,10 +224,10 @@ void update_key_input(struct pok_game_info* info)
                 else if (!info->playerContext->update) {
                     /* update player context for animation; the player sprite is just moving in place; this
                        still produces an animation, but the sprite doesn't offset; this is specified by
-                       passing 0 as the dimension parameter to 'pok_character_set_update' */
+                       passing 0 as the dimension parameter to 'pok_character_context_set_update' */
                     pok_game_modify_enter(info->playerContext);
                     info->playerContext->slowDown = FALSE;
-                    pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,0);
+                    pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,0,TRUE);
                     pok_game_modify_exit(info->playerContext);
                 }
             }
@@ -234,10 +237,8 @@ void update_key_input(struct pok_game_info* info)
 
 bool_t character_update(struct pok_game_info* info)
 {
-    if ( pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed) ) {
+    /* process non-player character updates */
 
-        return TRUE;
-    }
     return FALSE;
 }
 
@@ -317,7 +318,8 @@ void fadeout_update(struct pok_game_info* info)
                                 info->playerContext,
                                 direction,
                                 pok_character_normal_effect,
-                                info->sys->dimension);
+                                info->sys->dimension,
+                                TRUE );
                             pok_game_modify_exit(info->playerContext);
                             pok_game_modify_enter(info->mapRC);
                             pok_map_render_context_set_update(

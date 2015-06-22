@@ -20,7 +20,15 @@ enum pok_network_result
     pok_net_already /* object was marked as already sent */
 };
 
-/* enumerate the network object kinds */
+/* enumerate the static network object kinds (graphics subsystem is an exception) */
+enum pok_static_obj_kind
+{
+    pok_static_obj_tile_manager,
+    pok_static_obj_sprite_manager,
+    _pok_static_obj_top /* this enumerator should represent the total number of static network object kinds */
+};
+
+/* enumerate the dynamic network object kinds */
 enum pok_netobj_kind
 {
     pok_netobj_unknown,

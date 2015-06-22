@@ -15,6 +15,7 @@ struct pok_character
     struct pok_point chunkPos;    /* position of chunk containing character within map */
     struct pok_location tilePos;  /* position within chunk (tile position) */
     bool_t isPlayer;              /* flag whether the character is a human player (user or remote) */
+    struct pok_string name;       /* character name string */
 
 };
 struct pok_character* pok_character_new();

@@ -82,3 +82,9 @@ void pok_timeout(struct pok_timeout_interval* interval)
         interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
     } while (interval->elapsed < interval->mseconds);
 }
+
+void pok_timeout_no_elapsed(struct pok_timeout_interval* interval)
+{
+    /* this variant just does the sleep; it does not compute and set the elapsed time */
+    Sleep(interval->mseconds);
+}

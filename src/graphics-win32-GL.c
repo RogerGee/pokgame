@@ -64,7 +64,9 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     sys->impl->doHide = FALSE;
     sys->impl->texinfo = NULL;
     sys->impl->texinfoCount = 0;
-    /* spawn render loop thread */
+    /* spawn render loop thread; set 'sys->background' to TRUE to mean that we run
+       the window on a background thread */
+    sys->background = TRUE;
     sys->impl->hThread = CreateThread(
         NULL,
         0,
@@ -201,8 +203,10 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 
         /* handle window messages from the operating system; use
            PeekMessage so that we don't have to wait on messages 
-           but can go on to do more important things */
-        if (PeekMessage(&msg, sys->impl->hWnd, 0, 0, PM_REMOVE)) {
+           but can go on to do more important things; handle all
+           messages on this thread (not just for the specific
+           window) */
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
                 sys->impl->rendering = FALSE;
                 sys->impl->gameRendering = FALSE;

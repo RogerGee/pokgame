@@ -41,7 +41,7 @@ struct pok_tile_manager
     /* set of tiles available to the tile manager; these images that must be
        square with dimensions equal to 'sys->dimension' */
     uint16_t tilecnt;
-    uint16_t impassability; /* any tile index <= this value is initially considered impassable */
+    uint16_t impassibility; /* any tile index <= this value is initially considered impassable */
     struct pok_image** tileset;
 
     /* tile animation data links tiles together to form logical animation sequences; this
@@ -66,7 +66,7 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
 void pok_tile_manager_delete(struct pok_tile_manager* tman);
 bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_source* dsrc);
 bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_source* dsrc);
-bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,const byte_t* data,bool_t byRef);
+bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassibility,const byte_t* data,bool_t byRef);
 bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,struct pok_tile_ani_data* data,bool_t byRef);
 bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char* file);
 enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,struct pok_data_source* dsrc,

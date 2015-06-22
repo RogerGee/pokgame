@@ -11,12 +11,36 @@ const char* POKGAME_NAME;
 /* pokgame entry point */
 int main(int argc,const char* argv[])
 {
+    struct pok_graphics_subsystem* sys;
     POKGAME_NAME = argv[0];
 
     /* load all modules */
     pok_exception_load_module();
     pok_network_object_load_module();
     pok_game_load_module();
+
+    /* initialize a graphics subsystem for the game; this corresponds to the
+       application's top-level window; start up the window and renderer before
+       anything else; depending on the platform, the renderer may be run on
+       another thread or require the main thread */
+    sys = pok_graphics_subsystem_new();
+    if ( !pok_graphics_subsystem_begin(sys) )
+        pok_error(pok_error_fatal,"could not begin graphics subsystem");
+
+    if ( !sys->background ) {
+        /* the platform cannot run the window on another thread, so start up the IO
+           procedure on a background thread and run the window on this thread */
+
+
+    }
+    else
+        /* begin the IO procedure; this is the entry point into the game */
+        io_proc(sys);
+
+    /* close graphics subsystem: if the graphics subsystem was working on another
+       thread this will wait to join back up with said thread; otherwise the graphics
+       subsystem has already finished and is waiting to be cleaned up */
+    pok_graphics_subsystem_free(sys);
 
     /* unload all modules */
     pok_game_unload_module();
@@ -145,8 +169,10 @@ void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds
 }
 
 /* pok_game_info */
-struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys)
+struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok_game_info* template)
 {
+    /* this function creates a new game state object; if 'template' is not NULL, then its static network
+       objects are copied by reference into the new game info */
     struct pok_game_info* game;
     game = malloc(sizeof(struct pok_game_info));
     if (game == NULL)
@@ -154,23 +180,36 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys)
     /* initialize general parameters */
     pok_timeout_interval_reset(&game->ioTimeout,100);
     pok_timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
+    game->staticOwnerMask = template == NULL ? (2 << _pok_static_obj_top) - 1 : 0x00;
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
     game->versionProc = NULL;
     game->versionCBack = NULL;
+    pok_string_init(&game->versionLabel);
     game->versionChannel = NULL;
+    game->updateThread = pok_thread_new((pok_thread_entry)update_proc,game);
+    if (game->updateThread == NULL)
+        pok_error_fromstack(pok_error_fatal);
     /* assign graphics subsystem */
     game->sys = sys;
     /* initialize effects */
     pok_fadeout_effect_init(&game->fadeout);
     game->fadeout.keep = TRUE;
-    /* initialize tile and sprite image managers */
-    game->tman = pok_tile_manager_new(game->sys);
-    if (game->tman == NULL)
-        pok_error_fromstack(pok_error_fatal);
-    game->sman = pok_sprite_manager_new(game->sys);
-    if (game->sman == NULL)
-        pok_error_fromstack(pok_error_fatal);
+    if (template == NULL) {
+        /* initialize tile and sprite image managers; we will own these objects */
+        game->tman = pok_tile_manager_new(game->sys);
+        if (game->tman == NULL)
+            pok_error_fromstack(pok_error_fatal);
+        game->sman = pok_sprite_manager_new(game->sys);
+        if (game->sman == NULL)
+            pok_error_fromstack(pok_error_fatal);
+    }
+    else {
+        /* assign tile and sprite image managers from the existing game; the
+           caller should take care not to delete the template game before this one */
+        game->tman = template->tman;
+        game->sman = template->sman;
+    }
     /* initialize maps */
     game->world = pok_world_new();
     if (game->world == NULL)
@@ -197,9 +236,39 @@ void pok_game_free(struct pok_game_info* game)
     pok_character_render_context_free(game->charRC);
     pok_world_free(game->world);
     pok_map_render_context_free(game->mapRC);
-    pok_sprite_manager_free(game->sman);
-    pok_tile_manager_free(game->tman);
+    if (game->staticOwnerMask & 0x01)
+        pok_sprite_manager_free(game->sman);
+    if (game->staticOwnerMask & 0x02)
+        pok_tile_manager_free(game->tman);
+    pok_thread_free(game->updateThread);
     free(game);
+
+}
+void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind kind,void* obj)
+{
+    /* replace the specified static network object; the 'pok_game_info' instance will assume
+       ownership of the object; free any owned object before assigning */
+    switch (kind) {
+    case pok_static_obj_tile_manager:
+        if (game->staticOwnerMask & 0x01)
+            pok_tile_manager_free(game->tman);
+        else
+            game->staticOwnerMask |= 0x01;
+        game->tman = obj;
+        break;
+    case pok_static_obj_sprite_manager:
+        if (game->staticOwnerMask & 0x02)
+            pok_sprite_manager_free(game->sman);
+        else
+            game->staticOwnerMask |= 0x02;
+        game->sman = obj;
+        break;
+    default:
+#ifdef POKGAME_DEBUG
+        pok_error(pok_error_fatal,"bad static network object kind to pok_game_static_replace()");
+#endif
+        return;
+    }
 }
 void pok_game_register(struct pok_game_info* game)
 {

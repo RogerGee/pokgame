@@ -37,6 +37,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
     context->granularity = 1;
     context->tileAniTicks = 0;
     context->scrollTicks = 0;
+    context->grooveTicks = 0;
     context->scrollTicksAmt = 1;
     context->groove = FALSE;
     context->changed = FALSE;
@@ -113,8 +114,8 @@ static bool_t is_impassable(const struct pok_tile_manager* tman,struct pok_map_c
        warp location is always passable */
     if (chunk->data[row][column].data.warpKind != pok_tile_warp_none)
         return FALSE;
-    if (chunk->data[row][column].data.tileid <= tman->impassability) {
-        /* make sure there is not an exception to impassability rule */
+    if (chunk->data[row][column].data.tileid <= tman->impassibility) {
+        /* make sure there is not an exception to impassibility rule */
         if ( !chunk->data[row][column].pass )
             return TRUE;
     }
@@ -245,15 +246,18 @@ void pok_map_render_context_set_update(struct pok_map_render_context* context,en
     default:
         break;
     }
-    context->scrollTicks = 0;
+    /* if the groove has expired, then reset the ticks; otherwise keep any leftover
+       ticks to maintain accurate game time */
+    if (!context->groove)
+        context->scrollTicks = 0;
     context->groove = FALSE;
     context->update = TRUE;
 }
 bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension,uint32_t ticks)
 {
     /* check to see if map is being updated, and that enough time has elapsed for an update */
-    context->scrollTicks += ticks;
     if (context->update) {
+        context->scrollTicks += ticks;
         if (context->scrollTicks >= context->scrollTicksAmt) {
             /* updating map render context by incrementing the map offset in
                the correct direction */
@@ -294,13 +298,18 @@ bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint
                 /* done: return TRUE to denote that the process finished */
                 context->update = FALSE;
                 context->groove = TRUE;
+                context->grooveTicks = 0;
                 return TRUE;
             }
         }
     }
-    else if (context->groove && context->scrollTicks >= context->scrollTicksAmt * (context->granularity-1))
-        /* we lost our groove */
-        context->groove = FALSE;
+    else if (context->groove) {
+        context->grooveTicks += ticks;
+        if (context->grooveTicks >= context->scrollTicksAmt * (context->granularity - 1)) {
+            /* we lost our groove */
+            context->groove = FALSE;
+        }
+    }
     return FALSE;
 }
 

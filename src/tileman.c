@@ -24,7 +24,7 @@ void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphi
     tman->flags = pok_tile_manager_flag_none;
     tman->sys = sys; /* store a reference to the subsystem; we do not own this object */
     tman->tilecnt = 0;
-    tman->impassability = 1; /* black tile is impassable, everything else passable */
+    tman->impassibility = 1; /* black tile is impassable, everything else passable */
     tman->tileset = NULL;
     tman->tileani = NULL;
     tman->waterTilesCnt = 0;
@@ -104,7 +104,7 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
     */
     if (tman->tileset != NULL) {
         uint16_t i;
-        if (!pok_data_stream_write_uint16(dsrc,tman->tilecnt) || !pok_data_stream_write_uint16(dsrc,tman->impassability))
+        if (!pok_data_stream_write_uint16(dsrc,tman->tilecnt) || !pok_data_stream_write_uint16(dsrc,tman->impassibility))
             return FALSE;
         for (i = 0;i < tman->tilecnt;++i)
             if ( !pok_image_save(tman->tileset[i],dsrc) )
@@ -142,7 +142,7 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
             pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_zero_tiles);
             return FALSE;
         }
-        if ( !pok_data_stream_read_uint16(dsrc,&tman->impassability) )
+        if ( !pok_data_stream_read_uint16(dsrc,&tman->impassibility) )
             return FALSE;
         tman->tileset = malloc(sizeof(struct pok_image*) * tman->tilecnt);
         if (tman->tileset == NULL) {
@@ -189,7 +189,7 @@ static bool_t pok_tile_manager_from_data(struct pok_tile_manager* tman,uint16_t 
     }
     return TRUE;
 }
-bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassability,const byte_t* data,bool_t byRef)
+bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassibility,const byte_t* data,bool_t byRef)
 {
     /* read tile data from memory; since tile images must match the 'dimension' value, the data is
        assumed to be of the correct length for the given value of 'imgc'; the pixel data also should
@@ -199,7 +199,7 @@ bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,u
         return FALSE;
     }
     tman->tilecnt = imgc+1;
-    tman->impassability = impassability;
+    tman->impassibility = impassibility;
     tman->tileset = malloc(tman->tilecnt * sizeof(struct pok_image*));
     if (tman->tileset == NULL) {
         pok_exception_flag_memory_error();
@@ -257,7 +257,7 @@ bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char*
         pok_image_free(img);
         return FALSE;
     }
-    /* load tile images by reference (set impassability to default value for now) */
+    /* load tile images by reference (set impassibility to default value for now) */
     if ( !pok_tile_manager_load_tiles(tman,img->height / tman->sys->dimension,0,img->pixels.data,TRUE) ) {
         pok_image_free(img);
         return FALSE;
@@ -372,7 +372,7 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
 {
     /* read tile info substructure from data source:
         [2 bytes] number of tiles
-        [2 bytes] impassability cutoff
+        [2 bytes] impassibility cutoff
         [n bytes] pok image containing the specified number of tiles; the image's size
                   is assumed from the number of tiles (width=dimension height=dimension*number-of-tiles)
         [n bytes] tile animation data (optional if user sends zero as first field)
@@ -404,8 +404,8 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
         for (i = 1;i < tman->tilecnt;++i)
             tman->tileset[i] = NULL;
     case 1:
-        /* impassability value */
-        pok_data_stream_read_uint16(dsrc,&tman->impassability);
+        /* impassibility value */
+        pok_data_stream_read_uint16(dsrc,&tman->impassibility);
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
         if ( !pok_netobj_readinfo_alloc_next(info) )

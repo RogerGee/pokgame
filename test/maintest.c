@@ -37,7 +37,7 @@ int main_test()
     sys = pok_graphics_subsystem_new();
     if (sys == NULL)
         pok_error_fromstack(pok_error_fatal);
-    game = pok_game_new(sys);
+    game = pok_game_new(sys,NULL);
     init();
     printf("finished: %d\n",update_proc(game));
     pok_game_free(game);
@@ -58,7 +58,7 @@ void init()
     pok_graphics_subsystem_default(game->sys);
     if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts0.data") )
         pok_error_fromstack(pok_error_fatal);
-    game->tman->impassability = 32;
+    game->tman->impassibility = 32;
     assert( pok_tile_manager_load_ani(game->tman,42,ANIDATA,TRUE) );
     if ( !pok_sprite_manager_fromfile(game->sman,"test/img/sss0.data",pok_sprite_manager_updown_alt) )
         pok_error_fromstack(pok_error_fatal);

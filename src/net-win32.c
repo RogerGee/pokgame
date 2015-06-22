@@ -3,7 +3,7 @@
 #include <Windows.h>
 
 /* Note: this file mirrors net-posix.c and as such it is not fully documented; see
-   net-posix.c to find documented explainations of the function defined in
+   net-posix.c to find documented explainations of the functions defined in
    this sub-module; the function names will be similar but identifiers, 
    typenames, ETC. will be different (and of course the implementation will
    vary slightly) */

@@ -19,21 +19,21 @@ static void gl_init( /* implemented in graphics-GL.c (included later in this fil
 static void gl_create_textures(struct pok_graphics_subsystem* sys);
 
 /* globals */
-static int screen;
-static Display* display;
-static XVisualInfo* visual;
-static int xref = 0;
-static pthread_mutex_t xlib_mutex = PTHREAD_MUTEX_INITIALIZER; /* we must control concurrent access to xlib calls */
+static int screen;          /* X session screen */
+static Display* display;    /* X session display connection */
+static XVisualInfo* visual; /* visual info for X session */
+static int xref = 0;        /* reference (how many times have we used X in the program's lifetime?) */
+static pthread_mutex_t xlib_mutex = PTHREAD_MUTEX_INITIALIZER; /* we control concurrent access to xlib startup calls */
 
 struct _pok_graphics_subsystem_impl
 {
-    Atom del;
-    Window window;
-    GLXContext context;
-    char keys[32];
-    pthread_t tid;
-    pthread_mutex_t mutex;
-    size_t textureAlloc, textureCount;
+    Atom del;                          /* our window's delete property identifier (used to detect window close messages) */
+    Window window;                     /* X window handle */
+    GLXContext context;                /* GLX rendering context */
+    char keys[32];                     /* bitmask of keyboard keys used when asynchronously querying the keyboard state */
+    pthread_t tid;                     /* the rendering routine runs on the thread represented by this process id */
+    pthread_mutex_t mutex;             /* this locks the renderer; used for synchronizing updating and rendering */
+    size_t textureAlloc, textureCount; /* store OpenGL texture references; this is just a list of integers */
     GLuint* textureNames;
 
     /* shared variable flags */
@@ -46,8 +46,20 @@ struct _pok_graphics_subsystem_impl
     volatile struct texture_info* texinfo;
 };
 
+#ifdef POKGAME_DEBUG
+
+static void check_impl(struct pok_graphics_subsystem* sys)
+{
+    if (sys->impl == NULL)
+        pok_error(pok_error_fatal,"graphics_subsystem was not configured properly!");
+}
+
+#endif
+
+/* implement the interface from graphics.c; this implementation will be included directly into graphics.c */
 bool_t impl_new(struct pok_graphics_subsystem* sys)
 {
+    /* initialize a new impl object for the graphics subsystem */
     sys->impl = malloc(sizeof(struct _pok_graphics_subsystem_impl));
     if (sys->impl == NULL) {
         pok_exception_flag_memory_error();
@@ -62,7 +74,10 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         free(sys->impl);
         return FALSE;
     }
-    /* prepare the rendering thread */
+    /* prepare the rendering thread: since we can run the window and renderer on
+       a separate thread, we set 'sys->background' to TRUE so the program can know
+       to use the main thread for something else */
+    sys->background = TRUE;
     sys->impl->rendering = TRUE;
     sys->impl->gameRendering = TRUE;
     sys->impl->editFrame = FALSE;
@@ -75,13 +90,11 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         pok_error(pok_error_fatal,"fail pthread_create()");
     return TRUE;
 }
-
 inline void impl_set_game_state(struct pok_graphics_subsystem* sys,bool_t state)
 {
     /* this allows the subsystem to effectively pause/resume the game rendering */
     sys->impl->gameRendering = state;
 }
-
 void impl_free(struct pok_graphics_subsystem* sys)
 {
     /* flag that rendering should stop and join the render thread
@@ -93,15 +106,6 @@ void impl_free(struct pok_graphics_subsystem* sys)
     free(sys->impl);
     sys->impl = NULL;
 }
-
-#ifdef POKGAME_DEBUG
-static void check_impl(struct pok_graphics_subsystem* sys)
-{
-    if (sys->impl == NULL)
-        pok_error(pok_error_fatal,"graphics_subsystem was not configured properly!");
-}
-#endif
-
 inline void impl_reload(struct pok_graphics_subsystem* sys)
 {
 #ifdef POKGAME_DEBUG
@@ -110,7 +114,6 @@ inline void impl_reload(struct pok_graphics_subsystem* sys)
 
     sys->impl->editFrame = TRUE;
 }
-
 inline void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
 {
 #ifdef POKGAME_DEBUG
@@ -129,47 +132,50 @@ inline void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture
     sys->impl->texinfoCount = count;
     pthread_mutex_unlock(&sys->impl->mutex);
 }
-
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
 {
 #ifdef POKGAME_DEBUG
     check_impl(sys);
 #endif
 
-    /* flag that we want the frame to be mapped to screen */
+    /* flag that we want the frame to be mapped to screen; the
+       rendering thread will detect this change and reset the flag */
     sys->impl->doMap = TRUE;
 }
-
 inline void impl_unmap_window(struct pok_graphics_subsystem* sys)
 {
 #ifdef POKGAME_DEBUG
     check_impl(sys);
 #endif
 
+    /* flag that we want the frame to be unmapped (hidden) from screen; the
+       rendering thread will detect this change and reset the flag */
     sys->impl->doUnmap = TRUE;
 }
-
 inline void impl_lock(struct pok_graphics_subsystem* sys)
 {
 #ifdef POKGAME_DEBUG
     check_impl(sys);
 #endif
 
+    /* lock the impl object; note: if the game is rendering then this will also
+       lock the rendering thread */
     pthread_mutex_lock(&sys->impl->mutex);
 }
-
 inline void impl_unlock(struct pok_graphics_subsystem* sys)
 {
 #ifdef POKGAME_DEBUG
     check_impl(sys);
 #endif
 
+    /* unlock the impl object */
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 
 /* define keyboard input functions */
 static KeySym pok_input_key_to_keysym(enum pok_input_key key)
 {
+    /* convert the pok_input_key enumerator into its X11 key constant equivilent */
     switch (key) {
     case pok_input_key_ABUTTON:
         return XK_Z;
@@ -194,6 +200,7 @@ static KeySym pok_input_key_to_keysym(enum pok_input_key key)
 }
 static enum pok_input_key pok_input_key_from_keysym(KeySym keysym)
 {
+    /* convert X11 key constant to pok_input_key enumerator equivilent */
     switch (keysym) {
     case XK_Z:
         return pok_input_key_ABUTTON;
@@ -216,6 +223,8 @@ static enum pok_input_key pok_input_key_from_keysym(KeySym keysym)
 }
 bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,enum pok_input_key key,bool_t refresh)
 {
+    /* this function will asychronously detect the keyboard state; the main game uses this implementation as opposed to
+       window events because we can detect key presses closer to real time in this manner */
 #ifdef POKGAME_DEBUG
     check_impl(sys);
 #endif
@@ -227,7 +236,7 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
         {-1,-1}, {-1,-1}, {-1,-1}, {-1,-1}
     };
 
-    /* only query keyboard events if the window has input focus */
+    /* only query keyboard events if the window has input focus; we have to explicitly check this */
     if (display != NULL && XGetInputFocus(display,&xwin,&dummy) && xwin == sys->impl->window) {
         /* asynchronously get the state of the keyboard from the X server; return TRUE if the specified
            normal input key was pressed in this instance; only grab the keyboard state if the user specified
@@ -242,6 +251,7 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
         }
         if (key < 8) {
             if (cache[key][0] == -1) {
+                /* cache the byte position and mask of the key's bit in the bitmask for efficiency */
                 if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
                     return FALSE;
                 cache[key][0] = i = keycode/8;
@@ -253,6 +263,7 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
             }
         }
         else {
+            /* not a pok_input_key */
             if ((keycode = XKeysymToKeycode(display,pok_input_key_to_keysym(key))) == 0)
                 return FALSE;
             i = keycode/8;
@@ -280,6 +291,8 @@ void pok_graphics_subsystem_lock(struct pok_graphics_subsystem* sys)
     check_impl(sys);
 #endif
 
+    /* this function is the same as 'impl_lock' however it is visible to other
+       modules so that other routines can synchronize with the renderer */
     pthread_mutex_lock(&sys->impl->mutex);
 }
 void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
@@ -288,16 +301,16 @@ void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
     check_impl(sys);
 #endif
 
+    /* this function is the same as 'impl_unlock' however it is visible to other modules */
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 
 /* x11 functions */
 void do_x_init()
 {
-    static bool_t flag = FALSE;
+    /* connect to the X server if we have not already */
     pthread_mutex_lock(&xlib_mutex);
-    ++xref;
-    if (!flag) {
+    if (xref++ == 0) {
         /* connect to the X server (now it gets real) */
         int dum;
         static int GLX_VISUAL[] = {GLX_RGBA,GLX_DEPTH_SIZE,24,GLX_DOUBLEBUFFER,None};
@@ -308,12 +321,12 @@ void do_x_init()
             pok_error(pok_error_fatal,"glx extension not supported");
         /* obtain OpenGL-capable visual */
         visual = glXChooseVisual(display,screen,GLX_VISUAL);
-        flag = TRUE;
     }
     pthread_mutex_unlock(&xlib_mutex);
 }
 void do_x_close()
 {
+    /* close the connection to the X server if we are the last to use it */
     pthread_mutex_lock(&xlib_mutex);
     if (--xref <= 0) {
         XFree(visual);
@@ -324,6 +337,7 @@ void do_x_close()
 }
 void make_frame(struct pok_graphics_subsystem* sys)
 {
+    /* make a brand new X window; create a GLX context for the window as well */
     unsigned int vmask;
     XSetWindowAttributes attrs;
     Colormap cmap;
@@ -398,7 +412,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
     /* make the frame */
     make_frame(sys);
 
-    /* make the context current on this thread */
+    /* make the context current on this thread and attach it to the window */
     if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
         pok_error(pok_error_fatal,"fail glXMakeCurrent()");
 

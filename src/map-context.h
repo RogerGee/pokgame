@@ -38,6 +38,7 @@ struct pok_map_render_context
     uint16_t granularity;                      /* controls map scroll granularity (how many updates per scroll cycle) */
     uint32_t tileAniTicks;                     /* tile animation counter */
     uint32_t scrollTicks;                      /* scroll animation tick counter */
+    uint32_t grooveTicks;                      /* groove time tick counter */
     uint32_t scrollTicksAmt;                   /* number of ticks before scroll cycle */
     bool_t groove;                             /* true after a context has finished updating and for a period afterwards */
     bool_t changed;                            /* true if the map render context location has been changed */

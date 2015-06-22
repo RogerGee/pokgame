@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
 
@@ -627,4 +628,53 @@ struct pok_data_source* pok_process_stdio(struct pok_process* proc)
 bool_t pok_process_has_terminated(struct pok_process* proc)
 {
     return FALSE;
+}
+
+/* pok_thread */
+struct pok_thread
+{
+    int retval;                  /* the thread's return value */
+    void* param;                 /* optional parameter for the thread's entry point */
+    pthread_t threadID;          /* POSIX thread-id */
+    pok_thread_entry entryPoint; /* thread entry point */
+};
+
+static void* thread_proc(struct pok_thread* thread)
+{
+    /* wrap the entry point procedure */
+    thread->retval = thread->entryPoint(thread->param);
+    return thread;
+}
+
+struct pok_thread* pok_thread_new(pok_thread_entry entryPoint,void* parameter)
+{
+    struct pok_thread* thread;
+    thread = malloc(sizeof(struct pok_thread));
+    if (thread == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    thread->retval = -1;
+    thread->param = parameter;
+    thread->threadID = (pthread_t)-1;
+    thread->entryPoint = entryPoint;
+    return thread;
+}
+void pok_thread_free(struct pok_thread* thread)
+{
+    /* make sure we have joined back with the thread */
+    if (thread->threadID != (pthread_t)-1)
+        pok_thread_join(thread);
+    free(thread);
+}
+void pok_thread_start(struct pok_thread* thread)
+{
+    if (pthread_create(&thread->threadID,NULL,(void*(*)(void*))thread_proc,thread) != 0)
+        pok_error(pok_error_fatal,"fail pok_thread_start()");
+}
+int pok_thread_join(struct pok_thread* thread)
+{
+    if (pthread_join(thread->threadID,NULL) != 0)
+        pok_error(pok_error_warning,"fail pok_thread_join()");
+    return thread->retval;
 }

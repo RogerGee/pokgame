@@ -49,7 +49,8 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "a bad dimension was specified to the graphics subsystem", /* pok_ex_graphics_bad_dimension */
         "a bad window size was specified to the graphics subsystem", /* pok_ex_graphics_bad_window_size */
         "a bad player location was specified to the graphics subsystem", /* pok_ex_graphics_bad_player_location */
-        "a bad player offset was specified to the graphics subsystem" /* pok_ex_graphics_bad_player_offset */
+        "a bad player offset was specified to the graphics subsystem", /* pok_ex_graphics_bad_player_offset */
+        "the graphics subsystem was already started" /* pok_ex_graphics_already_started */
     },
     (const char* []) { /* pok_ex_image */
         "the image format is unrecognized", /* pok_ex_image_unrecognized_format */
@@ -245,9 +246,9 @@ struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
         pok_error(pok_error_fatal,"module 'exception' was unloaded");
 #endif
     ex = malloc(sizeof(struct pok_exception));
-    ex->id = pok_ex_default;
+    ex->id = pok_ex_default_undocumented;
     ex->lineno = lineno;
-    ex->kind = pok_ex_default_undocumented;
+    ex->kind = pok_ex_default;
     ex->message = message;
     /* place exceptions in data structure */
     pok_lock_error_module();
@@ -284,9 +285,9 @@ bool_t pok_exception_check()
     pok_unlock_error_module();
     return TRUE;
 }
-bool_t pok_exception_check_ex(enum pok_ex_kind kind)
+bool_t pok_exception_check_ex(enum pok_ex_kind kind,int id)
 {
-    /* is there an exception of the specified kind on the thread-specific stack? */
+    /* is there an exception of the specified kind/id on the thread-specific stack? */
     size_t i;
     int tid;
     void** buf;
@@ -302,7 +303,7 @@ bool_t pok_exception_check_ex(enum pok_ex_kind kind)
     list = hashmap_lookup(&exceptions,&tid);
     if (list!=NULL && !stack_is_empty(&list->exceptions)) {
         for (i = 0,buf = stack_getbuffer(&list->exceptions);i < stack_getsize(&list->exceptions);++i) {
-            if (((struct pok_exception*)buf[i])->kind == kind) {
+            if (((struct pok_exception*)buf[i])->kind == kind && ((struct pok_exception*)buf[i])->id == id) {
                 pok_unlock_error_module();
                 return TRUE;
             }
@@ -341,9 +342,9 @@ const struct pok_exception* pok_exception_pop()
     pok_unlock_error_module();
     return ex;
 }
-const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind)
+const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind,int id)
 {
-    /* see if the next exception is of 'kind' and if so pop it off */
+    /* see if the next exception is of 'kind' and 'id'; if so pop it off */
     int tid;
     struct pok_exception* ex;
     struct thread_exception_item* list;
@@ -366,7 +367,12 @@ const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind)
     if (list->last)
         stack_pop(&list->exceptions);
     ex = stack_top(&list->exceptions);
-    list->last = TRUE;
+    if (ex->kind == kind && ex->id == id)
+        list->last = TRUE;
+    else {
+        list->last = FALSE;
+        ex = NULL;
+    }
     pok_unlock_error_module();
     return ex;
 }
@@ -395,7 +401,7 @@ const struct pok_exception* pok_exception_peek()
     pok_unlock_error_module();
     return ex;
 }
-const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind)
+const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id)
 {
     /* return top-most exception of specified kind on thread-specific stack but do not
        mark it for removal; if the current exception is not of 'kind' then NULL is returned */
@@ -416,7 +422,7 @@ const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind)
         if (list->last)
             stack_pop(&list->exceptions);
         ex = stack_top(&list->exceptions);
-        if (ex->kind != kind)
+        if (ex->kind != kind || ex->id != id)
             ex = NULL;
     }
     pok_unlock_error_module();

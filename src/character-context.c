@@ -73,7 +73,8 @@ void pok_character_context_set_player(struct pok_character_context* context,stru
 void pok_character_context_set_update(struct pok_character_context* context,
     enum pok_direction direction,
     enum pok_character_effect effect,
-    uint16_t parameter)
+    uint16_t parameter,
+    bool_t resetTime)
 {
     context->eff = effect;
     if (effect == pok_character_normal_effect) {
@@ -107,8 +108,10 @@ void pok_character_context_set_update(struct pok_character_context* context,
         context->update = context->granularity + 1;
     }
 
-    /* reset tick counter */
-    context->aniTicks = 0;
+    /* reset tick counter if specified; otherwise keep any extra time
+       from the previous timeout (this helps keep game time consistent) */
+    if (resetTime)
+        context->aniTicks = 0;
 }
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks)
 {
@@ -124,6 +127,8 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                 /* compute increment amount and number of times to apply it */
                 inc = dimension / context->granularity;
                 times = context->aniTicks / amt;
+                /* remember any leftover ticks so that we can keep time */
+                context->aniTicks %= amt;
                 if (inc == 0)
                     /* granularity was too fine */
                     inc = times;
@@ -169,8 +174,6 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                     context->update = FALSE;
                     return TRUE;
                 }
-                /* remember any leftover ticks so that we can keep time */
-                context->aniTicks %= amt;
             }
         }
 

@@ -1,9 +1,15 @@
 /* effect-GL.c - pokgame */
-#ifdef POKGAME_WIN32
+#if defined(POKGAME_WIN32)
+
 /* have to include Windows.h before OpenGL headers */
 #include <Windows.h>
-#endif
 #include <GL/gl.h>
+
+#else
+
+#include <GL/gl.h>
+
+#endif
 
 /* pok_fadeout_effect */
 void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct pok_fadeout_effect* effect)

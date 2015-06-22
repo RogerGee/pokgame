@@ -3,6 +3,16 @@
 #ifndef POKGAME_PROTOCOL_H
 #define POKGAME_PROTOCOL_H
 
+/* protocol constants */
+#define POKGAME_GREETING_SEQUENCE    "pokgame-greetings" /* greetings string */
+#define POKGAME_BINARYMODE_SEQUENCE  "pokgame-binary"    /* indicates to use the binary protocol */
+#define POKGAME_TEXTMODE_SEQUENCE    "pokgame-text"      /* indicates to use the text protocol */
+
+/* protocol masks */
+#define POKGAME_DEFAULT_GRAPHICS_MASK 0x01 /* mask for default settings bitmask sent during intermediate exchange */
+#define POKGAME_DEFAULT_TILES_MASK    0x02
+#define POKGAME_DEFAULT_SPRITES_MASK  0x03
+
 /* enumerators for network objects properties: do not change
    the order of elements in these enumerations */
 

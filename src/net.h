@@ -105,11 +105,19 @@ bool_t pok_data_stream_write_string(struct pok_data_source* dsrc,const char* src
 bool_t pok_data_stream_write_string_ex(struct pok_data_source* dsrc,const char* src,size_t numBytes);
 bool_t pok_data_stream_write_string_obj(struct pok_data_source* dsrc,const struct pok_string* src);
 
-/* pok_process: an abstraction around starting a process; its implementation is system specific */
+/* pok_process: an abstraction around starting a process; its implementation is platform specific */
 struct pok_process;
 struct pok_process* pok_process_new(const char* cmdline,const char* environment,pok_error_callback errorCallback);
 void pok_process_free(struct pok_process* proc);
 struct pok_data_source* pok_process_stdio(struct pok_process* proc);
 bool_t pok_process_has_terminated(struct pok_process* proc);
+
+/* pok_thread: an abstraction around starting a new thread; its implementation is platform specific */
+struct pok_thread;
+typedef int (*pok_thread_entry)(void* param);
+struct pok_thread* pok_thread_new(pok_thread_entry entryPoint,void* parameter);
+void pok_thread_free(struct pok_thread* thread);
+void pok_thread_start(struct pok_thread* thread);
+int pok_thread_join(struct pok_thread* thread);
 
 #endif

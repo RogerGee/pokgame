@@ -23,6 +23,7 @@ struct pok_timeout_interval
 };
 void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds);
 void pok_timeout(struct pok_timeout_interval* interval);
+void pok_timeout_no_elapsed(struct pok_timeout_interval* interval);
 void pok_timeout_grab_counter(struct pok_timeout_interval* interval);
 void pok_timeout_calc_elapsed(struct pok_timeout_interval* interval);
 
@@ -30,6 +31,7 @@ void pok_timeout_calc_elapsed(struct pok_timeout_interval* interval);
 enum pok_game_context
 {
     pok_game_intro_context, /* the game is processing the intro screen */
+    pok_game_pause_context, /* the game is doing nothing */
     pok_game_world_context,  /* the game is handling map logic */
     pok_game_warp_fadeout_context, /* the game is handling a warp fadeout */
     pok_game_warp_fadeout_cave_context, /* the game is handling a cave exit warp */
@@ -41,16 +43,23 @@ enum pok_game_context
 };
 
 struct pok_game_info;
-typedef void (*pok_game_callback)(struct pok_game_info* info);
+typedef struct pok_game_info* (*pok_game_callback)(struct pok_game_info* info);
 
 /* this structure stores all of the top-level game information */
 struct pok_game_info
 {
+    /* bitmask for static network object ownership: */
+    byte_t staticOwnerMask;
+
     /* controls the io and update procedures */
     bool_t control;
 
+    /* update thread handle */
+    struct pok_thread* updateThread;
+
     /* version information */
     struct pok_proc* versionProc;
+    struct pok_string versionLabel;
     pok_game_callback versionCBack;
     struct pok_data_source* versionChannel;
 
@@ -96,7 +105,7 @@ void pok_game_lock(void* object); /* ensure that 'object' is not being modified 
 void pok_game_unlock(void* object); /* exit 'lock' context (read-only access) */
 
 /* main pokgame procedures (the other procedure is graphics which is handled by the graphics subsystem) */
-int io_proc(struct pok_game_info* info);
+int io_proc(struct pok_graphics_subsystem* sys);
 int update_proc(struct pok_game_info* info);
 
 /* module load/unload */
@@ -104,8 +113,9 @@ void pok_game_load_module();
 void pok_game_unload_module();
 
 /* game initialization/closing */
-struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys);
+struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok_game_info* template);
 void pok_game_free(struct pok_game_info* game);
+void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind kind,void* obj);
 void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);
 
