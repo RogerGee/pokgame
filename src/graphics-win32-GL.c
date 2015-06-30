@@ -14,6 +14,7 @@ static void gl_init( /* implemented in graphics-GL.c (included later in this fil
     int32_t viewWidth,
     int32_t viewHeight);
 static void gl_create_textures(struct pok_graphics_subsystem* sys);
+static void gl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 
 struct _pok_graphics_subsystem_impl
 {
@@ -105,6 +106,12 @@ void impl_load_textures(struct pok_graphics_subsystem* sys, struct texture_info*
     } while (FALSE);
     sys->impl->texinfo = info;
     sys->impl->texinfoCount = count;
+    ReleaseMutex(sys->impl->mutex);
+}
+void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
+{
+    WaitForSingleObject(sys->impl->mutex,INFINITE);
+    gl_delete_textures(sys,info,count);
     ReleaseMutex(sys->impl->mutex);
 }
 void impl_set_game_state(struct pok_graphics_subsystem* sys, bool_t state)
@@ -276,8 +283,10 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
     }
 
     /* cleanup */
-    if (sys->impl->textureCount > 0)
+    if (sys->impl->textureCount > 0) {
         glDeleteTextures(sys->impl->textureCount, sys->impl->textureNames);
+        sys->impl->textureCount = 0;
+    }
     DestroyMainWindow(sys);
     return 0;
 }

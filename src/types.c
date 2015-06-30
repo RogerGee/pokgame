@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* external constants */
+const struct pok_point ORIGIN = {0,0};
+
 /* pok_string */
 static char dummyBuffer[16];
 struct pok_string* pok_string_new()

@@ -1,7 +1,6 @@
 /* error.c - pokgame */
 #include "error.h"
 #include <dstructs/hashmap.h>
-#include <dstructs/stack.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -45,6 +44,9 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "cannot execute program: file does not exist", /* pok_ex_net_program_not_found */
         "cannot execute program: permission denied" /* pok_ex_net_execute_denied */
     },
+    (const char* []) { /* pok_ex_netobj */
+        "the specified network id was already allocated" /* pok_ex_netobj_bad_id */
+    },
     (const char* []) { /* pok_ex_graphics */
         "a bad dimension was specified to the graphics subsystem", /* pok_ex_graphics_bad_dimension */
         "a bad window size was specified to the graphics subsystem", /* pok_ex_graphics_bad_window_size */
@@ -54,6 +56,7 @@ static char const* const* POK_ERROR_MESSAGES[] = {
     },
     (const char* []) { /* pok_ex_image */
         "the image format is unrecognized", /* pok_ex_image_unrecognized_format */
+        "the image's color format is not supported", /* pok_ex_image_bad_color_format */
         "the specified image was too large", /* pok_ex_image_too_big */
         "the specified subimage was invalid", /* pok_ex_image_invalid_subimage */
         "the image object was already loaded", /* pok_ex_image_already_loaded */
@@ -76,6 +79,7 @@ static char const* const* POK_ERROR_MESSAGES[] = {
         "the specified chunk size was incorrect", /* pok_ex_map_bad_chunk_size */
         "a zero amount of chunks was specified", /* pok_ex_map_zero_chunks */
         "the operation could not complete because the map was already loaded", /* pok_ex_map_already */
+        "the operation could not complete because the map was not loaded", /* pok_ex_map_not_loaded */
         "map information was incorrect", /* pok_ex_map_bad_format */
         "a new chunk was created at an already allocated position on the map" /* pok_ex_map_non_unique_chunk */
     }
@@ -124,19 +128,19 @@ void pok_error_fromstack(enum pok_errorkind kind)
 
 struct thread_exception_item
 {
-    int id; /* key: must be first value in struct */
-    bool_t last; /* does last value need to be popped off 'exceptions'? */
-    struct stack exceptions;
+    int id; /* key: must be first value in struct; this is the thread id */
+    bool_t popped; /* non-zero if the exception has been popped */
+    struct pok_exception* ex; /* the exception */
 };
-static void thread_exception_item_init(struct thread_exception_item* item,int id)
+static void thread_exception_item_init(struct thread_exception_item* item,int id,struct pok_exception* ex)
 {
     item->id = id;
-    item->last = FALSE;
-    stack_init(&item->exceptions,free);
+    item->popped = FALSE;
+    item->ex = ex;
 }
 static void thread_exception_item_dstor(struct thread_exception_item* item)
 {
-    stack_delete(&item->exceptions);
+    free(item->ex);
     free(item);
 }
 
@@ -150,6 +154,32 @@ static struct pok_exception memerror = {pok_ex_default_memory_allocation_fail,
                                         pok_ex_default,
                                         "memory allocation exception",
                                         0};
+
+static void add_exception(struct pok_exception* ex)
+{
+    int tid;
+    struct thread_exception_item* list;
+    /* place exception in data structure */
+    pok_lock_error_module();
+    tid = pok_get_thread_id();
+    list = hashmap_lookup(&exceptions,&tid);
+    if (list == NULL) {
+        /* create new structure for thread */
+        list = malloc(sizeof(struct thread_exception_item));
+        thread_exception_item_init(list,tid,ex);
+        hashmap_insert(&exceptions,list);
+    }
+    else {
+#ifdef POKGAME_DEBUG
+        if (!list->popped)
+            pok_error(pok_error_warning,"exception module discarded unpopped exception");
+#endif
+        free(list->ex);
+        list->ex = ex;
+        list->popped = FALSE;
+    }
+    pok_unlock_error_module();
+}
 
 void pok_exception_load_module()
 {
@@ -182,8 +212,6 @@ void pok_exception_unload_module()
 }
 struct pok_exception* pok_exception_new()
 {
-    int tid;
-    struct thread_exception_item* list;
     struct pok_exception* ex;
 #ifdef POKGAME_DEBUG
     if (!init)
@@ -194,18 +222,7 @@ struct pok_exception* pok_exception_new()
     ex->lineno = 0;
     ex->kind = pok_ex_default;
     ex->message = NULL;
-    /* place exceptions in data structure */
-    pok_lock_error_module();
-    tid = pok_get_thread_id();
-    list = hashmap_lookup(&exceptions,&tid);
-    if (list == NULL) {
-        list = malloc(sizeof(struct thread_exception_item));
-        thread_exception_item_init(list,tid);
-        hashmap_insert(&exceptions,list);
-    }
-    stack_push(&list->exceptions,ex);
-    list->last = FALSE; /* current top of stack is current exception */
-    pok_unlock_error_module();
+    add_exception(ex);
     return ex;
 }
 struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
@@ -222,18 +239,7 @@ struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
     ex->lineno = 0;
     ex->kind = kind;
     ex->message = POK_ERROR_MESSAGES[kind][id];
-    /* place exceptions in data structure */
-    pok_lock_error_module();
-    tid = pok_get_thread_id();
-    list = hashmap_lookup(&exceptions,&tid);
-    if (list == NULL) {
-        list = malloc(sizeof(struct thread_exception_item));
-        thread_exception_item_init(list,tid);
-        hashmap_insert(&exceptions,list);
-    }
-    stack_push(&list->exceptions,ex);
-    list->last = FALSE; /* current top of stack is current exception */
-    pok_unlock_error_module();
+    add_exception(ex);
     return ex;
 }
 struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
@@ -250,24 +256,14 @@ struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
     ex->lineno = lineno;
     ex->kind = pok_ex_default;
     ex->message = message;
-    /* place exceptions in data structure */
-    pok_lock_error_module();
-    tid = pok_get_thread_id();
-    list = hashmap_lookup(&exceptions,&tid);
-    if (list == NULL) {
-        list = malloc(sizeof(struct thread_exception_item));
-        thread_exception_item_init(list,tid);
-        hashmap_insert(&exceptions,list);
-    }
-    stack_push(&list->exceptions,ex);
-    list->last = FALSE; /* current top of stack is current exception */
-    pok_unlock_error_module();
+    add_exception(ex);
     return ex;
 }
 bool_t pok_exception_check()
 {
-    /* is there an exception on the thread-specific stack? */
+    /* is there an exception for the current thread? */
     int tid;
+    bool_t result;
     struct thread_exception_item* list;
 #ifdef POKGAME_DEBUG
     if (!init)
@@ -278,19 +274,18 @@ bool_t pok_exception_check()
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    if (list==NULL || stack_is_empty(&list->exceptions)) {
-        pok_unlock_error_module();
-        return FALSE;
-    }
+    /* there is an exception if there is a structure whose exception has
+       not been popped */
+    result = !(list==NULL || list->popped);
     pok_unlock_error_module();
-    return TRUE;
+    return result;
 }
 bool_t pok_exception_check_ex(enum pok_ex_kind kind,int id)
 {
     /* is there an exception of the specified kind/id on the thread-specific stack? */
     size_t i;
     int tid;
-    void** buf;
+    bool_t result;
     struct thread_exception_item* list;
 #ifdef POKGAME_DEBUG
     if (!init)
@@ -301,22 +296,15 @@ bool_t pok_exception_check_ex(enum pok_ex_kind kind,int id)
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    if (list!=NULL && !stack_is_empty(&list->exceptions)) {
-        for (i = 0,buf = stack_getbuffer(&list->exceptions);i < stack_getsize(&list->exceptions);++i) {
-            if (((struct pok_exception*)buf[i])->kind == kind && ((struct pok_exception*)buf[i])->id == id) {
-                pok_unlock_error_module();
-                return TRUE;
-            }
-        }
-    }
+    result = list!=NULL && !list->popped && list->ex->kind == kind && list->ex->id == id;
     pok_unlock_error_module();
-    return FALSE;
+    return result;
 }
 const struct pok_exception* pok_exception_pop()
 {
-    /* return top-most exception on thread-specific stack; it will
-       remain valid so long as the user doesn't make another call
-       to a pop_exception_pop*() function variant */
+    /* return exception on current thread (if any); NULL is returned
+       if no exception has been added; it will remain valid so long
+       as another exception is not created for the thread */
     int tid;
     struct pok_exception* ex;
     struct thread_exception_item* list;
@@ -324,6 +312,8 @@ const struct pok_exception* pok_exception_pop()
     if (!init)
         pok_error(pok_error_fatal,"module 'exception' was unloaded");
 #endif
+    /* return the memory error structure's address; this structure is allocated
+       within the program's data segment so that we can use it if memory is exhausted */
     if (memory_error_flag) {
         memory_error_flag = FALSE;
         return &memerror;
@@ -331,14 +321,12 @@ const struct pok_exception* pok_exception_pop()
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    if (list==NULL || stack_is_empty(&list->exceptions)) {
+    if (list==NULL || list->popped) {
         pok_unlock_error_module();
         return NULL;
     }
-    if (list->last)
-        stack_pop(&list->exceptions);
-    ex = stack_top(&list->exceptions);
-    list->last = TRUE;
+    ex = list->ex;
+    list->popped = TRUE;
     pok_unlock_error_module();
     return ex;
 }
@@ -359,20 +347,12 @@ const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind,int id)
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    if (list==NULL || stack_is_empty(&list->exceptions) || 
-        ((struct pok_exception*)stack_top(&list->exceptions))->kind!=kind) {
+    if (list==NULL || list->popped || list->ex->kind != kind || list->ex->id != id) {
         pok_unlock_error_module();
         return NULL;
     }
-    if (list->last)
-        stack_pop(&list->exceptions);
-    ex = stack_top(&list->exceptions);
-    if (ex->kind == kind && ex->id == id)
-        list->last = TRUE;
-    else {
-        list->last = FALSE;
-        ex = NULL;
-    }
+    ex = list->ex;
+    list->popped = TRUE;
     pok_unlock_error_module();
     return ex;
 }
@@ -392,12 +372,7 @@ const struct pok_exception* pok_exception_peek()
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    ex = NULL;
-    if (list != NULL) {
-        if (list->last)
-            stack_pop(&list->exceptions);
-        ex = stack_top(&list->exceptions); /* will be NULL if stack is empty */
-    }
+    ex = list != NULL && !list->popped ? list->ex : NULL;
     pok_unlock_error_module();
     return ex;
 }
@@ -417,14 +392,7 @@ const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id)
     pok_lock_error_module();
     tid = pok_get_thread_id();
     list = hashmap_lookup(&exceptions,&tid);
-    ex = NULL;
-    if (list != NULL) {
-        if (list->last)
-            stack_pop(&list->exceptions);
-        ex = stack_top(&list->exceptions);
-        if (ex->kind != kind || ex->id != id)
-            ex = NULL;
-    }
+    ex = list != NULL && !list->popped && list->ex->kind == kind && list->ex->id == id ? list->ex : NULL;
     pok_unlock_error_module();
     return ex;
 }

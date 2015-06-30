@@ -1,17 +1,14 @@
 /* pok.h
     This file provides an Application Programming Interface for
-   pokgame game version servers.
+   pokgame versions.
 */
 #ifndef POKGAME_API
 #define POKGAME_API
-#include <stdlib.h>
-#include <stdint.h>
 #include "protocol.h"
-#include "types.h"
 
-/* POKGAME VERSION SERVER CORE LIBRARY */
+/* POKGAME VERSION CORE LIBRARY */
 
-/* pok_init: initialize pokgame version server library
+/* pok_init: initialize pokgame version library
 
    dimension        - tile/sprite dimension for graphics
    windowWidth      - number of tiles spanning game window's width
@@ -20,10 +17,10 @@
    playerLocationY  - row in which to place player sprite on screen
    playerOffsetX    - pixel offset within column tile for player sprite
    playerOffsetY    - pixel offset within row tile for player sprite
-   doServer         - if non-zero, then library uses network sockets to host game;
-                      otherwise the library uses the standard input/output
+   doServer         - if non-zero, then library uses network sockets to host game
+                      as a server; otherwise the library uses a single connection
 
-   'default' variant: lets the client specify graphics parameters
+   'default' variant: lets the engine specify graphics parameters
 */
 void pok_init(
     uint16_t dimension,

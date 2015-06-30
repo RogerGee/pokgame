@@ -13,7 +13,9 @@
       tilemaker add <source-raw-image> <cols> <rows>            // update database with tiles from source
       tilemaker rm <position-index> ...                         // remove tiles at specified positions
       tilemaker pass <position-index> ...                       // marks tiles as passable (put at end of list)
+      tilemaker impass <position-index> ...                     // marks tiles as impassable (put at end of first section)
       tilemaker mv <source-index> <dest-index>                  // reorders tiles such that source is at dest position
+      tilemaker stats                                           // display info about tilemaker database
 */
 #include "lib.h"
 #include <dstructs/dynarray.h>
@@ -49,7 +51,9 @@ static void compile(const char* outputFile,int option);
 static void add(const char* sourceFile,size_t columns,size_t rows);
 static void rm(const char* argv[],int number);
 static void pass(const char* argv[],int number);
+static void impass(const char* argv[],int number);
 static void mv(const char* source[],const char* destination[],int number);
+static void stats();
 
 int main(int argc,const char* argv[])
 {
@@ -118,6 +122,14 @@ int main(int argc,const char* argv[])
         read_config();
         pass(argv+2,argc-2);
     }
+    else if (strcmp(argv[1],"impass") == 0) {
+        if (argc < 3) {
+            fprintf(stderr,"%s: impass position-index ...\n",argv[0]);
+            return 1;
+        }
+        read_config();
+        impass(argv+2,argc-2);
+    }
     else if (strcmp(argv[1],"mv") == 0) {
         int i, number;
         const char** source, **dest;
@@ -142,6 +154,8 @@ int main(int argc,const char* argv[])
         free(source);
         free(dest);
     }
+    else if (strcmp(argv[1],"stats") == 0)
+        stats();
     else {
         fprintf(stderr,"%s: the command '%s' was not recognized\n",argv[0],argv[1]);
         return 1;
@@ -481,6 +495,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
             m = 1;
             for (i = 0;i < arry->da_top;++i) {
                 if ( image_compar(tile,arry->da_data[i],tilebytes) ) {
+                    printf("source tile {%d,%d} matches tile at index %d\n",(int)x+1,(int)y+1,(int)i+1);
                     m = 0;
                     break;
                 }
@@ -489,6 +504,7 @@ void add(const char* sourceFile,size_t columns,size_t rows)
             if (m) {
                 char name[16];
                 snprintf(name,sizeof(name),"%d",a++);
+                printf("source tile {%d,%d} --> ",(int)x+1,(int)y+1);
                 save_image_rgb(name,tile,config.dimension,config.dimension,1);
                 /* add the tile to the list */
                 dynamic_array_pushback(arry,tile);
@@ -554,7 +570,7 @@ void pass(const char* argv[],int number)
             const char* oldName;
             oldName = (const char*)arry->da_data[pos];
             if ( isalpha(oldName[0]) ) {
-                fprintf(stderr,"%s: file '%s' at position %zu is already special\n",programName,oldName,pos+1);
+                fprintf(stderr,"%s: file '%s' at position %zu is already passable\n",programName,oldName,pos+1);
                 continue;
             }
             snprintf(name,sizeof(name),"p%s",oldName);
@@ -566,6 +582,42 @@ void pass(const char* argv[],int number)
         else
             fprintf(stderr,"%s: incorrect position '%zu'\n",programName,pos+1);
     }
+    if (chdir("..") != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    dynamic_array_free_ex(arry,free);
+}
+
+void impass(const char* argv[],int number)
+{
+    int i, next;
+    struct dynamic_array* arry;
+    arry = get_tile_files(&next);
+    if (chdir(TILEDIR) != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    /* mark all specified tiles as impassable (if not already) */
+    for (i = 0;i < number;++i) {
+        size_t pos = atoi(argv[i]) - 1;
+        if (pos < arry->da_top) {
+            char newName[16];
+            const char* name = arry->da_data[pos];
+            if (name[0] != 'p') {
+                fprintf(stderr,"%s: tile at position %zu is already impassable\n",programName,pos);
+                continue;
+            }
+            sprintf(newName,"%d",next++);
+            if (rename(name,newName) == -1)
+                fprintf(stderr,"%s: could not rename '%s': %s\n",programName,name,strerror(errno));
+            else
+                printf("marked tile file '%s' at position %zu as impassable\n",name,pos);
+        }
+        else
+            fprintf(stderr,"%s: %zu is not a valid tile position\n",programName,pos);
+    }
+    /* cleanup */
     if (chdir("..") != 0) {
         fprintf(stderr,"%s: fail chdir()\n",programName);
         exit(EXIT_FAILURE);
@@ -693,4 +745,35 @@ void mv(const char** source,const char** destination,int number)
     puts("tiles moved");
     dynamic_array_free_ex(arry,free);
     free(newlist);
+}
+
+void stats()
+{
+    int next;
+    size_t iter;
+    int cutoff, pass;
+    struct dynamic_array* arry;
+    arry = get_tile_files(&next);
+    if (chdir(TILEDIR) != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    cutoff = 0;
+    pass = 0;
+    for (iter = 0;iter < arry->da_top;++iter) {
+        const char* name = arry->da_data[iter];
+        if (name[0] == 'p')
+            ++pass;
+        else
+            ++cutoff;
+    }
+    printf("tile database has %zu tiles\n\timpassibility cutoff: %d\n\tnumber of passable tiles: %d\n",
+        arry->da_top,
+        cutoff,
+        pass );
+    if (chdir("..") != 0) {
+        fprintf(stderr,"%s: fail chdir()\n",programName);
+        exit(EXIT_FAILURE);
+    }
+    dynamic_array_free_ex(arry,free);
 }

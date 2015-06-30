@@ -1,7 +1,7 @@
 /* map.c - pokgame */
 #include "map.h"
 #include "error.h"
-#include "pok.h" /* gets protocol.h */
+#include "pok.h"
 #include "parser.h"
 #include <stdlib.h>
 
@@ -44,7 +44,7 @@ struct chunk_key
     struct pok_map_chunk* chunk;
 };
 
-static bool_t chunk_key_create(struct pok_map* map,struct pok_map_chunk* chunk,struct pok_point* point)
+static bool_t chunk_key_create(struct pok_map* map,struct pok_map_chunk* chunk,const struct pok_point* point)
 {
     struct chunk_key* key = malloc(sizeof(struct chunk_key));
     if (key == NULL) {
@@ -68,7 +68,7 @@ enum pok_map_chunk_flags
     pok_map_chunk_flag_byref = 0x01
 };
 
-static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,struct pok_point* position)
+static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,const struct pok_point* position)
 {
     uint16_t i, j;
     struct pok_map_chunk* chunk;
@@ -91,6 +91,8 @@ static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,struct pok_po
             pok_exception_flag_memory_error();
             return NULL;
         }
+        for (j = 0;j < map->chunkSize.columns;++j)
+            chunk->data[i][j] = DEFAULT_TILE;
     }
     for (i = 0;i < 4;++i)
         chunk->adjacent[i] = NULL;
@@ -106,7 +108,7 @@ static struct pok_map_chunk* pok_map_chunk_new(struct pok_map* map,struct pok_po
     pok_netobj_default_ex(&chunk->_base,pok_netobj_mapchunk);
     return chunk;
 }
-static struct pok_map_chunk* pok_map_chunk_new_ex(struct pok_map* map,struct pok_point* position,bool_t byref)
+static struct pok_map_chunk* pok_map_chunk_new_ex(struct pok_map* map,const struct pok_point* position,bool_t byref)
 {
     /* this chunk only allocates space for pointers to row data and
        assumes the row data is allocated by another context; the caller
@@ -302,13 +304,25 @@ static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk
     }
     return result;
 }
-static enum pok_network_result pok_map_chunk_netupread(struct pok_map_chunk* chunk,struct pok_data_source* dsrc,
-    const struct pok_netobj_readinfo* info)
+enum pok_network_result pok_map_chunk_netmethod_send(struct pok_map_chunk* chunk,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* winfo,
+    struct pok_netobj_upinfo* uinfo)
 {
-    enum pok_network_result result = pok_net_already;
+    enum pok_network_result result = pok_net_completed;
 
     return result;
 }
+enum pok_network_result pok_map_chunk_netmethod_recv(struct pok_map_chunk* chunk,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info,
+    enum pok_map_chunk_method method)
+{
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}
+
 
 /* pok_map */
 struct pok_map* pok_map_new()
@@ -347,6 +361,78 @@ void pok_map_delete(struct pok_map* map)
     }
     treemap_delete(&map->loadedChunks);
 }
+bool_t pok_map_configure(struct pok_map* map,const struct pok_size* chunkSize,const uint16_t firstChunk[],uint32_t length)
+{
+    /* configure an empty map with the specified chunk size; create the first chunk from the specified tile data; the
+       'length' argument specifies the length of the tile data array; the algorithm will repeat the tiles if too few
+       are specified (this allows fills and patterns to be applied to a chunk) */
+    if (map->origin == NULL) {
+        uint16_t i, j;
+        uint32_t k = 0;
+        /* validate chunk size */
+        if (chunkSize->columns < pok_min_map_chunk_dimension || chunkSize->columns > pok_max_map_chunk_dimension
+            || chunkSize->rows < pok_min_map_chunk_dimension || chunkSize->rows > pok_max_map_chunk_dimension) {
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
+            return FALSE;
+        }
+        /* create origin chunk */
+        map->chunkSize = *chunkSize;
+        map->origin = pok_map_chunk_new(map,&ORIGIN);
+        /* assign chunk data; the tile data may repeat */
+        if (length > 0)
+            for (i = 0;i < chunkSize->rows;++i)
+                for (j = 0;j < chunkSize->columns;++j)
+                    map->origin->data[i][j].data.tileid = firstChunk[k++ % length];
+        return TRUE;
+    }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
+    return FALSE;
+}
+bool_t pok_map_add_chunk(struct pok_map* map,
+    const struct pok_point* adjacency,
+    enum pok_direction direction,
+    const uint16_t chunkTiles[],
+    uint32_t length)
+{
+    /* add a new chunk to the map that is adjacent to the chunk at position 'adjacency' 
+       in the specified 'direction'; assign the specified */
+    if (map->origin != NULL) {
+        uint16_t i, j;
+        uint32_t k = 0;
+        struct pok_point pos;
+        struct pok_map_chunk* chunk;
+        /* compute the position for the new chunk */
+        pos = *adjacency;
+        switch (direction) {
+        case pok_direction_up:
+            --pos.Y;
+            break;
+        case pok_direction_down:
+            ++pos.Y;
+            break;
+        case pok_direction_left:
+            --pos.X;
+            break;
+        case pok_direction_right:
+            ++pos.X;
+            break;
+        default:
+            break;
+        }
+        /* create the new chunk; this adds it to the map */
+        chunk = pok_map_chunk_new(map,&pos);
+        if (chunk == NULL)
+            return FALSE;
+        /* assign chunk data; the tile data may repeat */
+        if (length > 0)
+            for (i = 0;i < map->chunkSize.rows;++i)
+                for (j = 0;j < map->chunkSize.columns;++j)
+                    map->origin->data[i][j].data.tileid = chunkTiles[k++ % length];
+        return TRUE;
+    }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_not_loaded);
+    return FALSE;
+}
 bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t complex)
 {
     /* write the map representation to a file
@@ -375,6 +461,7 @@ bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t comp
         pok_map_chunk_setstate(map->origin,FALSE); /* reset visit state for future operation */
         return result;
     }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_not_loaded);
     return FALSE;
 }
 bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
@@ -401,8 +488,8 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
         if (!pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns) || !pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows))
             return FALSE;
         /* ensure chunk dimensions are correct */
-        if (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension
-            || map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.columns < pok_min_map_chunk_dimension || map->chunkSize.columns > pok_max_map_chunk_dimension
+            || map->chunkSize.rows < pok_min_map_chunk_dimension || map->chunkSize.rows > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return FALSE;
         }
@@ -417,7 +504,9 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
         info.map = map;
         if ( pok_map_chunk_open(map->origin,&info,map->originPos) )
             return TRUE;
+        return FALSE;
     }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
 static void pok_map_insert_chunk(struct pok_map* map,struct pok_map_chunk* chunk,struct chunk_insert_hint* hint)
@@ -529,6 +618,7 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
         }
         return TRUE;
     }
+    pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
 bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename)
@@ -704,7 +794,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns);
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
-        if (map->chunkSize.columns == 0 || map->chunkSize.columns > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.columns < pok_min_map_chunk_dimension || map->chunkSize.columns > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
@@ -713,7 +803,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows);
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
-        if (map->chunkSize.rows == 0 || map->chunkSize.rows > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.rows < pok_min_map_chunk_dimension || map->chunkSize.rows > pok_max_map_chunk_dimension) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
@@ -773,9 +863,29 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
     }
     return result;
 }
-static enum pok_network_result pok_map_netupread(struct pok_map* map)
+enum pok_network_result pok_map_netwrite(struct pok_map* map,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* info)
 {
-    enum pok_network_result result = pok_net_already;
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}
+enum pok_network_result pok_map_netmethod_send(struct pok_map* map,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* winfo,
+    struct pok_netobj_upinfo* uinfo)
+{
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}
+enum pok_network_result pok_map_netmethod_recv(struct pok_map* map,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info,
+    enum pok_map_method method)
+{
+    enum pok_network_result result = pok_net_completed;
 
     return result;
 }
@@ -862,9 +972,29 @@ bool_t pok_world_fromfile_warps(struct pok_world* world,const char* filename)
     }
     return FALSE;
 }
-enum pok_network_result pok_world_netread(struct pok_world* world,struct pok_data_source* dsrc,struct pok_netobj_readinfo* readinfo)
+enum pok_network_result pok_world_netwrite(struct pok_world* world,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* info)
 {
-    enum pok_network_result result = pok_net_already;
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}
+enum pok_network_result pok_world_netmethod_send(struct pok_world* world,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* winfo,
+    struct pok_netobj_upinfo* uinfo)
+{
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}
+enum pok_network_result pok_world_netmethod_recv(struct pok_world* world,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info,
+    enum pok_world_method method)
+{
+    enum pok_network_result result = pok_net_completed;
 
     return result;
 }

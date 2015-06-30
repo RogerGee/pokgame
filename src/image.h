@@ -7,6 +7,7 @@
 enum pok_ex_image
 {
     pok_ex_image_unrecognized_format, /* image data format was unrecognized */
+    pok_ex_image_bad_color_format, /* image color format was incorrect */
     pok_ex_image_too_big, /* image resolution was too big */
     pok_ex_image_invalid_subimage, /* subimage does not exist */
     pok_ex_image_already_loaded, /* image was already initialized */
@@ -81,12 +82,9 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
 /* these image constructors provide alternate input formats for image data; they are destroyed
    like any 'pok_image' using 'pok_image_free' */
 
-/* using the Windows bitmap format */
-struct pok_image* pok_image_bmp_new(const char* file);
-void pok_image_bmp_save(struct pok_image* bmp);
-
-/* using portable network graphics */
-struct pok_image_png* pok_image_png_new(const char* file);
-void pok_image_png_save(struct pok_image* png);
+/* using portable network graphics format: data is still stored in same format; image
+   may or may not have alpha information */
+struct pok_image* pok_image_png_new(const char* file);
+void pok_image_png_save(struct pok_image* img,const char* file);
 
 #endif

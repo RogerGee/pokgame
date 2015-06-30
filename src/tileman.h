@@ -17,7 +17,8 @@ enum pok_ex_tileman
 enum pok_tile_manager_flags
 {
     pok_tile_manager_flag_none = 0x00,
-    pok_tile_manager_flag_ani_byref = 0x01
+    pok_tile_manager_flag_ani_byref = 0x01,
+    pok_tile_manager_flag_terrain_byref = 0x02
 };
 
 /* tile animation data structure; defines animation sequences for tiles */
@@ -27,6 +28,26 @@ struct pok_tile_ani_data
     uint16_t forward; /* next tile frame in list */
     uint16_t backward; /* previous tile in list */
     uint16_t totalTicks; /* total ticks from this tile to itself */
+};
+
+enum pok_tile_terrain_type
+{
+    pok_tile_terrain_cutable,
+    pok_tile_terrain_water,
+    pok_tile_terrain_ice,
+    pok_tile_terrain_lava,
+    pok_tile_terrain_waterfall,
+    pok_tile_terrain_whirlpool,
+    pok_tile_terrain_ledge_down,
+    pok_tile_terrain_ledge_left,
+    pok_tile_terrain_ledge_right,
+    POK_TILE_TERRAIN_TOP
+};
+
+struct pok_tile_terrain_info
+{
+    uint16_t length;
+    uint16_t* list;
 };
 
 /* pok_tile_manager: interface to manage tile images and animation */
@@ -49,13 +70,11 @@ struct pok_tile_manager
        tileset[tileani[id]] */
     struct pok_tile_ani_data* tileani;
 
-    /* special tile lists */
-    uint16_t waterTilesCnt;
-    uint16_t* waterTiles;
-    uint16_t lavaTilesCnt;
-    uint16_t* lavaTiles;
-    uint16_t waterfallTilesCnt;
-    uint16_t* waterfallTiles;
+    /* terrain tile lists: every tile of the kinds enumerated here receives the specified
+       terrain attribute; this is more convenient than specifying it for certain instantiated
+       tiles in a map; the game engine will be able to automatically recognize these tiles and
+       apply effects */
+    struct pok_tile_terrain_info terrain[POK_TILE_TERRAIN_TOP];
 
     /* reserved for the implementation */
     struct pok_image* _sheet;
@@ -69,6 +88,7 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
 bool_t pok_tile_manager_load_tiles(struct pok_tile_manager* tman,uint16_t imgc,uint16_t impassibility,const byte_t* data,bool_t byRef);
 bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,struct pok_tile_ani_data* data,bool_t byRef);
 bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char* file);
+bool_t pok_tile_manager_fromfile_tiles_png(struct pok_tile_manager* tman,const char* file);
 enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 struct pok_image* pok_tile_manager_get_tile(const struct pok_tile_manager* tman,uint16_t tileid,uint32_t aniticks);

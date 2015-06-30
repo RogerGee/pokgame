@@ -56,9 +56,10 @@ bool_t pok_map_render_context_set_position(struct pok_map_render_context* contex
     struct pok_map* map,
     const struct pok_point* chunkpos,
     const struct pok_location* relpos);
-bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum pok_direction dir,bool_t checkPassable);
+bool_t pok_map_render_context_move(struct pok_map_render_context* context,enum pok_direction dir,uint16_t skipTiles,bool_t checkPassable);
 void pok_map_render_context_set_update(struct pok_map_render_context* context,enum pok_direction dir,uint16_t dimension);
 bool_t pok_map_render_context_update(struct pok_map_render_context* context,uint16_t dimension,uint32_t ticks);
+struct pok_tile* pok_map_render_context_get_adjacent_tile(struct pok_map_render_context* context,int x,int y);
 
 /* render routine for maps */
 void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);

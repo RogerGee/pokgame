@@ -77,7 +77,7 @@ void pok_character_context_set_update(struct pok_character_context* context,
     bool_t resetTime)
 {
     context->eff = effect;
-    if (effect == pok_character_normal_effect) {
+    if (effect == pok_character_normal_effect || effect == pok_character_slide_effect) {
         /* set the resolve frame and animation frame; recall that up/down directions have two frames instead of one;
            the frame alternation counter is used to alternate between those frames */
         context->character->direction = direction;
@@ -107,76 +107,170 @@ void pok_character_context_set_update(struct pok_character_context* context,
            frame */
         context->update = context->granularity + 1;
     }
+    else if (effect == pok_character_jump_effect) {
+        context->character->direction = direction;
+        context->resolveFrame = pok_to_frame_direction(direction);
+        /* set sprite offset to double the dimension (jump skips a tile); the jump only
+           occurs in the down, left and right directions */
+        parameter <<= 1;
+        switch (direction) {
+        case pok_direction_down:
+            context->offset[1] = -parameter;
+            break;
+        case pok_direction_left:
+            context->offset[0] = parameter;
+            break;
+        case pok_direction_right:
+            context->offset[0] = -parameter;
+            break;
+        default:
+            break;
+        }
+        /* let 'context->update' hold the number of iterations for the update; let a jump
+           take twice as long as a normal update */
+        context->update = context->granularity << 1;
+    }
 
     /* reset tick counter if specified; otherwise keep any extra time
        from the previous timeout (this helps keep game time consistent) */
     if (resetTime)
         context->aniTicks = 0;
 }
+static bool_t pok_character_context_normal_update(struct pok_character_context* context,int inc)
+{
+    /* update character frame if we have waited one cycle */
+    if (context->update == context->granularity)
+        /* increment the frame alteration counter so that animation frames alternate */
+        context->frame = context->resolveFrame + 1/*ani*/ + context->frameAlt++ % 2 /*alt-ani*/;
+    /* update animation offset */
+    if (context->offset[0] < 0) {
+        context->offset[0] += inc;
+        if (context->offset[0] > 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[0] > 0) {
+        context->offset[0] -= inc;
+        if (context->offset[0] < 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[1] < 0) {
+        context->offset[1] += inc;
+        if (context->offset[1] > 0)
+            context->offset[1] = 0;
+    }
+    else if (context->offset[1] > 0) {
+        context->offset[1] -= inc;
+        if (context->offset[1] < 0)
+            context->offset[1] = 0;
+    }
+    /* decrement update counter and see if it is time to resolve to
+       our destination frame; check slightly before end of rendering
+       sequence to allow more time to view the frame (in case the sequence
+       starts back up immediately) */
+    if (--context->update == context->granularity / 4)
+        context->frame = context->resolveFrame;
+    /* check to see if we are finished; opt out of the last frame
+       (it's the same as the start of the next sequence) */
+    if (context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
+        /* done: we skip the last frame because it is redundant; return TRUE to mean
+           that the process completed */
+        context->update = FALSE;
+        return TRUE;
+    }
+    return FALSE;
+}
+static bool_t pok_character_context_slide_update(struct pok_character_context* context,int inc)
+{
+    /* update character frame after waiting one cycle; since the character is sliding, no animation frames are used */
+    if (context->update == context->granularity)
+        context->frame = context->resolveFrame;
+    /* update animation offset */
+    if (context->offset[0] < 0) {
+        context->offset[0] += inc;
+        if (context->offset[0] > 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[0] > 0) {
+        context->offset[0] -= inc;
+        if (context->offset[0] < 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[1] < 0) {
+        context->offset[1] += inc;
+        if (context->offset[1] > 0)
+            context->offset[1] = 0;
+    }
+    else if (context->offset[1] > 0) {
+        context->offset[1] -= inc;
+        if (context->offset[1] < 0)
+            context->offset[1] = 0;
+    }
+    /* check to see if finished */
+    if (--context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
+        /* done: we skip the last frame because it is redundant; return TRUE to mean
+           that the process completed */
+        context->update = FALSE;
+        return TRUE;
+    }    
+    return FALSE;
+}
+static bool_t pok_character_context_jump_update(struct pok_character_context* context,int inc)
+{
+    /* update character frame if we have waited one cycle */
+    if (context->update == (context->granularity << 1) - 1)
+        /* increment the frame alteration counter so that animation frames alternate */
+        context->frame = context->resolveFrame + 1/*ani*/ + context->frameAlt++ % 2 /*alt-ani*/;
+    /* update vertical offset */
+    context->offset[1] += (context->update > context->granularity ? -inc : inc);
+    /* update animation offset */
+    if (context->offset[0] < 0) {
+        context->offset[0] += inc;
+        if (context->offset[0] > 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[0] > 0) {
+        context->offset[0] -= inc;
+        if (context->offset[0] < 0)
+            context->offset[0] = 0;
+    }
+    else if (context->offset[1] < 0) {
+        context->offset[1] += inc;
+        if (context->offset[1] > 0)
+            context->offset[1] = 0;
+    }
+    if (!--context->update && context->offset[0] == 0 && context->offset[1] == 0) {
+        context->frame = context->resolveFrame;
+        return TRUE;
+    }
+    return FALSE;
+}
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks)
 {
     if (context->update) {
-        /* update character context based on which effect is being applied; make sure enough elapsed time
-           has occurred before performing the update operation */
-        if (context->eff == pok_character_normal_effect) {
-            uint32_t amt = context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt;
-            context->aniTicks += ticks;
-            if (context->aniTicks >= amt) {
-                int inc;
-                int times;
-                /* compute increment amount and number of times to apply it */
-                inc = dimension / context->granularity;
-                times = context->aniTicks / amt;
-                /* remember any leftover ticks so that we can keep time */
-                context->aniTicks %= amt;
-                if (inc == 0)
-                    /* granularity was too fine */
-                    inc = times;
-                else
-                    inc *= times;
-                /* update character frame if at the right point in the sequence; we
-                   have waited one cycle if so */
-                if (context->update == context->granularity)
-                    /* increment the frame alteration counter so that animation frames alternate */
-                    context->frame = context->resolveFrame + 1/*ani*/ + context->frameAlt++ % 2 /*alt-ani*/;
-                /* update animation offset */
-                if (context->offset[0] < 0) {
-                    context->offset[0] += inc;
-                    if (context->offset[0] > 0)
-                        context->offset[0] = 0;
-                }
-                else if (context->offset[0] > 0) {
-                    context->offset[0] -= inc;
-                    if (context->offset[0] < 0)
-                        context->offset[0] = 0;
-                }
-                else if (context->offset[1] < 0) {
-                    context->offset[1] += inc;
-                    if (context->offset[1] > 0)
-                        context->offset[1] = 0;
-                }
-                else if (context->offset[1] > 0) {
-                    context->offset[1] -= inc;
-                    if (context->offset[1] < 0)
-                        context->offset[1] = 0;
-                }
-                /* decrement update counter and see if it is time to resolve to
-                   our destination frame; check slightly before end of rendering
-                   sequence to allow more time to view the frame (in case the sequence
-                   starts back up immediately) */
-                if (--context->update == context->granularity / 4)
-                    context->frame = context->resolveFrame;
-                /* check to see if we are finished; opt out of the last frame
-                   (it's the same as the start of the next sequence) */
-                if (context->update == 1 && context->offset[0] == 0 && context->offset[1] == 0) {
-                    /* done: we skip the last frame because it is redundant; return TRUE to mean
-                       that the process completed */
-                    context->update = FALSE;
-                    return TRUE;
-                }
-            }
+        /* make sure enough elapsed time has occurred before performing the update operation */
+        int inc;
+        int times;
+        uint32_t amt = context->slowDown ? 2 * context->aniTicksAmt : context->aniTicksAmt;
+        context->aniTicks += ticks;
+        if (context->aniTicks >= amt) {
+            /* compute increment amount and number of times to apply it */
+            inc = dimension / context->granularity;
+            times = context->aniTicks / amt;
+            if (inc == 0)
+                /* granularity was too fine */
+                inc = times;
+            else
+                inc *= times;
+            /* remember any leftover ticks so that we can keep time */
+            context->aniTicks %= amt;
+            /* update character context based on which effect is being applied */
+            if (context->eff == pok_character_normal_effect)
+                return pok_character_context_normal_update(context,inc);
+            else if (context->eff == pok_character_slide_effect)
+                return pok_character_context_slide_update(context,inc);
+            else if (context->eff == pok_character_jump_effect)
+                return pok_character_context_jump_update(context,inc);
         }
-
     }
     return FALSE;
 }

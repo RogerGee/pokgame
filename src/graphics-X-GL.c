@@ -17,6 +17,7 @@ static void gl_init( /* implemented in graphics-GL.c (included later in this fil
     int32_t viewWidth,
     int32_t viewHeight);
 static void gl_create_textures(struct pok_graphics_subsystem* sys);
+static void gl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 
 /* globals */
 static int screen;          /* X session screen */
@@ -114,7 +115,7 @@ inline void impl_reload(struct pok_graphics_subsystem* sys)
 
     sys->impl->editFrame = TRUE;
 }
-inline void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
+void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
 {
 #ifdef POKGAME_DEBUG
     check_impl(sys);
@@ -130,6 +131,16 @@ inline void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture
     } while (FALSE);
     sys->impl->texinfo = info;
     sys->impl->texinfoCount = count;
+    pthread_mutex_unlock(&sys->impl->mutex);
+}
+void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
+{
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
+    pthread_mutex_lock(&sys->impl->mutex);
+    gl_delete_textures(sys,info,count);
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
@@ -511,8 +522,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 done:
     sys->impl->gameRendering = FALSE;
     sys->impl->rendering = FALSE;
-    if (sys->impl->textureCount > 0)
+    if (sys->impl->textureCount > 0) {
         glDeleteTextures(sys->impl->textureCount,sys->impl->textureNames);
+        sys->impl->textureCount = 0;
+    }
     close_frame(sys);
     do_x_close();
     return NULL;

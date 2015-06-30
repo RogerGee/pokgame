@@ -61,6 +61,8 @@ struct pok_point
 };
 int pok_point_compar(struct pok_point* left,struct pok_point* right);
 
+extern const struct pok_point ORIGIN;
+
 /* define fundamental direction */
 enum pok_direction
 {

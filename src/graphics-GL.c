@@ -50,20 +50,28 @@ void gl_create_textures(struct pok_graphics_subsystem* sys)
             /* the images could be non-unique, in which case we could have
                already loaded it as a texture and unloaded its pixels */
             if (img->texref == 0) {
-                /* append texture name to collection */
-                if (sys->impl->textureCount >= sys->impl->textureAlloc) {
-                    size_t nalloc;
-                    void* ndata;
-                    nalloc = sys->impl->textureAlloc << 1;
-                    ndata = realloc(sys->impl->textureNames,nalloc * sizeof(GLuint));
-                    if (ndata == NULL) {
-                        pok_error(pok_error_warning,"could not allocate memory in gl_create_textures()");
-                        return;
+                size_t index;
+                /* search collection for unused index */
+                for (index = 0;index < sys->impl->textureCount;++index)
+                    if (sys->impl->textureNames[index] == 0)
+                        break;
+                if (index >= sys->impl->textureCount) {
+                    /* append texture name to collection */
+                    if (sys->impl->textureCount >= sys->impl->textureAlloc) {
+                        size_t nalloc;
+                        void* ndata;
+                        nalloc = sys->impl->textureAlloc << 1;
+                        ndata = realloc(sys->impl->textureNames,nalloc * sizeof(GLuint));
+                        if (ndata == NULL) {
+                            pok_error(pok_error_warning,"could not allocate memory in gl_create_textures()");
+                            return;
+                        }
+                        sys->impl->textureNames = ndata;
+                        sys->impl->textureAlloc = nalloc;
                     }
-                    sys->impl->textureNames = ndata;
-                    sys->impl->textureAlloc = nalloc;
+                    index = sys->impl->textureCount++;
                 }
-                sys->impl->textureNames[sys->impl->textureCount++] = names[j];
+                sys->impl->textureNames[index] = names[j];
                 /* create texture object */
                 glBindTexture(GL_TEXTURE_2D,names[j]);
                 glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_BASE_LEVEL,TEXPARAM);
@@ -78,6 +86,47 @@ void gl_create_textures(struct pok_graphics_subsystem* sys)
             }
         }
         free(names);
+    }
+}
+
+void gl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
+{
+    /* the 'sys->impl' object has an internal list of texture names; see if the specified images'
+       texture references exist in the list; if so, then place the names in a temporary list that
+       will be passed to 'glDeleteTextures'; replace texture names with 0 in the 'sys->impl' list;
+       according to the documentation, a texture name of 0 is silently ignored */
+    int i, j;
+    for (i = 0;i < count;++i) {
+        size_t index = 0;
+        GLsizei cnt = 0;
+        GLuint names[100];
+        for (j = 0;j < info[i].count;++j) {
+            struct pok_image* img = info[i].images[j];
+            if (img->texref != 0) {
+                size_t start = index;
+                if (start < sys->impl->textureCount) {
+                    do {
+                        if (sys->impl->textureNames[index] == img->texref)
+                            break;
+                        ++index;
+                        /* since texture names are normally allocated sequentially, then we let 'index'
+                           remember its position in the array since it is likely that the next position
+                           is the next texture name */
+                        if (index >= sys->impl->textureCount)
+                            index = 0;
+                    } while (index != start);
+                    if (index != start) {
+                        if (cnt >= 100) {
+                            glDeleteTextures(cnt,names);
+                            cnt = 0;
+                        }
+                        names[cnt++] = img->texref;
+                        sys->impl->textureNames[index] = 0;
+                    }
+                }
+            }
+        }
+        glDeleteTextures(cnt,names);
     }
 }
 

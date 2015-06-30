@@ -102,15 +102,14 @@ int graphics_main_test1()
                 nxt = TEST_ROUT_TOP-1;
         }
         else if (strcmp(tok,"left") == 0)
-            pok_map_render_context_move(globals.mcxt,pok_direction_left,FALSE);
+            pok_map_render_context_move(globals.mcxt,pok_direction_left,0,FALSE);
         else if (strcmp(tok,"right") == 0)
-            pok_map_render_context_move(globals.mcxt,pok_direction_right,FALSE);
+            pok_map_render_context_move(globals.mcxt,pok_direction_right,0,FALSE);
         else if (strcmp(tok,"down") == 0)
-            pok_map_render_context_move(globals.mcxt,pok_direction_down,FALSE);
+            pok_map_render_context_move(globals.mcxt,pok_direction_down,0,FALSE);
         else if (strcmp(tok,"up") == 0)
-            pok_map_render_context_move(globals.mcxt,pok_direction_up,FALSE);
+            pok_map_render_context_move(globals.mcxt,pok_direction_up,0,FALSE);
         else if (strcmp(tok,"mapdebug") == 0) {
-            struct pok_chunk_render_info info[4];
             compute_chunk_render_info(globals.mcxt,sys);
             printf("chunkSize{%d %d} focus{%d,%d} relpos{%d,%d} chunkpos{%d,%d} chunk{%d} viewing:\n",globals.mcxt->map->chunkSize.columns,
                 globals.mcxt->map->chunkSize.rows,globals.mcxt->focus[0],globals.mcxt->focus[1],globals.mcxt->relpos.column,
@@ -120,10 +119,18 @@ int graphics_main_test1()
                     printf("%d   ",globals.mcxt->viewingChunks[i][j]==NULL ? -1 : globals.mcxt->viewingChunks[i][j]->data[0][0].data.tileid);
                 putchar('\n');
             }
-            for (i = 0;i < 4;++i)
-                if (info[i].chunk != NULL)
-                    printf("px[%d] py[%d] across[%u] down[%u] loc{%d,%d} tile{%d}\n",info[i].px,info[i].py,info[i].across,info[i].down,
-                        info[i].loc.column,info[i].loc.row,info[i].chunk->data[0][0].data.tileid);
+            for (i = 0;i < 4;++i) {
+                if (globals.mcxt->info[i].chunk != NULL)
+                    printf(
+                        "px[%d] py[%d] across[%u] down[%u] loc{%d,%d} tile{%d}\n",
+                        globals.mcxt->info[i].px,
+                        globals.mcxt->info[i].py,
+                        globals.mcxt->info[i].across,
+                        globals.mcxt->info[i].down,
+                        globals.mcxt->info[i].loc.column,
+                        globals.mcxt->info[i].loc.row,
+                        globals.mcxt->info[i].chunk->data[0][0].data.tileid );
+            }
         }
         else if (strcmp(tok,"keylisten") == 0) {
             puts("listening for keys");
@@ -227,13 +234,13 @@ void keyup_routine(enum pok_input_key key)
 {
     /*printf("key up: %d\n",key);*/
     if (key == pok_input_key_UP)
-        pok_map_render_context_move(globals.mcxt,pok_direction_up,FALSE);
+        pok_map_render_context_move(globals.mcxt,pok_direction_up,0,FALSE);
     else if (key == pok_input_key_DOWN)
-        pok_map_render_context_move(globals.mcxt,pok_direction_down,FALSE);
+        pok_map_render_context_move(globals.mcxt,pok_direction_down,0,FALSE);
     else if (key == pok_input_key_LEFT)
-        pok_map_render_context_move(globals.mcxt,pok_direction_left,FALSE);
+        pok_map_render_context_move(globals.mcxt,pok_direction_left,0,FALSE);
     else if (key == pok_input_key_RIGHT)
-        pok_map_render_context_move(globals.mcxt,pok_direction_right,FALSE);
+        pok_map_render_context_move(globals.mcxt,pok_direction_right,0,FALSE);
 }
 
 void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)

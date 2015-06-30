@@ -54,7 +54,7 @@ int main(int argc,const char* argv[])
         assert(net_test1() == 0);
     else if (strcmp(input,"graphics 1") == 0)
         graphics_main_test1();
-    else if (strcmp(input,"main") == 0)
+    else /*if (strcmp(input,"main") == 0)*/
         main_test();
 
     /* unload modules */

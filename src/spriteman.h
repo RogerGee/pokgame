@@ -54,11 +54,6 @@ struct pok_sprite_manager
        that make up a single character set */
     struct pok_image*** spriteassoc;
 
-    /* special sprite sets */
-    uint16_t flySprite;
-    uint16_t surfSprite;
-    uint16_t lavaSprite;
-
     /* reserved for implementation */
     struct pok_image* _sheet;
 };
@@ -66,10 +61,11 @@ struct pok_sprite_manager* pok_sprite_manager_new(const struct pok_graphics_subs
 void pok_sprite_manager_free(struct pok_sprite_manager* sman);
 void pok_sprite_manager_init(struct pok_sprite_manager* sman,const struct pok_graphics_subsystem* sys);
 void pok_sprite_manager_delete(struct pok_sprite_manager* sman);
-bool_t pok_sprite_manager_save(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
-bool_t pok_sprite_manager_open(struct pok_sprite_manager* sman,struct pok_data_source* dscr);
+bool_t pok_sprite_manager_save(struct pok_sprite_manager* sman,struct pok_data_source* dsrc);
+bool_t pok_sprite_manager_open(struct pok_sprite_manager* sman,struct pok_data_source* dsrc);
 bool_t pok_sprite_manager_load(struct pok_sprite_manager* sman,uint16_t flags,uint16_t spriteCnt,const byte_t* data,bool_t byRef);
 bool_t pok_sprite_manager_fromfile(struct pok_sprite_manager* sman,const char* file,uint16_t flags);
+bool_t pok_sprite_manager_fromfile_png(struct pok_sprite_manager* sman,const char* file,uint16_t flags);
 enum pok_network_result pok_sprite_manager_netread(struct pok_sprite_manager* sman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info);
 

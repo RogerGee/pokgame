@@ -16,7 +16,7 @@ int main(int argc,const char* argv[])
 
     /* load all modules */
     pok_exception_load_module();
-    pok_network_object_load_module();
+    pok_netobj_load_module();
     pok_game_load_module();
 
     /* initialize a graphics subsystem for the game; this corresponds to the
@@ -24,6 +24,7 @@ int main(int argc,const char* argv[])
        anything else; depending on the platform, the renderer may be run on
        another thread or require the main thread */
     sys = pok_graphics_subsystem_new();
+    pok_graphics_subsystem_default(sys);
     if ( !pok_graphics_subsystem_begin(sys) )
         pok_error(pok_error_fatal,"could not begin graphics subsystem");
 
@@ -44,7 +45,7 @@ int main(int argc,const char* argv[])
 
     /* unload all modules */
     pok_game_unload_module();
-    pok_network_object_unload_module();
+    pok_netobj_unload_module();
     pok_exception_unload_module();
 
     return 0;
@@ -225,6 +226,7 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     if (game->player == NULL)
         pok_error_fromstack(pok_error_fatal);
     game->player->isPlayer = TRUE;
+    game->playerEffect = pok_character_normal_effect;
     game->playerContext = pok_character_render_context_add_ex(game->charRC,game->player);
     if (game->playerContext == NULL)
         pok_error_fromstack(pok_error_fatal);
@@ -241,6 +243,7 @@ void pok_game_free(struct pok_game_info* game)
     if (game->staticOwnerMask & 0x02)
         pok_tile_manager_free(game->tman);
     pok_thread_free(game->updateThread);
+    pok_string_delete(&game->versionLabel);
     free(game);
 
 }
@@ -282,4 +285,20 @@ void pok_game_unregister(struct pok_game_info* game)
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
+}
+void pok_game_load_textures(struct pok_game_info* game)
+{
+    pok_graphics_subsystem_create_textures(
+        game->sys,
+        2,
+        game->tman->tileset, game->tman->tilecnt,
+        game->sman->spritesets, game->sman->imagecnt );
+}
+void pok_game_delete_textures(struct pok_game_info* game)
+{
+    pok_graphics_subsystem_delete_textures(
+        game->sys,
+        2,
+        game->tman->tileset, game->tman->tilecnt,
+        game->sman->spritesets, game->sman->imagecnt );
 }

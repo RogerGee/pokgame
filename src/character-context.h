@@ -14,8 +14,10 @@ enum pok_character_effect
 {
     pok_character_no_effect,
     pok_character_normal_effect,    /* the character moves around in a normal fashion (parameter is dimension) */
-    pok_character_jump_effect,      /* the character jumps over a specified number of tiles (parameter is tile count) */
-    pok_character_warp_effect       /* the character warps up off the map (parameter is number of frames before lift-off) */
+    pok_character_jump_effect,      /* the character jumps over a specified number of tiles (parameter is dimension) */
+    pok_character_spin_off_effect,  /* the character spins to warp off the map (parameter is acceleration) */
+    pok_character_spin_on_effect,   /* the character spins to warp on to the map (parameter is de-acceleration) */
+    pok_character_slide_effect      /* the character slides to the next tile (parameter is dimension) */
 };
 
 /* pok_character_context: provides information for rendering a single

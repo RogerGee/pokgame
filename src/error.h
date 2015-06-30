@@ -19,6 +19,7 @@ enum pok_ex_kind
 {
     pok_ex_default,
     pok_ex_net,
+    pok_ex_netobj,
     pok_ex_graphics,
     pok_ex_image,
     pok_ex_tileman,
@@ -40,8 +41,8 @@ void pok_exception_flag_memory_error();
 void pok_exception_unload_module();
 
 /* an exception is used by one module to report a runtime exception to another; each
-   thread maintains its own stack of exceptions; an exception is popped off and 
-   remains in memory until the next exception is popped off */
+   thread maintains its own last exception; when an exception is popped off, it remains
+   in memory until a new exception is created; only one exception is allowed per thread */
 struct pok_exception
 {
     int id;

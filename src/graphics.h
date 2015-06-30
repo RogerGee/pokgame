@@ -98,6 +98,7 @@ enum pok_network_result pok_graphics_subsystem_netread(struct pok_graphics_subsy
     struct pok_netobj_readinfo* info);
 bool_t pok_graphics_subsystem_begin(struct pok_graphics_subsystem* sys);
 bool_t pok_graphics_subsystem_create_textures(struct pok_graphics_subsystem* sys,int count, ...);
+bool_t pok_graphics_subsystem_delete_textures(struct pok_graphics_subsystem* sys,int count, ...);
 void pok_graphics_subsystem_game_render_state(struct pok_graphics_subsystem* sys,bool_t state);
 void pok_graphics_subsystem_end(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_register(struct pok_graphics_subsystem* sys,graphics_routine_t routine,void* context); /* thread-safe */

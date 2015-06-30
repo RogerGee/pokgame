@@ -36,4 +36,6 @@ bool_t pok_tile_save(struct pok_tile* tile,struct pok_data_source* dsrc);
 bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc);
 enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
 
+extern const struct pok_tile DEFAULT_TILE;
+
 #endif

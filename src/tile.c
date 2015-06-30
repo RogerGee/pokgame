@@ -4,6 +4,9 @@
 #include "protocol.h"
 #include <stdlib.h>
 
+/* external constants */
+const struct pok_tile DEFAULT_TILE = { { 0, 0, {0,0}, {0,0}, 0 }, FALSE, FALSE };
+
 /* pok_tile */
 void pok_tile_init(struct pok_tile* tile,uint16_t tileid)
 {

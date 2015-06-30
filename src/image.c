@@ -2,6 +2,7 @@
 #include "image.h"
 #include "error.h"
 #include "protocol.h"
+#include <png.h>
 #include <stdlib.h>
 
 struct pok_image* pok_image_new()
@@ -565,4 +566,153 @@ enum pok_network_result pok_image_netread_ex(struct pok_image* img,uint32_t widt
             break;
     }
     return result;
+}
+
+/* PNG functionality; we link against libpng for this */
+
+/* customize libpng's io routines using our routines defined in net.h */
+static void read_data(png_structp pngptr,png_bytep data,png_size_t length)
+{
+    size_t bytesRead;
+    struct pok_data_source* dsrc;
+    dsrc = png_get_io_ptr(pngptr);
+    pok_data_source_read_to_buffer(dsrc,data,length,&bytesRead);
+}
+static void write_data(png_structp pngptr,png_bytep data,png_size_t length)
+{
+    size_t bytesWritten;
+    struct pok_data_source* dsrc;
+    dsrc = png_get_io_ptr(pngptr);
+    pok_data_source_write(dsrc,data,length,&bytesWritten);
+}
+static void flush_data(png_structp png_ptr)
+{
+}
+
+struct pok_image* pok_image_png_new(const char* file)
+{
+    size_t bytesRead;
+    png_structp pngptr;
+    png_infop infoptr;
+    png_bytep sig;
+    png_uint_32 i;
+    png_uint_32 imgwidth;
+    png_uint_32 imgheight;
+    png_uint_32 bitdepth;
+    png_uint_32 channels;
+    png_uint_32 colorType;
+    png_bytepp rowptrs;
+    struct pok_image* img;
+    struct pok_data_source* dsrc;
+
+    /* allocate image */
+    img = malloc(sizeof(struct pok_image));
+    if (img == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+
+    /* open data source to file */
+    dsrc = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
+    if (dsrc == NULL) {
+        pok_image_free(img);
+        return NULL;
+    }
+
+    /* verify that file data is png image format by reading signiture bytes*/
+    sig = pok_data_source_read(dsrc,8,&bytesRead);
+    if (sig == NULL)
+        goto fail;
+    if (bytesRead != 8 || !png_check_sig(sig,8)) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_unrecognized_format);
+        goto fail;
+    }
+
+    /* allocate libpng structures */
+    pngptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
+    if (pngptr == NULL) {
+        pok_exception_flag_memory_error();
+        goto fail;
+    }
+    infoptr = png_create_info_struct(pngptr);
+    if (infoptr == NULL) {
+        pok_exception_flag_memory_error();
+        goto fail;
+    }
+
+    /* setup libpng */
+    png_set_read_fn(pngptr,dsrc,read_data); /* custom read function */
+    if (setjmp(png_jmpbuf(pngptr)) != 0) { /* error handler */
+        pok_exception_new_ex2(0,"libpng exception");
+        png_destroy_read_struct(&pngptr,&infoptr,NULL);
+        goto fail;
+    }
+
+    /* read header information */
+    png_set_sig_bytes(pngptr,8);
+    png_read_info(pngptr,infoptr);
+
+    /* make sure image is correctly formatted */
+    imgwidth = png_get_image_width(pngptr,infoptr);
+    imgheight = png_get_image_height(pngptr,infoptr);
+    bitdepth = png_get_bit_depth(pngptr,infoptr);
+    channels = png_get_channels(pngptr,infoptr);
+    colorType = png_get_color_type(pngptr,infoptr);
+    switch (colorType) {
+    case PNG_COLOR_TYPE_PALETTE:
+        png_set_palette_to_rgb(pngptr);
+        channels = 3;
+        colorType = PNG_COLOR_TYPE_RGB;
+        break;
+    case PNG_COLOR_TYPE_GRAY:
+        if (bitdepth < 8)
+            png_set_expand_gray_1_2_4_to_8(pngptr);
+        bitdepth = 8;
+        colorType = PNG_COLOR_TYPE_RGB;
+        break;
+    }
+    if (bitdepth != 8 || (colorType != PNG_COLOR_TYPE_RGB && colorType != PNG_COLOR_TYPE_RGBA)) {
+        pok_exception_new_ex(pok_ex_image,pok_ex_image_bad_color_format);
+        png_destroy_read_struct(&pngptr,&infoptr,NULL);
+        goto fail;
+    }
+
+    /* setup image object */
+    if (colorType == PNG_COLOR_TYPE_RGB)
+        img->pixels.dataRGB = malloc(sizeof(union pixel) * imgheight * imgwidth);
+    else { /* PNG_COLOR_TYPE_RGBA */
+        img->flags |= pok_image_flag_alpha;
+        img->pixels.dataRGBA = malloc(sizeof(union alpha_pixel) * imgheight * imgwidth);
+    }
+    if (img->pixels.data == NULL) {
+        pok_exception_flag_memory_error();
+        png_destroy_read_struct(&pngptr,&infoptr,NULL);
+        goto fail;
+    }
+    rowptrs = malloc(sizeof(png_bytep) * imgheight);
+    if (rowptrs == NULL) {
+        pok_exception_flag_memory_error();
+        png_destroy_read_struct(&pngptr,&infoptr,NULL);
+        goto fail;
+    }
+    for (i = 0;i < imgheight;++i)
+        /* note: we have already asserted that bitdepth is 8 */
+        rowptrs[i] = (byte_t*)img->pixels.data + imgwidth * channels;
+
+    /* read image data */
+    png_read_image(pngptr,rowptrs);
+
+    png_destroy_read_struct(&pngptr,&infoptr,NULL);
+    pok_data_source_free(dsrc);
+    free(rowptrs);
+    return img;
+
+fail:
+    pok_image_free(img);
+    pok_data_source_free(dsrc);
+    return NULL;
+
+}
+void pok_image_png_save(struct pok_image* img,const char* file)
+{
 }

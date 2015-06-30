@@ -3,6 +3,47 @@
 #include "error.h"
 #include <stdlib.h>
 
+/* pok_tile_terrain_info */
+static void pok_tile_terrain_info_init(struct pok_tile_terrain_info* info)
+{
+    info->length = 0;
+    info->list = NULL;
+}
+static void pok_tile_terrain_info_delete(struct pok_tile_terrain_info* info)
+{
+    if (info->list != NULL)
+        free(info->list);
+}
+static enum pok_network_result pok_tile_terrain_info_netread(struct pok_tile_terrain_info* tinfo,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info)
+{
+    /* read special tile lists from data source:
+        [2 bytes] number of tiles to enumerate (if 0 then skip the remaining fields)
+        [n bytes] the specified number of tile ids (each is 2 bytes)
+    */
+    enum pok_network_result result = pok_net_already;
+    switch (info->fieldProg) {
+    case 0:
+        pok_data_stream_read_uint16(dsrc,&tinfo->length);
+        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+            break;
+        tinfo->list = malloc(sizeof(uint16_t) * tinfo->length);
+        if (tinfo->list == NULL) {
+            pok_exception_flag_memory_error();
+            return pok_net_failed_internal;
+        }
+        info->fieldCnt = 0;
+    case 1:
+        for (;info->fieldCnt < tinfo->length;++info->fieldCnt) {
+            pok_data_stream_read_uint16(dsrc,tinfo->list + info->fieldCnt);
+            if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
+                break;
+        }
+    }
+    return result;
+}
+
 /* pok_tile_manager */
 struct pok_tile_manager* pok_tile_manager_new(const struct pok_graphics_subsystem* sys)
 {
@@ -21,24 +62,21 @@ void pok_tile_manager_free(struct pok_tile_manager* tman)
 }
 void pok_tile_manager_init(struct pok_tile_manager* tman,const struct pok_graphics_subsystem* sys)
 {
+    uint16_t i = 0;
     tman->flags = pok_tile_manager_flag_none;
     tman->sys = sys; /* store a reference to the subsystem; we do not own this object */
     tman->tilecnt = 0;
     tman->impassibility = 1; /* black tile is impassable, everything else passable */
     tman->tileset = NULL;
     tman->tileani = NULL;
-    tman->waterTilesCnt = 0;
-    tman->waterTiles = NULL;
-    tman->lavaTilesCnt = 0;
-    tman->lavaTiles = NULL;
-    tman->waterfallTilesCnt = 0;
-    tman->waterfallTiles = NULL;
+    for (i = 0;i < POK_TILE_TERRAIN_TOP;++i)
+        pok_tile_terrain_info_init(tman->terrain + i);
     tman->_sheet = NULL;
 }
 void pok_tile_manager_delete(struct pok_tile_manager* tman)
 {
+    uint16_t i;
     if (tman->tilecnt > 0) {
-        uint16_t i;
         /* start at index 1 since the first tile is not owned by this manager; it is
            the black tile owned by the graphics subsystem */
         for (i = 1;i < tman->tilecnt;++i)
@@ -48,12 +86,9 @@ void pok_tile_manager_delete(struct pok_tile_manager* tman)
     }
     if (tman->tileani!=NULL && (tman->flags & pok_tile_manager_flag_ani_byref) == 0)
         free(tman->tileani);
-    if (tman->waterTiles != NULL)
-        free(tman->waterTiles);
-    if (tman->lavaTiles != NULL)
-        free(tman->lavaTiles);
-    if (tman->waterfallTiles != NULL)
-        free(tman->waterfallTiles);
+    if ((tman->flags & pok_tile_manager_flag_terrain_byref) == 0)
+        for (i = 0;i < POK_TILE_TERRAIN_TOP;++i)
+            pok_tile_terrain_info_delete(tman->terrain + i);
     if (tman->_sheet != NULL)
         pok_image_free(tman->_sheet);
 }
@@ -98,17 +133,17 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
            [1 byte] ani ticks
            [2 bytes] forward tile id
            [2 bytes] backward tile id
-        [2 bytes] number of water tiles
-        [n bytes] water tile ids
-        [2 bytes] number of lava tiles
+        [n bytes] special tiles (in order defined by enumeration 'pok_tile_terrain_type')
     */
     if (tman->tileset != NULL) {
-        uint16_t i;
+        uint16_t i, j;
+        /* write images */
         if (!pok_data_stream_write_uint16(dsrc,tman->tilecnt) || !pok_data_stream_write_uint16(dsrc,tman->impassibility))
             return FALSE;
         for (i = 0;i < tman->tilecnt;++i)
             if ( !pok_image_save(tman->tileset[i],dsrc) )
                 return FALSE;
+        /* write tile animation info */
         if ( !pok_data_stream_write_byte(dsrc,tman->tileani != NULL) )
             return FALSE;
         if (tman->tileani != NULL)
@@ -116,6 +151,14 @@ bool_t pok_tile_manager_save(struct pok_tile_manager* tman,struct pok_data_sourc
                 if (!pok_data_stream_write_byte(dsrc,tman->tileani[i].ticks) || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].forward)
                     || !pok_data_stream_write_uint16(dsrc,tman->tileani[i].backward))
                     return FALSE;
+        /* write special tiles */
+        for (i = 0;i < POK_TILE_TERRAIN_TOP;++i) {
+            if ( !pok_data_stream_write_uint16(dsrc,tman->terrain[i].length) )
+                return FALSE;
+            for (j = 0;j < tman->terrain[i].length;++j)
+                if ( !pok_data_stream_write_uint16(dsrc,tman->terrain[i].list[j]) )
+                    return FALSE;
+        }
         return TRUE;
     }
     return FALSE;
@@ -132,10 +175,12 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
            [1 byte] ani ticks
            [2 bytes] forward tile id
            [2 bytes] backward tile id
+        [n bytes] special tiles (in order defined by enumeration 'pok_tile_terrain_type')
     */
     if (tman->tileset == NULL) {
-        uint16_t i;
+        uint16_t i, j;
         bool_t hasAni;
+        /* read tile images */
         if ( !pok_data_stream_read_uint16(dsrc,&tman->tilecnt) )
             return FALSE;
         if (tman->tilecnt == 0) {
@@ -151,9 +196,10 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
         }
         for (i = 0;i < tman->tilecnt;++i) {
             tman->tileset[i] = pok_image_new();
-            if (tman->tileset[i]==NULL ||  !pok_image_open(tman->tileset[i],dsrc))
+            if (tman->tileset[i]==NULL || !pok_image_open(tman->tileset[i],dsrc))
                 return FALSE;
         }
+        /* read tile animation info */
         if ( !pok_data_stream_read_byte(dsrc,&hasAni) )
             return FALSE;
         if (hasAni) {
@@ -167,6 +213,19 @@ bool_t pok_tile_manager_open(struct pok_tile_manager* tman,struct pok_data_sourc
                     || !pok_data_stream_read_uint16(dsrc,&tman->tileani[i].backward))
                     return FALSE;
             pok_tile_manager_compute_ani_ticks(tman);
+        }
+        /* read special tiles */
+        for (i = 0;i < POK_TILE_TERRAIN_TOP;++i) {
+            if ( !pok_data_stream_read_uint16(dsrc,&tman->terrain[i].length) )
+                return FALSE;
+            tman->terrain[i].list = malloc(sizeof(uint16_t) * tman->terrain[i].length);
+            if (tman->terrain[i].list == NULL) {
+                pok_exception_flag_memory_error();
+                return FALSE;
+            }
+            for (j = 0;j < tman->terrain[i].length;++j)
+                if ( !pok_data_stream_read_uint16(dsrc,tman->terrain[i].list + j) )
+                    return FALSE;
         }
         return TRUE;
     }
@@ -237,6 +296,22 @@ bool_t pok_tile_manager_load_ani(struct pok_tile_manager* tman,uint16_t anic,str
     pok_tile_manager_compute_ani_ticks(tman);
     return TRUE;
 }
+static bool_t pok_tile_manager_from_image(struct pok_tile_manager* tman,struct pok_image* img)
+{
+    /* check image dimensions; it must specify complete tiles (and at least 1) */
+    if (img->width != tman->sys->dimension || img->height < tman->sys->dimension || img->height % tman->sys->dimension != 0) {
+        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_bad_image_dimension);
+        pok_image_free(img);
+        return FALSE;
+    }
+    /* load tile images by reference (set impassibility to default value for now) */
+    if ( !pok_tile_manager_load_tiles(tman,img->height / tman->sys->dimension,0,img->pixels.data,TRUE) ) {
+        pok_image_free(img);
+        return FALSE;
+    }
+    tman->_sheet = img;
+    return TRUE;
+}
 bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char* file)
 {
     struct pok_image* img;
@@ -251,19 +326,20 @@ bool_t pok_tile_manager_fromfile_tiles(struct pok_tile_manager* tman,const char*
         pok_image_free(img);
         return FALSE;
     }
-    /* check image dimensions; it must specify complete tiles (and at least 1) */
-    if (img->width != tman->sys->dimension || img->height < tman->sys->dimension || img->height % tman->sys->dimension != 0) {
-        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_bad_image_dimension);
-        pok_image_free(img);
+    /* use generic routine to load tiles from image */
+    return pok_tile_manager_from_image(tman,img);
+}
+bool_t pok_tile_manager_fromfile_tiles_png(struct pok_tile_manager* tman,const char* file)
+{
+    struct pok_image* img;
+    if (tman->_sheet != NULL || tman->tileset != NULL) {
+        pok_exception_new_ex(pok_ex_tileman,pok_ex_tileman_already);
         return FALSE;
     }
-    /* load tile images by reference (set impassibility to default value for now) */
-    if ( !pok_tile_manager_load_tiles(tman,img->height / tman->sys->dimension,0,img->pixels.data,TRUE) ) {
-        pok_image_free(img);
+    img = pok_image_png_new(file);
+    if (img == NULL)
         return FALSE;
-    }
-    tman->_sheet = img;
-    return TRUE;
+    return pok_tile_manager_from_image(tman,img);
 }
 static enum pok_network_result pok_tile_ani_data_netread(struct pok_tile_ani_data* ani,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
@@ -338,35 +414,6 @@ static enum pok_network_result pok_tile_manager_netread_ani(struct pok_tile_mana
     }
     return result;
 }
-static enum pok_network_result pok_tile_manager_netread_special_tiles(uint16_t* tileListCnt,
-    uint16_t** tileList,
-    struct pok_data_source* dsrc,
-    struct pok_netobj_readinfo* info)
-{
-    /* read special tile lists from data source:
-        [2 bytes] number of tiles to enumerate (if 0 then skip the remaining fields)
-        [n bytes] the specified number of tile ids (each is 2 bytes)
-    */
-    enum pok_network_result result = pok_net_already;
-    switch (info->fieldProg) {
-    case 0:
-        pok_data_stream_read_uint16(dsrc,tileListCnt);
-        if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
-            break;
-        *tileList = malloc(sizeof(uint16_t) * *tileListCnt);
-        if (*tileList == NULL) {
-            pok_exception_flag_memory_error();
-            return pok_net_failed_internal;
-        }
-    case 1:
-        for (info->fieldCnt = 0;info->fieldCnt < *tileListCnt;++info->fieldCnt) {
-            pok_data_stream_read_uint16(dsrc,*tileList + info->fieldCnt);
-            if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
-                break;
-        }
-    }
-    return result;
-}
 enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info)
 {
@@ -376,9 +423,7 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
         [n bytes] pok image containing the specified number of tiles; the image's size
                   is assumed from the number of tiles (width=dimension height=dimension*number-of-tiles)
         [n bytes] tile animation data (optional if user sends zero as first field)
-        [n bytes] water tiles (optional if user sends zero as first field)
-        [n bytes] lava tiles (optional if user sends zero as first field)
-        [n bytes] waterfall tiles (optional if user sends zero as first field)
+        [n bytes] terrain tile info (order defined by enum 'pok_tile_terrain_type'; any sub-field is optional if length is 0)
     */
     size_t i;
     enum pok_network_result result = pok_net_already;
@@ -432,25 +477,15 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
         if ((result = pok_tile_manager_netread_ani(tman,dsrc,info->next)) != pok_net_completed)
             break;
         ++info->fieldProg;
+        info->fieldCnt = 0;
         pok_netobj_readinfo_reset(info->next);
     case 4:
-        /* water tiles */
-        if ((result = pok_tile_manager_netread_special_tiles(&tman->waterTilesCnt,&tman->waterTiles,dsrc,info->next)) != pok_net_completed)
-            break;
-        ++info->fieldProg;
-        pok_netobj_readinfo_reset(info->next);
-    case 5:
-        /* lava tiles */
-        if ((result = pok_tile_manager_netread_special_tiles(&tman->lavaTilesCnt,&tman->lavaTiles,dsrc,info->next)) != pok_net_completed)
-            break;
-        ++info->fieldProg;
-        pok_netobj_readinfo_reset(info->next);
-    case 6:
-        /* waterfall tiles */
-        if ((result = pok_tile_manager_netread_special_tiles(&tman->waterfallTilesCnt,
-                    &tman->waterfallTiles,dsrc,info->next)) != pok_net_completed)
-            break;
-        ++info->fieldProg;
+        /* terrain tile info */
+        for (;info->fieldCnt < POK_TILE_TERRAIN_TOP;++info->fieldCnt) {
+            if ((result = pok_tile_terrain_info_netread(tman->terrain + info->fieldCnt,dsrc,info->next)) != pok_net_completed)
+                break;
+            pok_netobj_readinfo_reset(info->next);
+        }
     }
     return result;
 }

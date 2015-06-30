@@ -33,10 +33,15 @@ static void set_defaults(struct pok_game_info* info);
 static void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t);
 static void update_key_input(struct pok_game_info* info);
 static bool_t character_update(struct pok_game_info* info);
-static void fadeout_update(struct pok_game_info* info);
 static bool_t check_collisions(struct pok_game_info* info);
+static void player_move_logic(struct pok_game_info* info,enum pok_direction direction);
+static void fadeout_logic(struct pok_game_info* info);
+static void map_terrain_logic(struct pok_game_info* info);
 static bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction);
-static void warp_logic(struct pok_game_info* info);
+static bool_t warp_logic(struct pok_game_info* info);
+static enum pok_character_effect get_effect_from_terrain(struct pok_map_render_context* mapRC,
+    struct pok_tile_manager* tman,
+    enum pok_direction direction);
 
 /* this procedure drives all the game logic; the return value has special meaning:
     0 - exit via in game event (e.g. the player selected a menu item)
@@ -73,8 +78,9 @@ int update_proc(struct pok_game_info* info)
             pok_graphics_subsystem_unlock(info->sys);
         }
 
-        /* perform fadeout update */
-        fadeout_update(info);
+        /* perform game logic updates */
+        fadeout_logic(info);
+        map_terrain_logic(info);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
@@ -166,71 +172,7 @@ void update_key_input(struct pok_game_info* info)
                 info->playerContext->aniTicksAmt = globals.mapTicksNormal;
             }
 
-            if (direction != pok_direction_none) {
-                if (direction == info->player->direction || info->mapRC->groove) { /* player facing update direction */
-                    if (!info->playerContext->update && !info->mapRC->update) {
-                        bool_t groove = info->mapRC->groove;
-
-                        /* lock the graphics subsystem: this prevents rendering momentarily so that
-                           we can update the player and the map at the same time without a race */
-                        pok_graphics_subsystem_lock(info->sys);
-
-                        /* update map context */
-                        pok_game_modify_enter(info->mapRC);
-                        /* test to see if the current tile has a latent warp; if so, this would change the
-                           map and animate it to 1 tile offset the warp location; this will setup a transition */
-                        if ( !latent_warp_logic(info,direction) ) {
-                            /* attempt to update the map focus; the map render context will
-                               handle impassable tile collisions */
-                            if ( pok_map_render_context_move(info->mapRC,direction,TRUE) ) {
-                                /* check for other collision possibilities while the context is updated */
-                                if ( !check_collisions(info) ) {
-                                    /* undo the previous changes; this will work as if they never took place */
-                                    pok_map_render_context_move(info->mapRC,pok_direction_opposite(direction),FALSE);
-                                    /* the player ran into something; animate slower for effect */
-                                    info->playerContext->slowDown = TRUE;
-                                }
-                                else { /* we can safely pass into the new location */
-                                    /* check for non-latent warps; these calls will setup a transition */
-                                    warp_logic(info);
-                                    /* prepare the map context to be updated */
-                                    pok_map_render_context_set_update(info->mapRC,direction,info->sys->dimension);
-                                    /* update the player character's location */
-                                    info->player->chunkPos = info->mapRC->chunkpos;
-                                    info->player->tilePos = info->mapRC->relpos;
-                                    info->playerContext->slowDown = FALSE;
-                                }
-                            }
-                            else
-                                /* the player ran into something; animate slower for effect */
-                                info->playerContext->slowDown = TRUE;
-
-                            /* update player context for animation (direction does not change); if
-                               slowDown is true, then the player does not move (so don't set parameter) */
-                            pok_game_modify_enter(info->playerContext);
-                            pok_character_context_set_update(
-                                info->playerContext,
-                                direction,
-                                pok_character_normal_effect,
-                                info->playerContext->slowDown ? 0 : info->sys->dimension,
-                                !groove );
-                            pok_game_modify_exit(info->playerContext);
-                        }
-                        pok_game_modify_exit(info->mapRC);
-
-                        pok_graphics_subsystem_unlock(info->sys);
-                    }
-                }
-                else if (!info->playerContext->update) {
-                    /* update player context for animation; the player sprite is just moving in place; this
-                       still produces an animation, but the sprite doesn't offset; this is specified by
-                       passing 0 as the dimension parameter to 'pok_character_context_set_update' */
-                    pok_game_modify_enter(info->playerContext);
-                    info->playerContext->slowDown = FALSE;
-                    pok_character_context_set_update(info->playerContext,direction,pok_character_normal_effect,0,TRUE);
-                    pok_game_modify_exit(info->playerContext);
-                }
-            }
+            player_move_logic(info,direction);
         }
     }
 }
@@ -242,7 +184,128 @@ bool_t character_update(struct pok_game_info* info)
     return FALSE;
 }
 
-void fadeout_update(struct pok_game_info* info)
+bool_t check_collisions(struct pok_game_info* info)
+{
+    size_t iter;
+    bool_t status = TRUE;
+    /* check against all player contexts in the character render context; this
+       procedure assumes that the map render context is currently locked */
+    pok_game_lock(info->charRC);
+    for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
+        struct pok_character_context* ctx;
+        ctx = info->charRC->chars.da_data[iter];
+        if (ctx->character->mapNo == info->mapRC->map->mapNo
+            && ctx->character->chunkPos.X == info->mapRC->chunkpos.X
+            && ctx->character->chunkPos.Y == info->mapRC->chunkpos.Y
+            && ctx->character->tilePos.column == info->mapRC->relpos.column
+            && ctx->character->tilePos.row == info->mapRC->relpos.row)
+        {
+            status = FALSE;
+            break;
+        }
+    }
+    pok_game_unlock(info->charRC);
+
+    return status;
+}
+
+void player_move_logic(struct pok_game_info* info,enum pok_direction direction)
+{
+    /* process the player move logic; the player always moves in the 'pok_game_world_context' */
+    if (direction != pok_direction_none) {
+        if (direction == info->player->direction || info->mapRC->groove) { /* player facing update direction */
+            if (!info->playerContext->update && !info->mapRC->update) {
+                bool_t skip;
+                bool_t groove = info->mapRC->groove;
+                enum pok_character_effect effect = pok_character_normal_effect;
+
+                /* lock the graphics subsystem: this prevents rendering momentarily so that
+                   we can update the player and the map at the same time without a race */
+                pok_graphics_subsystem_lock(info->sys);
+
+                /* determine player update effect based on map terrain; this check occurs before the map is updated */
+                if (info->playerEffect == pok_character_normal_effect)
+                    effect = get_effect_from_terrain(info->mapRC,info->tman,direction);
+                skip = effect == pok_character_jump_effect;
+
+                /* update map context */
+                pok_game_modify_enter(info->mapRC);
+                /* test to see if the current tile has a latent warp; if so, this would change the
+                   map and animate it to 1 tile offset the warp location; this will setup a transition */
+                if ( !latent_warp_logic(info,direction) ) {
+                    /* attempt to update the map focus; the map render context will
+                       handle impassable tile collisions */
+                    if ( pok_map_render_context_move(info->mapRC,direction,skip,TRUE) ) {
+                        /* check for other collision possibilities while the context is updated */
+                        if ( !check_collisions(info) ) {
+                            /* undo the previous changes; this will work as if they never took place */
+                            pok_map_render_context_move(info->mapRC,pok_direction_opposite(direction),skip,FALSE);
+                            /* the player ran into something; animate slower for effect; reenter game world context
+                               upon a collision as well */
+                            info->playerContext->slowDown = TRUE;
+                            info->gameContext = pok_game_world_context;
+                        }
+                        else { /* we can safely pass into the new location */
+                            bool_t didWarp;
+                            /* check for non-latent warps; these calls will setup a transition */
+                            didWarp = warp_logic(info);
+                            /* prepare the map context to be updated; if we skipped a column/row then double the
+                               length of the map scroll animation */
+                            pok_map_render_context_set_update(info->mapRC,direction,info->sys->dimension*(skip+1));
+                            /* update the player character's location */
+                            info->player->chunkPos = info->mapRC->chunkpos;
+                            info->player->tilePos = info->mapRC->relpos;
+                            info->playerContext->slowDown = FALSE;
+
+                            /* determine if (after the map update) the tile terrain prompts a change in game context; we
+                               only do this if the player is currently updating normally, hasn't run into anything and is
+                               not currently warping */
+                            if (info->playerEffect == pok_character_normal_effect && !didWarp) {
+                                enum pok_character_effect eff;
+                                eff = get_effect_from_terrain(info->mapRC,info->tman,direction);
+                                if (eff == pok_character_slide_effect)
+                                    info->gameContext = pok_game_sliding_context;
+                                else
+                                    info->gameContext = pok_game_world_context;
+                            }
+                        }
+                    }
+                    else {
+                        /* the player ran into something; animate slower for effect; reset game context
+                           to 'world' upon collision */
+                        info->playerContext->slowDown = TRUE;
+                        info->gameContext = pok_game_world_context;
+                    }
+
+                    /* update player context for animation (direction does not change); if
+                       slowDown is true, then the player does not move (so don't set parameter) */
+                    pok_game_modify_enter(info->playerContext);
+                    pok_character_context_set_update(
+                        info->playerContext,
+                        direction,
+                        effect,
+                        info->playerContext->slowDown ? 0 : info->sys->dimension,
+                        !groove );
+                    pok_game_modify_exit(info->playerContext);
+                }
+                pok_game_modify_exit(info->mapRC);
+
+                pok_graphics_subsystem_unlock(info->sys);
+            }
+        }
+        else if (!info->playerContext->update) {
+            /* update player context for animation; the player sprite is just moving in place; this
+               still produces an animation, but the sprite doesn't offset; this is specified by
+               passing 0 as the dimension parameter to 'pok_character_context_set_update' */
+            pok_game_modify_enter(info->playerContext);
+            info->playerContext->slowDown = FALSE;
+            pok_character_context_set_update(info->playerContext,direction,info->playerEffect,0,TRUE);
+            pok_game_modify_exit(info->playerContext);
+        }
+    }
+}
+
+void fadeout_logic(struct pok_game_info* info)
 {
     bool_t result;
     struct pok_map* map;
@@ -283,7 +346,7 @@ void fadeout_update(struct pok_game_info* info)
             info->gameContext = pok_game_warp_fadein_context;
         }
         else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
-                || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
+            || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
             /* we just finished a fadeout for a latent warp; now finish the transition by setting a fadein effect; set
                the fadein effect first to avoid a race condition */
             info->fadeout.delay = WARP_FADEIN_DELAY;
@@ -342,32 +405,13 @@ void fadeout_update(struct pok_game_info* info)
             info->gameContext = pok_game_world_context;
             globals.pausePlayerMap = FALSE;
         }
-     }
- }
-
-bool_t check_collisions(struct pok_game_info* info)
-{
-    size_t iter;
-    bool_t status = TRUE;
-    /* check against all player contexts in the character render context; this
-       procedure assumes that the map render context is currently locked */
-    pok_game_lock(info->charRC);
-    for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
-        struct pok_character_context* ctx;
-        ctx = info->charRC->chars.da_data[iter];
-        if (ctx->character->mapNo == info->mapRC->map->mapNo
-            && ctx->character->chunkPos.X == info->mapRC->chunkpos.X
-            && ctx->character->chunkPos.Y == info->mapRC->chunkpos.Y
-            && ctx->character->tilePos.column == info->mapRC->relpos.column
-            && ctx->character->tilePos.row == info->mapRC->relpos.row)
-        {
-            status = FALSE;
-            break;
-        }
     }
-    pok_game_unlock(info->charRC);
+}
 
-    return status;
+void map_terrain_logic(struct pok_game_info* info)
+{
+    if (info->gameContext == pok_game_sliding_context)
+        player_move_logic(info,info->player->direction);
 }
 
 bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction)
@@ -407,7 +451,7 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
     return FALSE;
 }
 
-void warp_logic(struct pok_game_info* info)
+bool_t warp_logic(struct pok_game_info* info)
 {
     /* check to see if the current location has a non-latent warp */
     struct pok_tile_data* tdata;
@@ -423,8 +467,43 @@ void warp_logic(struct pok_game_info* info)
             pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_to_center,FALSE);
             info->gameContext = pok_game_warp_fadeout_cave_context;
         }
+        else
+            return FALSE;
         /* cache a reference to the tile data; it will be used to change the map render context
            after the transition has finished */
         info->mapTrans = tdata;
+        /* returning TRUE means we found a warp and have setup for a transition */
+        return TRUE;
     }
+    return FALSE;
+}
+
+enum pok_character_effect get_effect_from_terrain(struct pok_map_render_context* mapRC,
+    struct pok_tile_manager* tman,enum pok_direction direction)
+{
+    uint16_t i;
+    uint16_t tileid;
+    struct pok_tile* tile;
+    /* obtain current tile id */
+    tileid = mapRC->chunk->data[mapRC->relpos.row][mapRC->relpos.column].data.tileid;
+    /* check ice tiles: ice tiles cause the player to slide */
+    for (i = 0;i < tman->terrain[pok_tile_terrain_ice].length;++i)
+        if (tman->terrain[pok_tile_terrain_ice].list[i] == tileid)
+            return pok_character_slide_effect;
+    /* check ledge tiles: ledge tiles cause the player to jump over the ledge tile; the
+       player must be facing the correct direction; the ledge tile is assumed to be one tile
+       in front of the player */
+    if (direction > pok_direction_up) {
+        tile = pok_map_render_context_get_adjacent_tile(
+            mapRC,
+            direction == pok_direction_left ? -1 : (direction == pok_direction_right ? 1 : 0),
+            direction == pok_direction_down ? 1 : 0 );
+        if (tile != NULL) {
+            int d = pok_tile_terrain_ledge_down + (direction-1);
+            for (i = 0;i < tman->terrain[d].length;++i)
+                if (tman->terrain[d].list[i] == tile->data.tileid)
+                    return pok_character_jump_effect;
+        }
+    }
+    return pok_character_normal_effect;
 }

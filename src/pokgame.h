@@ -39,7 +39,7 @@ enum pok_game_context
     pok_game_warp_latent_fadeout_door_context, /* the game is handling a latent door exit warp */
     pok_game_warp_latent_fadeout_cave_context, /* the game is handling a latent cave exit warp */
     pok_game_warp_fadein_context, /* the game is handling a warp fadein */
-
+    pok_game_sliding_context /* the player is sliding along ice tiles */
 };
 
 struct pok_game_info;
@@ -52,7 +52,7 @@ struct pok_game_info
     byte_t staticOwnerMask;
 
     /* controls the io and update procedures */
-    bool_t control;
+    volatile bool_t control;
 
     /* update thread handle */
     struct pok_thread* updateThread;
@@ -92,6 +92,7 @@ struct pok_game_info
 
     /* player */
     struct pok_character* player; /* owned by the engine, not the version */
+    enum pok_character_effect playerEffect;
     struct pok_character_context* playerContext; /* cached */
 };
 
@@ -118,5 +119,7 @@ void pok_game_free(struct pok_game_info* game);
 void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind kind,void* obj);
 void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);
+void pok_game_load_textures(struct pok_game_info* game);
+void pok_game_delete_textures(struct pok_game_info* game);
 
 #endif

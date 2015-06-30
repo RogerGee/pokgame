@@ -28,6 +28,7 @@ static bool_t impl_new(struct pok_graphics_subsystem* sys);
 static void impl_free(struct pok_graphics_subsystem* sys);
 static void impl_reload(struct pok_graphics_subsystem* sys);
 static void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
+static void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 static void impl_set_game_state(struct pok_graphics_subsystem* sys,bool_t state);
 static void impl_map_window(struct pok_graphics_subsystem* sys);
 static void impl_unmap_window(struct pok_graphics_subsystem* sys);
@@ -289,6 +290,28 @@ bool_t pok_graphics_subsystem_create_textures(struct pok_graphics_subsystem* sys
         /* give the implementation a chance to optimize raster graphics operations using textures; it
            may do nothing or may create the textures and free the image pixel data */
         impl_load_textures(sys,info,count);
+    }
+    return TRUE;
+}
+bool_t pok_graphics_subsystem_delete_textures(struct pok_graphics_subsystem* sys,int count, ...)
+{
+    if (count > 0) {
+        int i;
+        va_list list;
+        struct texture_info* info;
+        info = malloc(sizeof(struct texture_info) * count);
+        if (info == NULL) {
+            pok_exception_flag_memory_error();
+            return FALSE;
+        }
+        va_start(list,count);
+        for (i = 0;i < count;++i) {
+            info[i].images = va_arg(list,struct pok_image**);
+            info[i].count = va_arg(list,int);
+        }
+        /* let the implementation delete the specified textures; since pokgame may load other
+           artwork if a version sends it we need to be frugal with the video card memory space */
+        impl_delete_textures(sys,info,count);
     }
     return TRUE;
 }

@@ -51,7 +51,6 @@ int main_test()
 
 void init()
 {
-    static const struct pok_point ORIGIN = {0,0};
     static const struct pok_location START_LOCATION = {4,6};
     fputs("doing init...",stdout);
     fflush(stdout);
@@ -59,6 +58,14 @@ void init()
     if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts0.data") )
         pok_error_fromstack(pok_error_fatal);
     game->tman->impassibility = 32;
+    game->tman->terrain[pok_tile_terrain_ice].length = 1;
+    game->tman->terrain[pok_tile_terrain_ice].list = malloc(sizeof(uint16_t));
+    assert( game->tman->terrain[pok_tile_terrain_ice].list != NULL );
+    game->tman->terrain[pok_tile_terrain_ice].list[0] = 35;
+    game->tman->terrain[pok_tile_terrain_ledge_down].length = 1;
+    game->tman->terrain[pok_tile_terrain_ledge_down].list = malloc(sizeof(uint16_t));
+    assert( game->tman->terrain[pok_tile_terrain_ledge_down].list != NULL );
+    game->tman->terrain[pok_tile_terrain_ledge_down].list[0] = 1;
     assert( pok_tile_manager_load_ani(game->tman,42,ANIDATA,TRUE) );
     if ( !pok_sprite_manager_fromfile(game->sman,"test/img/sss0.data",pok_sprite_manager_updown_alt) )
         pok_error_fromstack(pok_error_fatal);
@@ -67,11 +74,7 @@ void init()
     assert( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&START_LOCATION) );
     pok_character_context_set_player(game->playerContext,game->mapRC);
     assert( pok_graphics_subsystem_begin(game->sys) );
-    pok_graphics_subsystem_create_textures(
-        game->sys,
-        2,
-        game->tman->tileset, game->tman->tilecnt,
-        game->sman->spritesets, game->sman->imagecnt );
+    pok_game_load_textures(game);
     pok_game_register(game);
     puts("done");
 }
@@ -94,6 +97,14 @@ void load_maps()
         pok_error_fromstack(pok_error_fatal);
     map->mapNo = 2;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapB.csv") )
+        pok_error_fromstack(pok_error_fatal);
+    pok_world_add_map(game->world,map);
+    /* load map C */
+    map = pok_map_new();
+    if (map == NULL)
+        pok_error_fromstack(pok_error_fatal);
+    map->mapNo = 3;
+    if ( !pok_map_fromfile_csv(map,"test/maps/mapC.csv") )
         pok_error_fromstack(pok_error_fatal);
     pok_world_add_map(game->world,map);
 

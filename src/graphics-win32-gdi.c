@@ -2,7 +2,8 @@
 #include <Windows.h>
 
 /* note: this file mirrors 'graphics-win32-GL.c'; it is very similar except
-   it performs software rendering using the Win32 Graphics Display Interface */
+   it performs software rendering using the Win32 Graphics Display Interface;
+   I mainly used this for testing so it is not kept up-to-date */
 
 #define POKGAME_WINDOW_CLASS "pokgame"
 
@@ -237,6 +238,8 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 {
     DWORD i;
     RECT windowDims;
+    int framerate = 0;
+    DWORD sleepamt = 0;
 
     /* set window view dimensions */
     windowDims.left = 0;
@@ -313,13 +316,21 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
             WaitForSingleObject(sys->impl->mutex, INFINITE);
             for (index = 0; index < sys->routinetop; ++index)
                 (*sys->routines[index])(sys, sys->contexts[index]);
+            /* draw back buffer */
+            BitBlt(sys->impl->hDC, 0, 0, windowDims.right, windowDims.bottom, sys->impl->hBackBufferDC, 0, 0, SRCCOPY);
             ReleaseMutex(sys->impl->mutex);
         }
+        else
+            /* draw back buffer */
+            BitBlt(sys->impl->hDC, 0, 0, windowDims.right, windowDims.bottom, sys->impl->hBackBufferDC, 0, 0, SRCCOPY);
 
-        /* draw back buffer */
-        BitBlt(sys->impl->hDC, 0, 0, windowDims.right, windowDims.bottom, sys->impl->hBackBufferDC, 0, 0, SRCCOPY);
+        /* check for framerate change */
+        if (framerate != sys->framerate) {
+            framerate = sys->framerate;
+            sleepamt = 1000 / framerate;
+        }
 
-        Sleep(sys->framerate);
+        Sleep(sleepamt);
     }
 
     /* cleanup */
