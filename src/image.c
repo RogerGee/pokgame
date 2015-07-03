@@ -601,6 +601,7 @@ struct pok_image* pok_image_png_new(const char* file)
     png_uint_32 bitdepth;
     png_uint_32 channels;
     png_uint_32 colorType;
+    png_bytep ptr;
     png_bytepp rowptrs;
     struct pok_image* img;
     struct pok_data_source* dsrc;
@@ -643,7 +644,7 @@ struct pok_image* pok_image_png_new(const char* file)
     /* setup libpng */
     png_set_read_fn(pngptr,dsrc,read_data); /* custom read function */
     if (setjmp(png_jmpbuf(pngptr)) != 0) { /* error handler */
-        pok_exception_new_ex2(0,"libpng exception");
+        pok_exception_new_format("libpng exception in pok_image_png_new()");
         png_destroy_read_struct(&pngptr,&infoptr,NULL);
         goto fail;
     }
@@ -678,6 +679,8 @@ struct pok_image* pok_image_png_new(const char* file)
     }
 
     /* setup image object */
+    img->width = imgwidth;
+    img->height = imgheight;
     if (colorType == PNG_COLOR_TYPE_RGB)
         img->pixels.dataRGB = malloc(sizeof(union pixel) * imgheight * imgwidth);
     else { /* PNG_COLOR_TYPE_RGBA */
@@ -695,9 +698,12 @@ struct pok_image* pok_image_png_new(const char* file)
         png_destroy_read_struct(&pngptr,&infoptr,NULL);
         goto fail;
     }
-    for (i = 0;i < imgheight;++i)
+    ptr = img->pixels.data;
+    for (i = 0;i < imgheight;++i) {
         /* note: we have already asserted that bitdepth is 8 */
-        rowptrs[i] = (byte_t*)img->pixels.data + imgwidth * channels;
+        rowptrs[i] = ptr;
+        ptr += imgwidth * channels;
+    }
 
     /* read image data */
     png_read_image(pngptr,rowptrs);

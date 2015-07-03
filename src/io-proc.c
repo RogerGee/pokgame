@@ -3,6 +3,7 @@
 #include "error.h"
 #include "protocol.h"
 #include "default.h"
+#include "user.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -50,29 +51,41 @@ static bool_t seq_tile_manager(struct pok_game_info* game,struct pok_io_info* in
 static bool_t seq_sprite_manager(struct pok_game_info* game,struct pok_io_info* info);
 static bool_t seq_player_character(struct pok_game_info* game,struct pok_io_info* info);
 static bool_t seq_first_map(struct pok_game_info* game,struct pok_io_info* info);
-static void gen_guid(char* buffer,int length);
 
 int io_proc(struct pok_graphics_subsystem* sys)
 {
     struct pok_game_info* game, *save = NULL;
 
-    /* create a default game */
+    /* don't try to render game until we have something set up */
+    pok_graphics_subsystem_game_render_state(sys,FALSE);
+
+    /* create a default game; it will have an external version procedure */
     game = pok_make_default_game(sys);
     if (game == NULL)
         return 1;
 
+    /* load the default game's textures */
+    pok_game_load_textures(game);
+
     /* run versions in a loop; a version ends when either the version callback
        or the 'run_game' function returns  */
     do {
-        struct pok_game_info* ver;
-
         if (game->versionCBack != NULL) {
             /* this game will be run by an external procedure; if it returns a pointer
                to a new version, then we save the current game and switch to the new
                version; when the new version ends, we will switch back to the original game */
-            pok_thread_start(game->updateThread);
-            ver = (*game->versionCBack)(game);
-            pok_thread_join(game->updateThread);
+            struct pok_game_info* ver;
+
+            pok_game_register(game);              /* register game rendering functions */
+            pok_graphics_subsystem_game_render_state(sys,TRUE); /* let render process begin rendering */
+            pok_thread_start(game->updateThread); /* start up update process */
+            ver = (*game->versionCBack)(game);    /* execute version callback */
+            game->control = FALSE;                /* inform IO procedure that we are finished */
+            pok_thread_join(game->updateThread);  /* wait for update thread to end */
+            pok_graphics_subsystem_game_render_state(sys,FALSE); /* turn off rendering */
+            pok_game_unregister(game);            /* unregister rendering routines */
+
+            /* process new version to play (if any); save the current game */
             if (ver != NULL) {
                 save = game;
                 game = ver;
@@ -80,22 +93,31 @@ int io_proc(struct pok_graphics_subsystem* sys)
             else
                 break;
         }
-        else {
+        else if (game->versionChannel != NULL) {
+            /* the version is specifying a data channel; we can use this to engage the pokgame
+               protocol with a peer; the peer could be a pokgame version process executing on
+               a remote host or the local host */
             enum pok_io_result result;
-            pok_thread_start(game->updateThread);
-            result = run_game(game);
-            pok_thread_join(game->updateThread);
-            if (result == pok_io_result_quit)
-                break;
+
+            pok_game_register(game);              /* register game rendering functions */
+            pok_graphics_subsystem_game_render_state(sys,TRUE); /* let render process begin rendering */
+            pok_thread_start(game->updateThread); /* start up update process */
+            result = run_game(game);              /* run the game, engaging the pokgame protocol with a peer */
+            game->control = FALSE;                /* inform IO procedure that we are finished */
+            pok_thread_join(game->updateThread);  /* wait for update thread to end */
+            pok_graphics_subsystem_game_render_state(sys,FALSE); /* turn off rendering */
+            pok_game_unregister(game);            /* unregister rendering routines */
+
+            /* free the game; it is not the default version so we destroy it*/
             pok_game_free(game);
             game = save;
+            if (result == pok_io_result_quit)
+                break;
         }
-
-#ifdef POKGAME_DEBUG
-        if (game == NULL)
-            pok_error(pok_error_fatal,"assertion fail: couldn't find a game after operation");
-#endif
-
+        else {
+            pok_error(pok_error_warning,"game did not have IO source");
+            break;
+        }
     } while ( pok_graphics_subsystem_has_window(game->sys) );
 
     pok_game_free(game);
@@ -136,6 +158,9 @@ enum pok_io_result run_game(struct pok_game_info* game)
 
     }
 
+    /* reset the window's title bar text back to its title for the default version */
+    pok_graphics_subsystem_assign_title(game->sys,"default");
+
     pok_netobj_readinfo_delete(&info.readInfo);
     pok_string_delete(&info.string);
     return result;
@@ -164,7 +189,7 @@ enum pok_io_result exch_inter(struct pok_game_info* game,struct pok_io_info* inf
         pok_timeout(&game->ioTimeout);
         info->elapsed += game->ioTimeout.elapsed;
         if (info->elapsed > WAIT_TIMEOUT) {
-            pok_exception_new_ex2(0,"exch_inter: " ERROR_WAIT);
+            pok_exception_new_format("exch_inter: " ERROR_WAIT);
             return pok_io_result_error;
         }
     }
@@ -208,7 +233,7 @@ static bool_t read_string(struct pok_game_info* game,struct pok_io_info* info)
         pok_timeout(&game->ioTimeout);
         info->elapsed += game->ioTimeout.elapsed;
         if (info->elapsed > WAIT_TIMEOUT) {
-            pok_exception_new_ex2(0,"exch_intro: " ERROR_WAIT);
+            pok_exception_new_format("exch_intro: " ERROR_WAIT);
             return FALSE;
         }
     }
@@ -224,7 +249,7 @@ bool_t seq_greet(struct pok_game_info* game,struct pok_io_info* info)
         return FALSE;
     if (strcmp(POKGAME_GREETING_SEQUENCE,info->string.buf) != 0) {
         pok_string_clear(&info->string);
-        pok_exception_new_ex2(0,"seq_greet: peer did not send valid protocol greeting sequence");
+        pok_exception_new_format("seq_greet: peer did not send valid protocol greeting sequence");
         return FALSE;
     }
     pok_string_clear(&info->string);
@@ -242,7 +267,7 @@ bool_t seq_mode(struct pok_game_info* game,struct pok_io_info* info)
         info->protocolMode = FALSE;
     else {
         pok_string_clear(&info->string);
-        pok_exception_new_ex2(0,"seq_mode: peer did not send valid protocol mode sequence");
+        pok_exception_new_format("seq_mode: peer did not send valid protocol mode sequence");
         return FALSE;
     }
     pok_string_clear(&info->string);
@@ -251,6 +276,12 @@ bool_t seq_mode(struct pok_game_info* game,struct pok_io_info* info)
 
 bool_t seq_label(struct pok_game_info* game,struct pok_io_info* info)
 {
+    size_t sz;
+    const struct pok_user_info* userInfo = pok_user_get_info();
+    if (userInfo == NULL) {
+        pok_exception_new_format("seq_label: no user information available");
+        return FALSE;
+    }
     /* receive the version's associated label; this is used to give a title for the version
        so we assign it to the graphics subsystem; this will update the window title bar text */
     if ( !read_string(game,info) )
@@ -259,9 +290,16 @@ bool_t seq_label(struct pok_game_info* game,struct pok_io_info* info)
     pok_string_assign(&game->versionLabel,info->string.buf);
     /* receive the version's guid; this helps to uniquely identify a version process; the guid
        is formatted as a human readible text string */
-
+    if ( !read_string(game,info) )
+        return FALSE;
+    if (info->string.len != GUID_LENGTH) {
+        pok_exception_new_format("seq_label: expected guid of length %d",GUID_LENGTH);
+        return FALSE;
+    }
+    pok_string_concat(&game->versionLabel,info->string.buf);
     /* send our guid so the version can better uniquely identify us */
-
+    if ( !pok_data_source_write(game->versionChannel,(byte_t*)userInfo->guid.buf,GUID_LENGTH,&sz) )
+        return FALSE;
     return TRUE;
 }
 
@@ -280,7 +318,7 @@ bool_t seq_graphics_subsystem(struct pok_game_info* game,struct pok_io_info* inf
         pok_timeout(&game->ioTimeout);
         info->elapsed += game->ioTimeout.elapsed;
         if (info->elapsed > WAIT_TIMEOUT) {
-            pok_exception_new_ex2(0,"exch_inter: " ERROR_WAIT);
+            pok_exception_new_format("exch_inter: " ERROR_WAIT);
             return FALSE;
         }
     }
@@ -305,7 +343,7 @@ bool_t seq_tile_manager(struct pok_game_info* game,struct pok_io_info* info)
         pok_timeout(&game->ioTimeout);
         info->elapsed += game->ioTimeout.elapsed;
         if (info->elapsed > WAIT_TIMEOUT) {
-            pok_exception_new_ex2(0,"exch_inter: " ERROR_WAIT);
+            pok_exception_new_format("exch_inter: " ERROR_WAIT);
             pok_tile_manager_free(tman);
             return FALSE;
         }
@@ -336,7 +374,7 @@ bool_t seq_sprite_manager(struct pok_game_info* game,struct pok_io_info* info)
         pok_timeout(&game->ioTimeout);
         info->elapsed += game->ioTimeout.elapsed;
         if (info->elapsed > WAIT_TIMEOUT) {
-            pok_exception_new_ex2(0,"exch_inter: " ERROR_WAIT);
+            pok_exception_new_format("exch_inter: " ERROR_WAIT);
             pok_sprite_manager_free(sman);
             return FALSE;
         }
@@ -354,24 +392,20 @@ bool_t seq_sprite_manager(struct pok_game_info* game,struct pok_io_info* info)
 
 bool_t seq_player_character(struct pok_game_info* game,struct pok_io_info* info)
 {
-    /* request a unique network object id from the version that we can assign to 
-       the player character object */
+    /* read a unique network object id that we can assign to the player character object */
 
     /* netwrite player character object */
+
     return TRUE;
 }
 
 bool_t seq_first_map(struct pok_game_info* game,struct pok_io_info* info)
 {
-    /* request a unique network object id for our pok_world object */
+    /* netread a unique network object id for our world object  */
 
     /* netwrite our world object */
 
     /* expect a 'pok_world_method_add_map' operation to netread the first map */
 
     return TRUE;
-}
-
-void gen_guid(char* buffer,int length)
-{
 }

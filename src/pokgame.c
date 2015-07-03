@@ -1,8 +1,10 @@
 /* pokgame.c - pokgame */
 #include "pokgame.h"
 #include "error.h"
+#include "user.h"
 #include <dstructs/hashmap.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifndef POKGAME_TEST
 
@@ -14,8 +16,12 @@ int main(int argc,const char* argv[])
     struct pok_graphics_subsystem* sys;
     POKGAME_NAME = argv[0];
 
+    /* C-library initialization */
+    srand( time(NULL) );
+
     /* load all modules */
     pok_exception_load_module();
+    pok_user_load_module();
     pok_netobj_load_module();
     pok_game_load_module();
 
@@ -46,6 +52,7 @@ int main(int argc,const char* argv[])
     /* unload all modules */
     pok_game_unload_module();
     pok_netobj_unload_module();
+    pok_user_unload_module();
     pok_exception_unload_module();
 
     return 0;
@@ -175,6 +182,7 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     /* this function creates a new game state object; if 'template' is not NULL, then its static network
        objects are copied by reference into the new game info */
     struct pok_game_info* game;
+    const struct pok_user_info* userInfo = pok_user_get_info();
     game = malloc(sizeof(struct pok_game_info));
     if (game == NULL)
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
@@ -221,11 +229,13 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
         pok_error_fromstack(pok_error_fatal);
     /* initialize character render context */
     game->charRC = pok_character_render_context_new(game->mapRC,game->sman);
-    /* initialize player and add it to the character render context */
+    /* initialize player character and add it to the character render context */
     game->player = pok_character_new();
     if (game->player == NULL)
         pok_error_fromstack(pok_error_fatal);
     game->player->isPlayer = TRUE;
+    if (userInfo != NULL)
+        game->player->spriteIndex = userInfo->sprite;
     game->playerEffect = pok_character_normal_effect;
     game->playerContext = pok_character_render_context_add_ex(game->charRC,game->player);
     if (game->playerContext == NULL)
@@ -244,8 +254,11 @@ void pok_game_free(struct pok_game_info* game)
         pok_tile_manager_free(game->tman);
     pok_thread_free(game->updateThread);
     pok_string_delete(&game->versionLabel);
+    if (game->versionProc != NULL)
+        pok_process_free(game->versionProc);
+    if (game->versionChannel != NULL)
+        pok_data_source_free(game->versionChannel);
     free(game);
-
 }
 void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind kind,void* obj)
 {

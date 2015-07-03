@@ -1,10 +1,13 @@
-/* graphics-X-GL.c - implement graphics subsystem using POSIX, XLib and GL */
+/* graphics-X.c - implement graphics subsystem using POSIX and X11 */
+#include "graphics-impl.h"
+#include "error.h"
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 /* functions */
 static void do_x_init();
@@ -13,11 +16,6 @@ static void make_frame(struct pok_graphics_subsystem* sys);
 static void edit_frame(struct pok_graphics_subsystem* sys);
 static void close_frame(struct pok_graphics_subsystem* sys);
 static void* graphics_loop(struct pok_graphics_subsystem* sys);
-static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
-    int32_t viewWidth,
-    int32_t viewHeight);
-static void gl_create_textures(struct pok_graphics_subsystem* sys);
-static void gl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 
 /* globals */
 static int screen;          /* X session screen */
@@ -34,9 +32,8 @@ struct _pok_graphics_subsystem_impl
     char keys[32];                     /* bitmask of keyboard keys used when asynchronously querying the keyboard state */
     pthread_t tid;                     /* the rendering routine runs on the thread represented by this process id */
     pthread_mutex_t mutex;             /* this locks the renderer; used for synchronizing updating and rendering */
-    size_t textureAlloc, textureCount; /* store OpenGL texture references; this is just a list of integers */
-    GLuint* textureNames;
-
+    struct gl_texture_info gltexinfo;  /* OpenGL texture information */
+ 
     /* shared variable flags */
     volatile bool_t rendering;     /* is the system rendering the window frame? */
     volatile bool_t gameRendering; /* is the system invoking game rendering? */
@@ -57,7 +54,7 @@ static void check_impl(struct pok_graphics_subsystem* sys)
 
 #endif
 
-/* implement the interface from graphics.c; this implementation will be included directly into graphics.c */
+/* implement the graphics subsystem interface */
 bool_t impl_new(struct pok_graphics_subsystem* sys)
 {
     /* initialize a new impl object for the graphics subsystem */
@@ -67,10 +64,10 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         return FALSE;
     }
     sys->impl->window = None;
-    sys->impl->textureAlloc = 32;
-    sys->impl->textureCount = 0;
-    sys->impl->textureNames = malloc(sizeof(GLuint) * sys->impl->textureAlloc);
-    if (sys->impl->textureNames == NULL) {
+    sys->impl->gltexinfo.textureAlloc = 32;
+    sys->impl->gltexinfo.textureCount = 0;
+    sys->impl->gltexinfo.textureNames = malloc(sizeof(GLuint) * sys->impl->gltexinfo.textureAlloc);
+    if (sys->impl->gltexinfo.textureNames == NULL) {
         pok_exception_flag_memory_error();
         free(sys->impl);
         return FALSE;
@@ -103,7 +100,7 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl->rendering = FALSE;
     if (pthread_join(sys->impl->tid,NULL) != 0)
         pok_error(pok_error_fatal,"fail pthread_join()");
-    free(sys->impl->textureNames);
+    free(sys->impl->gltexinfo.textureNames);
     free(sys->impl);
     sys->impl = NULL;
 }
@@ -140,7 +137,7 @@ void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info
 #endif
 
     pthread_mutex_lock(&sys->impl->mutex);
-    gl_delete_textures(sys,info,count);
+    gl_delete_textures(&sys->impl->gltexinfo,info,count);
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
@@ -479,7 +476,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
             pthread_mutex_lock(&sys->impl->mutex);
-            gl_create_textures(sys);
+            gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;
@@ -522,14 +519,11 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 done:
     sys->impl->gameRendering = FALSE;
     sys->impl->rendering = FALSE;
-    if (sys->impl->textureCount > 0) {
-        glDeleteTextures(sys->impl->textureCount,sys->impl->textureNames);
-        sys->impl->textureCount = 0;
+    if (sys->impl->gltexinfo.textureCount > 0) {
+        glDeleteTextures(sys->impl->gltexinfo.textureCount,sys->impl->gltexinfo.textureNames);
+        sys->impl->gltexinfo.textureCount = 0;
     }
     close_frame(sys);
     do_x_close();
     return NULL;
 }
-
-/* include misc graphics routines (these don't require X11 calls or POSIX) */
-#include "graphics-GL.c"

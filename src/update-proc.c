@@ -11,8 +11,8 @@
 /* constant update parameters */
 
 #define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
-#define MAP_SCROLL_TIME          280 /* number of ticks for complete map scroll update */
-#define MAP_SCROLL_TIME_FAST     180 /* number of ticks for complete fast map scroll update */
+#define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
 
 #define INITIAL_FADEIN_DELAY     350 /* "initial fadein" happens before we show the game */
 #define INITIAL_FADEIN_TIME     2000
@@ -32,7 +32,7 @@ static struct
 static void set_defaults(struct pok_game_info* info);
 static void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t);
 static void update_key_input(struct pok_game_info* info);
-static bool_t character_update(struct pok_game_info* info);
+static void character_update(struct pok_game_info* info);
 static bool_t check_collisions(struct pok_game_info* info);
 static void player_move_logic(struct pok_game_info* info,enum pok_direction direction);
 static void fadeout_logic(struct pok_game_info* info);
@@ -77,6 +77,9 @@ int update_proc(struct pok_game_info* info)
                 +  pok_character_context_update(info->playerContext,info->sys->dimension,info->updateTimeout.elapsed);
             pok_graphics_subsystem_unlock(info->sys);
         }
+
+        /* perform other updates */
+        character_update(info);
 
         /* perform game logic updates */
         fadeout_logic(info);
@@ -177,11 +180,20 @@ void update_key_input(struct pok_game_info* info)
     }
 }
 
-bool_t character_update(struct pok_game_info* info)
+void character_update(struct pok_game_info* info)
 {
+    size_t iter;
     /* process non-player character updates */
-
-    return FALSE;
+    pok_game_lock(info->charRC);
+    for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
+        struct pok_character_context* context = (struct pok_character_context*) info->charRC->chars.da_data[iter];
+        if (context != info->playerContext)
+            pok_character_context_update(
+                context,
+                info->sys->dimension,
+                info->updateTimeout.elapsed );
+    }
+    pok_game_unlock(info->charRC);
 }
 
 bool_t check_collisions(struct pok_game_info* info)

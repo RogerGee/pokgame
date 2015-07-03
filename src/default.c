@@ -22,8 +22,8 @@ static struct pok_game_info* default_io_proc(struct pok_game_info* game);
 
 struct pok_game_info* pok_make_default_game(struct pok_graphics_subsystem* sys)
 {
+    struct pok_map* defmap;
     struct pok_game_info* game;
-    struct pok_character* character;
 
     /* create a new game for the default version; register a callback to handle its
        input and output */
@@ -31,7 +31,13 @@ struct pok_game_info* pok_make_default_game(struct pok_graphics_subsystem* sys)
     game->versionCBack = default_io_proc;
     setup_tileman(game->tman);
     setup_spriteman(game->sman);
-    B( pok_world_add_map(game->world,create_default_map()) );
+    defmap = create_default_map();
+    B( pok_world_add_map(game->world,defmap) );
+
+    /* prepare rendering contexts for initial scene */
+    pok_map_render_context_set_map(game->mapRC,defmap);
+    B( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&DEFAULT_MAP_START_LOCATION) );
+    pok_character_context_set_player(game->playerContext,game->mapRC); /* align the player context with map context */
 
     return game;
 }
@@ -40,7 +46,7 @@ void setup_tileman(struct pok_tile_manager* tman)
 {
     /* load tile manager for the default game */
     int i;
-    B( pok_tile_manager_fromfile_tiles_png(tman,POKGAME_DEFAULT_DIRECTORY POKGAME_STS_IMAGE) );
+    B( pok_tile_manager_fromfile_tiles_png(tman,POKGAME_INSTALL_DIRECTORY POKGAME_DEFAULT_DIRECTORY POKGAME_STS_IMAGE) );
     tman->impassibility = DEFAULT_TILEMAN_IMPASSIBILITY;
     tman->flags |= pok_tile_manager_flag_terrain_byref;
     for (i = 0;i < POK_TILE_TERRAIN_TOP;++i) {
@@ -54,7 +60,10 @@ void setup_tileman(struct pok_tile_manager* tman)
 
 void setup_spriteman(struct pok_sprite_manager* sman)
 {
-    B( pok_sprite_manager_fromfile_png(sman,POKGAME_DEFAULT_DIRECTORY POKGAME_SSS_IMAGE,pok_sprite_manager_updown_alt) );
+    B( pok_sprite_manager_fromfile_png(
+            sman,
+            POKGAME_INSTALL_DIRECTORY POKGAME_DEFAULT_DIRECTORY POKGAME_SSS_IMAGE,
+            pok_sprite_manager_updown_alt) );
 }
 
 struct pok_map* create_default_map()
@@ -70,5 +79,12 @@ struct pok_map* create_default_map()
 
 struct pok_game_info* default_io_proc(struct pok_game_info* game)
 {
+    /* loop while the window is still open */
+    while ( pok_graphics_subsystem_has_window(game->sys) ) {
+
+
+        /* time the thread out (don't compute elapsed time) */
+        pok_timeout_no_elapsed(&game->ioTimeout);
+    }
     return NULL;
 }

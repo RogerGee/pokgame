@@ -89,6 +89,16 @@ void pok_string_assign(struct pok_string* str,const char* s)
         str->len = len;
     }
 }
+void pok_string_assign_ex(struct pok_string* str,const char* s,size_t length)
+{
+    /* don't assume the user provided a null-terminator */
+    size_t zlen = length+1;
+    if (zlen<=str->cap || pok_string_realloc(str,zlen)) {
+        strncpy(str->buf,s,length); /* copy just the specified number of bytes */
+        str->buf[length] = 0; /* provide the null terminator ourselves */
+        str->len = length;
+    }
+}
 void pok_string_copy(struct pok_string* str,const struct pok_string* operand)
 {
     size_t zlen = operand->len + 1;

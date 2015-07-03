@@ -550,7 +550,7 @@ struct pok_process* pok_process_new(const char* cmdline,const char* environment,
     if ( !pok_parse_cmdline_ex(cmdline,&argbuf,&argv) )
         goto fail;
     if (argv[0] == NULL) {
-        pok_exception_new_ex2(0,"the command-line had no arguments!");
+        pok_exception_new_format("the command-line had no arguments!");
         goto fail;
     }
 
@@ -675,6 +675,7 @@ void pok_thread_start(struct pok_thread* thread)
 int pok_thread_join(struct pok_thread* thread)
 {
     if (pthread_join(thread->threadID,NULL) != 0)
-        pok_error(pok_error_warning,"fail pok_thread_join()");
+        pok_error(pok_error_fatal,"fail pok_thread_join()");
+    thread->threadID = (pthread_t)-1;
     return thread->retval;
 }

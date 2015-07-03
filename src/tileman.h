@@ -33,6 +33,7 @@ struct pok_tile_ani_data
 enum pok_tile_terrain_type
 {
     pok_tile_terrain_cutable,
+    pok_tile_terrain_headbuttable,
     pok_tile_terrain_water,
     pok_tile_terrain_ice,
     pok_tile_terrain_lava,

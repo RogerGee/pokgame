@@ -2,7 +2,9 @@
 #include "error.h"
 #include <dstructs/hashmap.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 extern const char* POKGAME_NAME;
 
@@ -87,36 +89,33 @@ static char const* const* POK_ERROR_MESSAGES[] = {
 
 /* target-independent code */
 
-void pok_error(enum pok_errorkind kind,const char* message)
+void pok_error(enum pok_errorkind kind,const char* message, ...)
 {
-    pok_lock_error_module();
+    va_list args;
+    char finalMessage[4096];
+    va_start(args,message);
+    vsnprintf(finalMessage,sizeof(finalMessage),message,args);
+    va_end(args);
     if (kind == pok_error_warning)
-        fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,message);
+        fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,finalMessage);
     else if (kind == pok_error_unimplemented)
-        fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,message);
+        fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,finalMessage);
     else if (kind == pok_error_fatal) {
-        fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,message);
+        fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,finalMessage);
         exit(EXIT_FAILURE);
     }
-    pok_unlock_error_module();
 }
 void pok_error_fromstack(enum pok_errorkind kind)
 {
     const struct pok_exception* ex;
     ex = pok_exception_pop();
     if (ex != NULL) {
-        pok_lock_error_module();
         if (kind == pok_error_warning)
-            fprintf(stderr,"%s: warning: %s",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,ex->message);
         else if (kind == pok_error_unimplemented)
-            fprintf(stderr,"%s: unimplemented: %s",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,ex->message);
         else if (kind == pok_error_fatal)
-            fprintf(stderr,"%s: fatal error: %s",POKGAME_NAME,ex->message);
-        pok_unlock_error_module();
-        if (ex->lineno != 0)
-            fprintf(stderr,": line %d\n",ex->lineno);
-        else
-            fputc('\n',stderr);
+            fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,ex->message);
     }
     else
         fprintf(stderr,"%s: error stack was empty!\n",POKGAME_NAME);
@@ -152,8 +151,7 @@ static bool_t memory_error_flag = FALSE;
    need to be able to still create this structure */
 static struct pok_exception memerror = {pok_ex_default_memory_allocation_fail,
                                         pok_ex_default,
-                                        "memory allocation exception",
-                                        0};
+                                        "memory allocation exception"};
 
 static void add_exception(struct pok_exception* ex)
 {
@@ -219,9 +217,8 @@ struct pok_exception* pok_exception_new()
 #endif
     ex = malloc(sizeof(struct pok_exception));
     ex->id = -1;
-    ex->lineno = 0;
     ex->kind = pok_ex_default;
-    ex->message = NULL;
+    ex->message[0] = 0;
     add_exception(ex);
     return ex;
 }
@@ -236,15 +233,15 @@ struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
 #endif
     ex = malloc(sizeof(struct pok_exception));
     ex->id = id;
-    ex->lineno = 0;
     ex->kind = kind;
-    ex->message = POK_ERROR_MESSAGES[kind][id];
+    strncpy(ex->message,POK_ERROR_MESSAGES[kind][id],sizeof(ex->message));
     add_exception(ex);
     return ex;
 }
-struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
+struct pok_exception* pok_exception_new_format(const char* message, ...)
 {
     int tid;
+    va_list args;
     struct thread_exception_item* list;
     struct pok_exception* ex;
 #ifdef POKGAME_DEBUG
@@ -253,9 +250,10 @@ struct pok_exception* pok_exception_new_ex2(int lineno,const char* message)
 #endif
     ex = malloc(sizeof(struct pok_exception));
     ex->id = pok_ex_default_undocumented;
-    ex->lineno = lineno;
     ex->kind = pok_ex_default;
-    ex->message = message;
+    va_start(args,message);
+    vsnprintf(ex->message,sizeof(ex->message),message,args);
+    va_end(args);
     add_exception(ex);
     return ex;
 }

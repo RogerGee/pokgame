@@ -11,7 +11,7 @@ enum pok_errorkind
     pok_error_fatal, /* the error is un-recoverable and the process will terminate */
     pok_error_unimplemented /* the control tried to execute a feature not yet supported */
 };
-void pok_error(enum pok_errorkind kind,const char* message);
+void pok_error(enum pok_errorkind kind,const char* message, ...);
 void pok_error_fromstack(enum pok_errorkind kind);
 
 /* exception categories are enumerated by the modules that generate them */
@@ -47,12 +47,11 @@ struct pok_exception
 {
     int id;
     enum pok_ex_kind kind;
-    const char* message;
-    int lineno;
+    char message[256];
 };
 struct pok_exception* pok_exception_new();
 struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id);
-struct pok_exception* pok_exception_new_ex2(int lineno,const char* message);
+struct pok_exception* pok_exception_new_format(const char* message, ...);
 bool_t pok_exception_check();
 bool_t pok_exception_check_ex(enum pok_ex_kind kind,int id);
 const struct pok_exception* pok_exception_pop();

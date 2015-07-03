@@ -375,7 +375,7 @@ static pstatus_t cmdline_non_wspace(struct pok_parser_info* info)
             pok_data_source_pop(info->dsrc);
             c = pok_data_source_peek(info->dsrc);
             if (c == -1) {
-                pok_exception_new_ex2(0,"parse cmdline: expected escape character after '\\'");
+                pok_exception_new_format("parse cmdline: expected escape character after '\\'");
                 return FAIL_WITH_ERROR;
             }
             switch (c) {
@@ -412,7 +412,7 @@ static pstatus_t cmdline_any(struct pok_parser_info* info)
             pok_data_source_pop(info->dsrc);
             c = pok_data_source_peek(info->dsrc);
             if (c == -1) {
-                pok_exception_new_ex2(0,"parse cmdline: expected escape character after '\\'");
+                pok_exception_new_format("parse cmdline: expected escape character after '\\'");
                 return FAIL_WITH_ERROR;
             }
             switch (c) {
@@ -457,7 +457,7 @@ static pstatus_t cmdline_arg(struct pok_parser_info* info)
             if (r != FAIL_WITH_ERROR) {
                 c = pok_data_source_peek(info->dsrc);
                 if (c != '"') {
-                    pok_exception_new_ex2(0,"parse cmdline: expected closing quote");
+                    pok_exception_new_format("parse cmdline: expected closing quote");
                     return FAIL_WITH_ERROR;
                 }
                 r = SUCCESS_PARSE;
@@ -538,7 +538,7 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
                     break;
                 }
                 if (escape == 0) {
-                    pok_exception_new_ex2(0,"parse cmdline: expected escape character after '\\'");
+                    pok_exception_new_format("parse cmdline: expected escape character after '\\'");
                     free((void*)argv);
                     return FALSE;
                 }
@@ -553,7 +553,7 @@ bool_t pok_parse_cmdline_ex(const char* cmdline,struct pok_string* buffer,const 
         /* the end of string can terminate an argument */
         pok_string_concat_char(buffer,0);
     else if (state == 2) {
-        pok_exception_new_ex2(0,"parse cmdline: expected terminating quote");
+        pok_exception_new_format("parse cmdline: expected terminating quote");
         free((void*)argv);
         return FALSE;
     }
@@ -623,7 +623,7 @@ static pstatus_t map_simple_row_data(struct pok_parser_info* info)
     if (r == FAIL_NO_MATCH) {
         if (pok_data_source_peek(info->dsrc) == -1)
             return SUCCESS_PARSE;
-        pok_exception_new_ex2(info->lineno,"parse map simple: expected row or end of input");
+        pok_exception_new_format("parse map simple: line %d: expected row or end of input",info->lineno);
     }
     return FAIL_WITH_ERROR;
 }
@@ -631,22 +631,22 @@ bool_t pok_parse_map_simple(struct pok_parser_info* info)
 {
     pstatus_t r = pok_parse_qword(info);
     if (r == FAIL_NO_MATCH) {
-        pok_exception_new_ex2(info->lineno,"parse map simple: expected width");
+        pok_exception_new_format("parse map simple: line %d: expected width",info->lineno);
         return FALSE;
     }
     if (r == SUCCESS_PARSE) {
         if (pok_parse_newline(info) == FAIL_NO_MATCH) {
-            pok_exception_new_ex2(info->lineno,"parse map simple: expected newline after width");
+            pok_exception_new_format("parse map simple: line %d: expected newline after width",info->lineno);
             return FALSE;
         }
         r = pok_parse_qword(info);
         if (r == FAIL_NO_MATCH) {
-            pok_exception_new_ex2(info->lineno,"parse map simple: expected height");
+            pok_exception_new_format("parse map simple: line %d: expected height",info->lineno);
             return FALSE;
         }
         if (r == SUCCESS_PARSE) {
             if (pok_parse_newline(info) == FAIL_NO_MATCH) {
-                pok_exception_new_ex2(info->lineno,"parse map simple: expected newline after height");
+                pok_exception_new_format("parse map simple: line %d: expected newline after height",info->lineno);
                 return FALSE;
             }
             return map_simple_row_data(info) == SUCCESS_PARSE;
@@ -674,104 +674,104 @@ static pstatus_t map_warps_warp_elem(struct pok_parser_info* info)
     pstatus_t r;
     struct pok_string* label;
     if (pok_parse_keyword(info,"warp",FALSE) == FAIL_NO_MATCH) {
-        pok_exception_new_ex2(info->lineno,"parse map warps: expected 'warp' declaration");
+        pok_exception_new_format("parse map warps: line %d: expected 'warp' declaration",info->lineno);
         return FAIL_WITH_ERROR;
     }
     pok_parse_wspace_optional(info);
     /* map element */
     if (pok_data_source_pop(info->dsrc) != '(') {
-        pok_exception_new_ex2(info->lineno,"parse map warps: expected '(' before 'map' element");
+        pok_exception_new_format("parse map warps: line %d: expected '(' before 'map' element",info->lineno);
         return FAIL_WITH_ERROR;
     }
     pok_parse_wspace_optional(info);
     if (pok_parse_keyword(info,"map",FALSE) == FAIL_NO_MATCH) {
-        pok_exception_new_ex2(info->lineno,"parse map warps: expected 'map' declaration");
+        pok_exception_new_format("parse map warps: line %d: expected 'map' declaration",info->lineno);
         return FAIL_WITH_ERROR;
     }
     pok_parse_wspace_optional(info);
     r = pok_parse_qword(info);
     if (r == FAIL_NO_MATCH) {
-        pok_exception_new_ex2(info->lineno,"parse map warps: expected from-map-number in 'map' element");
+        pok_exception_new_format("parse map warps: line %d: expected from-map-number in 'map' element",info->lineno);
         return FAIL_WITH_ERROR;
     }
     else if (r == SUCCESS_PARSE) {
         pok_parse_wspace_optional(info);
         r = pok_parse_qword(info);
         if (r == FAIL_NO_MATCH) {
-            pok_exception_new_ex2(info->lineno,"parse map warps: expected to-map-number in 'map' element");
+            pok_exception_new_format("parse map warps: line %d: expected to-map-number in 'map' element",info->lineno);
             return FAIL_WITH_ERROR;
         }
         else if (r == SUCCESS_PARSE) {
             pok_parse_wspace_optional(info);
             if (pok_data_source_pop(info->dsrc) != ')') {
-                pok_exception_new_ex2(info->lineno,"parse map warps: expected ')' after 'map' element");
+                pok_exception_new_format("parse map warps: line %d: expected ')' after 'map' element",info->lineno);
                 return FAIL_WITH_ERROR;
             }
             pok_parse_wspace_optional(info);
             /* chunk element */
             if (pok_data_source_pop(info->dsrc) != '(') {
-                pok_exception_new_ex2(info->lineno,"parse map warps: expected '(' before 'chunk' element");
+                pok_exception_new_format("parse map warps: line %d: expected '(' before 'chunk' element",info->lineno);
                 return FAIL_WITH_ERROR;
             }
             pok_parse_wspace_optional(info);
             if (pok_parse_keyword(info,"chunk",FALSE) == FAIL_NO_MATCH) {
-                pok_exception_new_ex2(info->lineno,"parse map warps: expected 'chunk' declaration");
+                pok_exception_new_format("parse map warps: line %d: expected 'chunk' declaration",info->lineno);
                 return FAIL_WITH_ERROR;
             }
             pok_parse_wspace_optional(info);
             r = pok_parse_coord(info);
             if (r == FAIL_NO_MATCH) {
-                pok_exception_new_ex2(info->lineno,"parse map warps: expected from-chunk-coordinate in 'chunk' element");
+                pok_exception_new_format("parse map warps: line %d: expected from-chunk-coordinate in 'chunk' element",info->lineno);
                 return FAIL_WITH_ERROR;
             }
             else if (r == SUCCESS_PARSE) {
                 pok_parse_wspace_optional(info);
                 r = pok_parse_coord(info);
                 if (r == FAIL_NO_MATCH) {
-                    pok_exception_new_ex2(info->lineno,"parse map warps: expected to-chunk-coordinate in 'chunk' element");
+                    pok_exception_new_format("parse map warps: line %d: expected to-chunk-coordinate in 'chunk' element",info->lineno);
                     return FAIL_WITH_ERROR;
                 }
                 else if (r == SUCCESS_PARSE) {
                     pok_parse_wspace_optional(info);
                     if (pok_data_source_pop(info->dsrc) != ')') {
-                        pok_exception_new_ex2(info->lineno,"parse map warps: expected ')' after 'chunk' element");
+                        pok_exception_new_format("parse map warps: line %d: expected ')' after 'chunk' element",info->lineno);
                         return FAIL_WITH_ERROR;
                     }
                     pok_parse_wspace_optional(info);
                     /* position element */
                     if (pok_data_source_pop(info->dsrc) != '(') {
-                        pok_exception_new_ex2(info->lineno,"parse map warps: expected '(' before 'pos' element");
+                        pok_exception_new_format("parse map warps: line %d: expected '(' before 'pos' element",info->lineno);
                         return FAIL_WITH_ERROR;
                     }
                     pok_parse_wspace_optional(info);
                     if (pok_parse_keyword(info,"pos",FALSE) == FAIL_NO_MATCH) {
-                        pok_exception_new_ex2(info->lineno,"parse map warps: expected 'pos' declaration");
+                        pok_exception_new_format("parse map warps: line %d: expected 'pos' declaration",info->lineno);
                         return FAIL_WITH_ERROR;
                     }
                     pok_parse_wspace_optional(info);
                     r = pok_parse_coord(info);
                     if (r == FAIL_NO_MATCH) {
-                        pok_exception_new_ex2(info->lineno,"parse map warps: expected from-position-coordinate in 'pos' element");
+                        pok_exception_new_format("parse map warps: line %d: expected from-position-coordinate in 'pos' element",info->lineno);
                         return FAIL_WITH_ERROR;
                     }
                     else if (r == SUCCESS_PARSE) {
                         pok_parse_wspace_optional(info);
                         r = pok_parse_coord(info);
                         if (r == FAIL_NO_MATCH) {
-                            pok_exception_new_ex2(info->lineno,"parse map warps: expected to-position-coordinate in 'pos' element");
+                            pok_exception_new_format("parse map warps: line %d: expected to-position-coordinate in 'pos' element",info->lineno);
                             return FAIL_WITH_ERROR;
                         }
                         else if (r == SUCCESS_PARSE) {
                             pok_parse_wspace_optional(info);
                             if (pok_data_source_pop(info->dsrc) != ')') {
-                                pok_exception_new_ex2(info->lineno,"parse map warps: expected ')' after 'pos' element");
+                                pok_exception_new_format("parse map warps: line %d: expected ')' after 'pos' element",info->lineno);
                                 return FAIL_WITH_ERROR;
                             }
                             pok_parse_wspace_optional(info);
                             /* warp kind label */
                             r = pok_parse_string(info);
                             if (r == FAIL_NO_MATCH) {
-                                pok_exception_new_ex2(info->lineno,"parse map warps: expected warp kind label");
+                                pok_exception_new_format("parse map warps: line %d: expected warp kind label",info->lineno);
                                 return FAIL_WITH_ERROR;
                             }
                             else if (r == SUCCESS_PARSE) {
@@ -809,8 +809,8 @@ static pstatus_t map_warps_warp_elem(struct pok_parser_info* info)
                                     else if (strcmp(label->buf,"WARP_FALL") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_fall;
                                     else {
-                                        pok_exception_new_ex2(info->lineno,"parse map warps: expected one of WARP_INSTANT, WARP_LATENT_*_UP, \
-WARP_LATENT_*_DOWN, WARP_LATENT_*_LEFT, WARP_LATENT_*_RIGHT, WARP_SPIN or WARP_FALL for warp kind");
+                                        pok_exception_new_format("parse map warps: line %d: expected one of WARP_INSTANT, WARP_LATENT_*_UP, \
+WARP_LATENT_*_DOWN, WARP_LATENT_*_LEFT, WARP_LATENT_*_RIGHT, WARP_SPIN or WARP_FALL for warp kind",info->lineno);
                                         return FAIL_WITH_ERROR;
                                     }
                                     ++info->bytes_c[0];

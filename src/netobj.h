@@ -105,10 +105,15 @@ struct pok_netobj_writeinfo
     uint16_t fieldCnt;  /* field counter */
     uint16_t fieldProg; /* field progress counter */
     uint16_t depth[2];  /* multidimensional depth counter */
+
+    /* if non-zero then an incomplete transfer send at least some bytes but not all */
+    bool_t pending;
 };
 struct pok_netobj_writeinfo* pok_netobj_writeinfo_new();
 void pok_netobj_writeinfo_free(struct pok_netobj_writeinfo* info);
 void pok_netobj_writeinfo_init(struct pok_netobj_writeinfo* info);
+enum pok_network_result pok_netobj_writeinfo_process(struct pok_netobj_writeinfo* info);
+enum pok_network_result pok_netobj_writeinfo_process_depth(struct pok_netobj_writeinfo* info,int index);
 
 struct pok_netobj_upinfo
 {

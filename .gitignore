@@ -7,8 +7,10 @@ pokgame-debug
 pokgame-test
 tilemaker
 spritemaker
+
 test/img
 test/maps
+game/
 
 *.obj
 pokgame.vcxproj.filters

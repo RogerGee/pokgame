@@ -85,6 +85,18 @@ enum pok_network_result pok_netobj_netread(struct pok_netobj* netobj,struct pok_
     }
     return result;
 }
+enum pok_network_result pok_netobj_netwrite(struct pok_netobj* netobj,struct pok_data_source* dsrc,struct pok_netobj_writeinfo* info)
+{
+    /* fields
+        [4 bytes] id
+    */
+    enum pok_network_result result = pok_net_already;
+    if (info->fieldProg == 0) {
+        pok_data_stream_write_uint32(dsrc,netobj->id);
+        result = pok_netobj_writeinfo_process(info);
+    }
+    return result;
+}
 
 /* pok_netobj_readinfo */
 struct pok_netobj_readinfo* pok_netobj_readinfo_new()
@@ -199,6 +211,42 @@ void pok_netobj_writeinfo_init(struct pok_netobj_writeinfo* info)
     info->fieldCnt = 0;
     info->fieldProg = 0;
     info->depth[0] = info->depth[1] = 0;
+}
+enum pok_network_result pok_netobj_writeinfo_process(struct pok_netobj_writeinfo* info)
+{
+    const struct pok_exception* ex;
+    ex = pok_exception_peek();
+    if (ex != NULL) {
+        if (ex->kind==pok_ex_net && (ex->id==pok_ex_net_wouldblock || ex->id==pok_ex_net_pending)) {
+            /* mark pending flag so user can know exactly why the transfer was incomplete */
+            info->pending = ex->id == pok_ex_net_pending;
+            /* remove exception since it was processed here */
+            pok_exception_pop();
+            return pok_net_incomplete;
+        }
+        /* leave the exception for the calling context */
+        return pok_net_failed;
+    }
+    ++info->fieldProg;
+    return pok_net_completed;
+}
+enum pok_network_result pok_netobj_writeinfo_process_depth(struct pok_netobj_writeinfo* info,int index)
+{
+    const struct pok_exception* ex;
+    ex = pok_exception_peek();
+    if (ex != NULL) {
+        if (ex->kind==pok_ex_net && (ex->id==pok_ex_net_wouldblock || ex->id==pok_ex_net_pending)) {
+            /* mark pending flag so user can know exactly why the transfer was incomplete */
+            info->pending = ex->id == pok_ex_net_pending;
+            /* remove exception since it was processed here */
+            pok_exception_pop();
+            return pok_net_incomplete;
+        }
+        /* leave the exception for the calling context */
+        return pok_net_failed;
+    }
+    ++info->depth[index%2];
+    return pok_net_completed;
 }
 
 /* pok_netobj_upinfo */

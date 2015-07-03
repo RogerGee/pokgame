@@ -291,8 +291,8 @@ void add(const char* file,int cols,int rows,int column,int row,int setID,int pos
     char name[128];
     int r, s, t, u, iter;
     int width, height;
-    /* validate coordinates */
-    if (column<=0 || row<=0 || column >= cols || row >= rows) {
+    /* validate coordinates: exclude top row because it would cut off top of sprite */
+    if (column<0 || row<=0 || column >= cols || row >= rows) {
         fprintf(stderr,"%s: add: column and row do not exist within source image\n",programName);
         exit(EXIT_FAILURE);
     }

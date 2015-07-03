@@ -51,17 +51,19 @@ struct pok_game_info
     /* bitmask for static network object ownership: */
     byte_t staticOwnerMask;
 
-    /* controls the io and update procedures */
+    /* controls the update procedure; if non-zero then the update procedure is allowed
+       to execute; if it becomes FALSE then the update procedure is to exit; the update
+       procedure may also exit for other reasons */
     volatile bool_t control;
 
     /* update thread handle */
     struct pok_thread* updateThread;
 
     /* version information */
-    struct pok_proc* versionProc;
-    struct pok_string versionLabel;
-    pok_game_callback versionCBack;
-    struct pok_data_source* versionChannel;
+    struct pok_process* versionProc; /* description of version process (if a local process is running the version) */
+    struct pok_string versionLabel; /* version label of the form: "Text Label\0GUID\0" */
+    pok_game_callback versionCBack; /* if non-NULL, then a procedure that executes the IO procedure for the version */
+    struct pok_data_source* versionChannel; /* data source for version IO */
 
     /* timeouts for main game procedures (in thousandths of a second) */
     struct pok_timeout_interval ioTimeout;
@@ -90,10 +92,11 @@ struct pok_game_info
     /* character render context */
     struct pok_character_render_context* charRC;
 
-    /* player */
+    /* player character */
     struct pok_character* player; /* owned by the engine, not the version */
     enum pok_character_effect playerEffect;
     struct pok_character_context* playerContext; /* cached */
+
 };
 
 /* these functions provide mutual exclusion when an object is edited; the 'modify' functions

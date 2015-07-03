@@ -1,4 +1,5 @@
-/* graphics-win32-GL.c - pokgame */
+/* graphics-win32.c - pokgame */
+#include "graphics-impl.h"
 #include <Windows.h>
 #include <gl/GL.h>
 
@@ -10,22 +11,18 @@ VOID EditMainWindow(struct pok_graphics_subsystem* sys);
 VOID DestroyMainWindow(struct pok_graphics_subsystem* sys);
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys);
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
-static void gl_init( /* implemented in graphics-GL.c (included later in this file) */
-    int32_t viewWidth,
-    int32_t viewHeight);
-static void gl_create_textures(struct pok_graphics_subsystem* sys);
-static void gl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count);
 
 struct _pok_graphics_subsystem_impl
 {
+    /* handles to Win32 resources */
     HDC hDC;
     HGLRC hOpenGLContext;
     HWND hWnd;
     HANDLE mutex;
     HANDLE hThread;
 
-    DWORD textureAlloc, textureCount;
-    GLuint* textureNames;
+    /* OpenGL texture information */
+    struct gl_texture_info gltexinfo;
 
     /* shared variable flags */
     volatile BOOLEAN rendering;     /* is the system rendering the window frame? */
@@ -49,10 +46,10 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     if (sys->impl->mutex == NULL)
         pok_error(pok_error_fatal, "fail CreateMutex()");
     /* allocate space to store texture names */
-    sys->impl->textureAlloc = 32;
-    sys->impl->textureCount = 0;
-    sys->impl->textureNames = malloc(sizeof(GLuint) * sys->impl->textureAlloc);
-    if (sys->impl->textureNames == NULL) {
+    sys->impl->gltexinfo.textureAlloc = 32;
+    sys->impl->gltexinfo.textureCount = 0;
+    sys->impl->gltexinfo.textureNames = malloc(sizeof(GLuint) * sys->impl->gltexinfo.textureAlloc);
+    if (sys->impl->gltexinfo.textureNames == NULL) {
         pok_exception_flag_memory_error();
         free(sys->impl);
         return FALSE;
@@ -86,7 +83,7 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl->rendering = FALSE;
     WaitForSingleObject(sys->impl->hThread, INFINITE);
     CloseHandle(sys->impl->hThread);
-    free(sys->impl->textureNames);
+    free(sys->impl->gltexinfo.textureNames);
     free(sys->impl);
     sys->impl = NULL;
 }
@@ -111,7 +108,7 @@ void impl_load_textures(struct pok_graphics_subsystem* sys, struct texture_info*
 void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
 {
     WaitForSingleObject(sys->impl->mutex,INFINITE);
-    gl_delete_textures(sys,info,count);
+    gl_delete_textures(&sys->impl->gltexinfo,info,count);
     ReleaseMutex(sys->impl->mutex);
 }
 void impl_set_game_state(struct pok_graphics_subsystem* sys, bool_t state)
@@ -246,7 +243,7 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
             WaitForSingleObject(sys->impl->mutex, INFINITE);
-            gl_create_textures(sys);
+            gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;
@@ -283,9 +280,9 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
     }
 
     /* cleanup */
-    if (sys->impl->textureCount > 0) {
-        glDeleteTextures(sys->impl->textureCount, sys->impl->textureNames);
-        sys->impl->textureCount = 0;
+    if (sys->impl->gltexinfo.textureCount > 0) {
+        glDeleteTextures(sys->impl->gltexinfo.textureCount, sys->impl->gltexinfo.textureNames);
+        sys->impl->gltexinfo.textureCount = 0;
     }
     DestroyMainWindow(sys);
     return 0;
@@ -442,6 +439,3 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     }
     return 0;
 }
-
-/* include misc. graphics routines (they don't require the Win32 API) */
-#include "graphics-GL.c"

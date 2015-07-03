@@ -60,7 +60,8 @@ enum pok_tile_warp_kind
 enum pok_map_flag
 {
     pok_map_flag_none = 0x00,
-    pok_map_flag_dynamic = 0x01 /* make requests to obtain more chunks */
+    pok_map_flag_dynamic = 0x01,   /* make requests to obtain more chunks */
+    pok_map_flag_overworld = 0x02, /* the map is an overworld map (influences game logic) */
 };
 
 /* protocol method enumerators: represent the set of operations on network objects that can

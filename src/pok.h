@@ -5,6 +5,7 @@
 #ifndef POKGAME_API
 #define POKGAME_API
 #include "protocol.h"
+#include "pok-stdenum.h"
 
 /* POKGAME VERSION CORE LIBRARY */
 

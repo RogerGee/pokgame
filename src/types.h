@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* the Microsoft C Compiler does not support C99; therefore
+/* the Microsoft C Compiler does not (fully) support C99; therefore
    make every "inline" reference just an empty macro substitution */
 #ifdef POKGAME_VISUAL_STUDIO
 #define inline
@@ -15,6 +15,7 @@ typedef unsigned char byte_t;
 
 #define TRUE 1
 #define FALSE 0
+#define GUID_LENGTH 16
 
 struct pok_string
 {
@@ -28,6 +29,7 @@ void pok_string_init(struct pok_string* str);
 void pok_string_init_ex(struct pok_string* str,size_t initialCapacity);
 void pok_string_delete(struct pok_string* str);
 void pok_string_assign(struct pok_string* str,const char* s);
+void pok_string_assign_ex(struct pok_string* str,const char* s,size_t length);
 void pok_string_copy(struct pok_string* str,const struct pok_string* operand);
 void pok_string_concat(struct pok_string* str,const char* s);
 void pok_string_concat_ex(struct pok_string* str,const char* s,size_t length);
@@ -81,5 +83,12 @@ enum pok_direction
 
 /* callback types */
 typedef void (*pok_error_callback)(int id,int kind);
+
+/* define gender (I follow the Maker on this one: "male and female He created them...") */
+enum pok_gender
+{
+    pok_gender_male,
+    pok_gender_female
+};
 
 #endif
