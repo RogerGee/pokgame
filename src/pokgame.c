@@ -2,6 +2,7 @@
 #include "pokgame.h"
 #include "error.h"
 #include "user.h"
+#include "config.h"
 #include <dstructs/hashmap.h>
 #include <stdlib.h>
 #include <time.h>
@@ -18,6 +19,7 @@ int main(int argc,const char* argv[])
 
     /* C-library initialization */
     srand( time(NULL) );
+    configure_stderr();
 
     /* load all modules */
     pok_exception_load_module();

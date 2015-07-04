@@ -142,13 +142,13 @@ struct pok_data_source* pok_data_source_new_file(const char* filename, enum pok_
         dwCreatDisp,
         FILE_ATTRIBUTE_NORMAL,
         NULL);
-    if (*hpFile == NULL) {
+    if (*hpFile == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
         if (err == ERROR_ACCESS_DENIED)
             pok_exception_new_ex(pok_ex_net, pok_ex_net_file_permission_denied);
         else if (err == ERROR_FILE_EXISTS)
             pok_exception_new_ex(pok_ex_net, pok_ex_net_file_already_exist);
-        else if (err == ERROR_FILE_NOT_FOUND)
+        else if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
             pok_exception_new_ex(pok_ex_net, pok_ex_net_file_does_not_exist);
         else
             pok_exception_new_ex(pok_ex_default, pok_ex_default_undocumented);
@@ -425,4 +425,82 @@ inline bool_t pok_data_source_readbuf_full(struct pok_data_source* dsrc)
 inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc)
 {
     return dsrc->bAtEOF;
+}
+
+/* pok_process */
+struct pok_process
+{
+    HANDLE hProcess;
+};
+
+struct pok_process* pok_process_new(const char* cmdline, const char* environment, pok_error_callback errorCallback)
+{
+    return NULL;
+}
+void pok_process_free(struct pok_process* proc)
+{
+}
+struct pok_data_source* pok_process_stdio(struct pok_process* proc)
+{
+    return NULL;
+}
+bool_t pok_process_has_terminated(struct pok_process* proc)
+{
+    return TRUE;
+}
+
+/* pok_thread */
+struct pok_thread
+{
+    int retval;
+    PVOID param;
+    HANDLE hThread;
+    pok_thread_entry entryPoint;
+};
+
+static DWORD WINAPI thread_entry(struct pok_thread* thread)
+{
+    thread->retval = thread->entryPoint(thread->param);
+    return MININT32;
+}
+
+struct pok_thread* pok_thread_new(pok_thread_entry entryPoint, void* parameter)
+{
+    struct pok_thread* thread;
+    thread = malloc(sizeof(struct pok_thread));
+    if (thread == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    thread->retval = -1;
+    thread->param = parameter;
+    thread->entryPoint = entryPoint;
+    thread->hThread = (HANDLE)NULL;
+    return thread;
+}
+void pok_thread_free(struct pok_thread* thread)
+{
+    /* make sure we have joined back with the thread */
+    if (thread->hThread != NULL)
+        pok_thread_join(thread);
+    free(thread);
+}
+void pok_thread_start(struct pok_thread* thread)
+{
+    /* create the thread */
+    thread->hThread = CreateThread(
+        NULL,
+        0,
+        thread_entry,
+        thread,
+        0,
+        NULL );
+    if (thread->hThread == NULL)
+        pok_error(pok_error_fatal, "fail pok_thread_new()");
+}
+int pok_thread_join(struct pok_thread* thread)
+{
+    if (WaitForSingleObject(thread->hThread,INFINITE) == WAIT_FAILED)
+        pok_error(pok_error_fatal,"fail pok_thread_join()");
+    return thread->retval;
 }

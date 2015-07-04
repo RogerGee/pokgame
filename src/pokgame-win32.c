@@ -67,20 +67,47 @@ void gamelock_down(struct gamelock* lock)
 /* implement 'pok_timeout' from 'pokgame.h' */
 void pok_timeout(struct pok_timeout_interval* interval)
 {
-    /* Windows NT clock interval is 15 ms; I expect the
+    /* Windows NT clock interval is 16 ms; I expect the
        elapsed time computed here will be roughly that if
        the timeout period <= 15 ms */
-    LARGE_INTEGER before;
+
+    ULONGLONG before;
+    ULONGLONG after;
+
+    /*LARGE_INTEGER before;
     LARGE_INTEGER after;
     static LARGE_INTEGER freq = { 0, 0 };
     if (freq.QuadPart == 0)
-        QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&before);
-    do {
+        QueryPerformanceFrequency(&freq);*/
+
+    /*LARGE_INTEGER time;
+    static HANDLE hTimer = INVALID_HANDLE_VALUE;
+    if (hTimer == INVALID_HANDLE_VALUE)
+        hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
+    time.QuadPart = -10000LL * interval->mseconds;
+    SetWaitableTimer(hTimer, &time, 0, NULL, NULL, 0);
+    WaitForSingleObject(hTimer, INFINITE);*/
+
+    /*QueryPerformanceCounter(&before);*/
+
+    before = GetTickCount64();
+    Sleep(interval->mseconds);
+    after = GetTickCount64();
+
+    /*QueryPerformanceCounter(&after);*/
+
+    /*do {
         Sleep(1);
         QueryPerformanceCounter(&after);
         interval->elapsed = (uint32_t) ((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);
-    } while (interval->elapsed < interval->mseconds);
+    } while (interval->elapsed < interval->mseconds);*/
+
+    /*interval->elapsed = (uint32_t)((after.QuadPart - before.QuadPart) * 1000 / freq.QuadPart);*/
+
+    if (after < before)
+        interval->elapsed = (uint32_t) (MAXULONGLONG - before + after + 1);
+    else
+        interval->elapsed = (uint32_t) (after - before);
 }
 
 void pok_timeout_no_elapsed(struct pok_timeout_interval* interval)

@@ -1,5 +1,6 @@
 /* graphics-win32.c - pokgame */
 #include "graphics-impl.h"
+#include "error.h"
 #include <Windows.h>
 #include <gl/GL.h>
 

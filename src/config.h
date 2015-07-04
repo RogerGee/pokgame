@@ -3,6 +3,9 @@
 #define POKGAME_CONFIG_H
 #include "types.h"
 
+/* configure standard error logging */
+void configure_stderr();
+
 /* special directory access: these functions return valid directory paths in which
    the game content and install directories can be created */
 struct pok_string* pok_get_content_root_path();
@@ -36,6 +39,8 @@ struct pok_string* pok_get_install_root_path();
 
 #elif defined(POKGAME_WIN32)
 
+#define POKGAME_INSTALL_DIRECTORY "./" /* on Windows the install directory is relative */
+#define POKGAME_CONTENT_DIRECTORY "pokgame/"
 
 #elif defined(POKGAME_OSX)
 

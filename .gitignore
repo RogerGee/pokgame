@@ -11,6 +11,7 @@ spritemaker
 test/img
 test/maps
 game/
+default/
 
 *.obj
 pokgame.vcxproj.filters

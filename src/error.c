@@ -224,8 +224,6 @@ struct pok_exception* pok_exception_new()
 }
 struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
 {
-    int tid;
-    struct thread_exception_item* list;
     struct pok_exception* ex;
 #ifdef POKGAME_DEBUG
     if (!init)
@@ -240,9 +238,7 @@ struct pok_exception* pok_exception_new_ex(enum pok_ex_kind kind,int id)
 }
 struct pok_exception* pok_exception_new_format(const char* message, ...)
 {
-    int tid;
     va_list args;
-    struct thread_exception_item* list;
     struct pok_exception* ex;
 #ifdef POKGAME_DEBUG
     if (!init)
@@ -281,7 +277,6 @@ bool_t pok_exception_check()
 bool_t pok_exception_check_ex(enum pok_ex_kind kind,int id)
 {
     /* is there an exception of the specified kind/id on the thread-specific stack? */
-    size_t i;
     int tid;
     bool_t result;
     struct thread_exception_item* list;

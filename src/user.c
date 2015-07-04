@@ -46,9 +46,11 @@ void pok_user_load_module()
     path = get_user_save_file_path();
     fin = pok_data_source_new_file(path->buf,pok_filemode_open_existing,pok_iomode_read);
     if (fin == NULL) {
-        if ( pok_exception_peek_ex(pok_ex_net,pok_ex_net_file_does_not_exist) )
+        if ( pok_exception_peek_ex(pok_ex_net,pok_ex_net_file_does_not_exist) ) {
             /* file does not exist, so assign default settings */
             load_default_settings();
+            pok_exception_pop();
+        }
         else
             pok_error_fromstack(pok_error_fatal);
     }
@@ -97,6 +99,10 @@ void pok_user_save()
     struct pok_data_source* fout;
     path = get_user_save_file_path();
     fout = pok_data_source_new_file(path->buf,pok_filemode_create_always,pok_iomode_write);
+    if (fout == NULL) {
+        pok_error_fromstack(pok_error_warning);
+        return;
+    }
     pok_data_source_write(fout,(byte_t*)userInfo.guid.buf,GUID_LENGTH,&sz);
     pok_data_stream_write_string(fout,userInfo.name.buf);
     pok_data_stream_write_uint16(fout,userInfo.sprite);
