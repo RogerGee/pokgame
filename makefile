@@ -110,7 +110,7 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB) $(LIBRARY_LIB)
 
 # src targets (only for the game engine)
-$(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H) $(USER_H)
+$(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H) $(USER_H) $(CONFIG_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
 $(OBJDIR)/graphics.o: src/graphics.c $(GRAPHICS_H) $(GRAPHICS_IMPL_H) $(ERROR_H) $(PROTOCOL_H) $(OPENGL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
@@ -178,3 +178,10 @@ $(OBJDIR):
 	@mkdir $(OBJDIR)
 
 # other rules
+clean:
+	rm -f $(PROGRAM_NAME)
+	rm -f $(PROGRAM_NAME_DEBUG)
+	rm -f $(PROGRAM_NAME_TEST)
+	@rm $(OBJECT_DIRECTORY)/*.o
+	@rm $(OBJECT_DIRECTORY_DEBUG)/*.o
+	@rm $(OBJECT_DIRECTORY_TEST)/*.o

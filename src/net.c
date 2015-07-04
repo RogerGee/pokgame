@@ -281,9 +281,9 @@ bool_t pok_data_stream_read_string_ex(struct pok_data_source* dsrc,struct pok_st
     for (iter = 0;iter < bytesIn;++iter)
         if (data[iter] == 0)
             break;
-    pok_string_concat_ex(dst,(const char*)dst,iter);
+    pok_string_concat_ex(dst,(const char*)data,iter);
     if (iter < bytesIn) {
-        pok_data_source_unread(dsrc,ATTEMPT_SIZE-iter);
+        pok_data_source_unread(dsrc,bytesIn - iter);
         return TRUE;
     }
     if ( pok_data_source_endofcomms(dsrc) )

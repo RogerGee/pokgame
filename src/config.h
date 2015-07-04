@@ -17,6 +17,7 @@ struct pok_string* pok_get_install_root_path();
 /* pokgame files under the content directory */
 #define POKGAME_CONTENT_USERSAVE_FILE "user.pokgame"
 #define POKGAME_CONTENT_MAPS_FILE     "maps.pokgame"
+#define POKGAME_CONTENT_LOG_FILE      "pokgame.log"
 
 /* directories under the install directory */
 #define POKGAME_DEFAULT_DIRECTORY "default/"

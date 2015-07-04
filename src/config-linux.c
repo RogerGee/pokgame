@@ -4,11 +4,25 @@
 #include <pwd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
 
 /* this file provides functionality for the pokgame engine that is specific to the linux platform */
+
+void configure_stderr()
+{
+#ifndef POKGAME_DEBUG
+    int fd;
+    struct pok_string* path = pok_get_content_root_path();
+    pok_string_concat(path, "/" POKGAME_CONTENT_LOG_FILE);
+    fd = open(path->buf,O_WRONLY | O_CREAT | O_APPEND,0777);
+    if (fd == -1 || dup2(fd,STDERR_FILENO)==-1)
+        _exit(2);
+    close(fd);
+#endif
+}
 
 struct pok_string* pok_get_content_root_path()
 {
@@ -36,7 +50,7 @@ struct pok_string* pok_get_content_root_path()
     if (stat(path->buf,&statbuf) == -1) {
         if (errno == ENOENT) {
             /* doesn't exist; try to create the top level directory */
-            if (mkdir(path->buf,0777) == -1)
+            if (mkdir(path->buf,0666) == -1)
                 pok_error(pok_error_fatal,"failed to create content directory: %s",strerror(errno));
         }
         else
