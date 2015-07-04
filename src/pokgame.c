@@ -18,7 +18,7 @@ int main(int argc,const char* argv[])
     POKGAME_NAME = argv[0];
 
     /* C-library initialization */
-    srand( time(NULL) );
+    srand( (unsigned int) time(NULL) );
     configure_stderr();
 
     /* load all modules */

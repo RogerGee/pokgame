@@ -109,21 +109,23 @@ void pok_string_copy(struct pok_string* str,const struct pok_string* operand)
 }
 void pok_string_concat(struct pok_string* str,const char* s)
 {
-    size_t len = strlen(s) + str->len;
-    size_t zlen = len+1;
+    size_t l = strlen(s);
+    size_t len = str->len + l;
+    size_t zlen = len + 1;
     if (zlen<=str->cap || pok_string_realloc(str,zlen)) {
-        strncpy(str->buf+str->len,s,zlen);
+        strncpy(str->buf+str->len,s,l+1); /* add 1 to copy 0 byte */
         str->len = len;
     }
 }
 void pok_string_concat_ex(struct pok_string* str,const char* s,size_t length)
 {
-    size_t zlen;
-    length += str->len;
-    zlen = length+1;
+    /* don't assume 's' is null-terminated */
+    size_t len = length + str->len;
+    size_t zlen = len + 1;
     if (zlen<=str->cap || pok_string_realloc(str,zlen)) {
-        strncpy(str->buf+str->len,s,zlen);
-        str->len = length;
+        strncpy(str->buf+str->len,s,length);
+        str->len = len;
+        str->buf[len] = 0;
     }
 }
 void pok_string_concat_obj(struct pok_string* str,const struct pok_string* operand)
