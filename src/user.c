@@ -45,6 +45,7 @@ void pok_user_load_module()
     pok_string_init(&userInfo.name);
     path = get_user_save_file_path();
     fin = pok_data_source_new_file(path->buf,pok_filemode_open_existing,pok_iomode_read);
+    pok_string_free(path);
     if (fin == NULL) {
         if ( pok_exception_peek_ex(pok_ex_net,pok_ex_net_file_does_not_exist) ) {
             /* file does not exist, so assign default settings */
@@ -108,4 +109,5 @@ void pok_user_save()
     pok_data_stream_write_uint16(fout,userInfo.sprite);
     pok_data_stream_write_byte(fout,userInfo.gender);
     pok_data_source_free(fout);
+    pok_string_free(path);
 }

@@ -5,9 +5,16 @@
 #include "config.h"
 #include <dstructs/hashmap.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 
 #ifndef POKGAME_TEST
+
+/* functions */
+static void aux_graphics_load();
+static void aux_graphics_unload();
+static void configure_stderr();
+static void log_termination();
 
 const char* POKGAME_NAME;
 
@@ -33,6 +40,8 @@ int main(int argc,const char* argv[])
        another thread or require the main thread */
     sys = pok_graphics_subsystem_new();
     pok_graphics_subsystem_default(sys);
+    sys->loadRoutine = aux_graphics_load;
+    sys->unloadRoutine = aux_graphics_unload;
     if ( !pok_graphics_subsystem_begin(sys) )
         pok_error(pok_error_fatal,"could not begin graphics subsystem");
 
@@ -57,7 +66,60 @@ int main(int argc,const char* argv[])
     pok_user_unload_module();
     pok_exception_unload_module();
 
+    log_termination();
     return 0;
+}
+
+void aux_graphics_load()
+{
+    /* this routine is called by the graphics subsystem each time it loads the
+       graphics functionality; we load auxilary graphics here (other than the game's
+       artwork which can be specified by a game version or the default subsystem) */
+
+    pok_glyphs_load();
+}
+
+void aux_graphics_unload()
+{
+    /* this routine is executed on the graphics thread when the graphics functionality
+       is unloading */
+
+    pok_glyphs_unload();
+}
+
+void configure_stderr()
+{
+    /* redirect 'stderr' to the log file; open it for appending and
+       place a timestamp */
+    time_t t;
+    char buf[128];
+    struct tm* tinfo;
+    struct pok_string* path = pok_get_content_root_path();
+    if (path == NULL)
+        exit(1);
+    pok_string_concat(path,POKGAME_CONTENT_LOG_FILE);
+    if (freopen(path->buf,"a",stderr) == NULL)
+        exit(1);
+#ifndef POKGAME_DEBUG
+    time(&t);
+    tinfo = localtime(&t);
+    strftime(buf,sizeof(buf),"%a %b %d %Y %I:%M:%S %p",tinfo);
+    fprintf(stderr,"%s: begin: %s\n",POKGAME_NAME,buf);
+#endif
+    pok_string_free(path);
+}
+
+void log_termination()
+{
+#ifndef POKGAME_DEBUG
+    time_t t;
+    char buf[128];
+    struct tm* tinfo;
+    time(&t);
+    tinfo = localtime(&t);
+    strftime(buf,sizeof(buf),"%a %b %d %Y %I:%M:%S %p",tinfo);
+    fprintf(stderr,"%s: end: %s\n",POKGAME_NAME,buf);
+#endif
 }
 
 #endif

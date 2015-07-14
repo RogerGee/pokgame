@@ -3,9 +3,6 @@
 #define POKGAME_CONFIG_H
 #include "types.h"
 
-/* configure standard error logging */
-void configure_stderr();
-
 /* special directory access: these functions return valid directory paths in which
    the game content and install directories can be created */
 struct pok_string* pok_get_content_root_path();
@@ -25,9 +22,13 @@ struct pok_string* pok_get_install_root_path();
 /* directories under the content directory */
 #define POKGAME_VERSION_DIRECTORY "versions/"
 
-/* system directories */
+/* system directories: pokgame uses two directories, content and install; the
+   install directory houses resources that do not change and do not contain
+   user/session specific information; the content directory contains user
+   information that the game produces as it goes */
 #ifdef POKGAME_DEBUG
 
+/* if we're debugging, just refer to a local 'game' directory */
 #define POKGAME_INSTALL_DIRECTORY "game/"
 #define POKGAME_CONTENT_DIRECTORY "game/"
 
@@ -36,12 +37,14 @@ struct pok_string* pok_get_install_root_path();
 #ifdef POKGAME_LINUX
 
 #define POKGAME_INSTALL_DIRECTORY "/usr/share/pokgame/"
-#define POKGAME_CONTENT_DIRECTORY ".pokgame/"
+#define POKGAME_CONTENT_DIRECTORY ".pokgame/" /* relative to user home directory */
 
 #elif defined(POKGAME_WIN32)
 
-#define POKGAME_INSTALL_DIRECTORY "./" /* on Windows the install directory is relative */
-#define POKGAME_CONTENT_DIRECTORY "pokgame/"
+/* win32: the content directory is relative to the install directory which is
+   relative to the user's AppData directory */
+#define POKGAME_INSTALL_DIRECTORY "pokgame/"
+#define POKGAME_CONTENT_DIRECTORY "pokgame/content/"
 
 #elif defined(POKGAME_OSX)
 

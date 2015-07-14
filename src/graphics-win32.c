@@ -148,8 +148,11 @@ bool_t pok_graphics_subsystem_keyboard_query(struct pok_graphics_subsystem* sys,
         case pok_input_key_ENTER:
             vkey = VK_RETURN;
             break;
-        case pok_input_key_ALT:
+        case pok_input_key_BACK:
             vkey = VK_BACK;
+            break;
+        case pok_input_key_DEL:
+            vkey = VK_DELETE;
             break;
         case pok_input_key_UP:
             vkey = VK_UP;
@@ -202,6 +205,10 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 
     /* call function to setup OpenGL */
     gl_init(sys->wwidth, sys->wheight);
+
+    /* if specified, game load routine */
+    if (sys-loadRoutine != NULL)
+        sys->loadRoutine();
 
     while (sys->impl->rendering) {
         MSG msg;
@@ -262,7 +269,8 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
                thread */
             WaitForSingleObject(sys->impl->mutex,INFINITE);
             for (index = 0; index < sys->routinetop; ++index)
-                (*sys->routines[index])(sys, sys->contexts[index]);
+                if (sys->routines[index])
+                    sys->routines[index](sys, sys->contexts[index]);
             /* expose the backbuffer */
             SwapBuffers(sys->impl->hDC);
             ReleaseMutex(sys->impl->mutex);
@@ -285,6 +293,8 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
         glDeleteTextures(sys->impl->gltexinfo.textureCount, sys->impl->gltexinfo.textureNames);
         sys->impl->gltexinfo.textureCount = 0;
     }
+    if (sys->unloadRoutine)
+        sys->unloadRoutine();
     DestroyMainWindow(sys);
     return 0;
 }
@@ -388,6 +398,31 @@ VOID DestroyMainWindow(struct pok_graphics_subsystem* sys)
     UnregisterClass(POKGAME_WINDOW_CLASS, GetModuleHandle(NULL));
 }
 
+static enum pok_input_key PokKeyFromVirtualKeyCode(int vKey)
+{
+    switch (vKey) {
+    case VK_UP:
+        return pok_input_key_UP;
+    case VK_DOWN:
+        return pok_input_key_DOWN;
+    case VK_LEFT:
+        return pok_input_key_LEFT;
+    case VK_RIGHT:
+        return pok_input_key_RIGHT;
+    case VK_RETURN:
+        return pok_input_key_ENTER;
+    case VK_BACK:
+        return pok_input_key_BACK;
+    case VK_DELETE:
+        return pok_input_key_DEL;
+    case 0x5A:  /* Z key */
+        return pok_input_key_ABUTTON;
+    case 0x58:    /* X key */
+        return pok_input_key_BBUTTON;
+    }
+    return pok_input_key_unknown;
+}
+
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     static struct pok_graphics_subsystem* sys = NULL;
@@ -403,35 +438,23 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         PostQuitMessage(0);
         break;
     case WM_KEYUP:
-        if (sys->keyup != NULL) {
-            enum pok_input_key key = pok_input_key_unknown;
-            switch (wParam) {
-            case VK_UP:
-                key = pok_input_key_UP;
-                break;
-            case VK_DOWN:
-                key = pok_input_key_DOWN;
-                break;
-            case VK_LEFT:
-                key = pok_input_key_LEFT;
-                break;
-            case VK_RIGHT:
-                key = pok_input_key_RIGHT;
-                break;
-            case VK_RETURN:
-                key = pok_input_key_ENTER;
-                break;
-            case VK_BACK:
-                key = pok_input_key_ALT;
-                break;
-            case 0x5A:  /* Z key */
-                key = pok_input_key_ABUTTON;
-                break;
-            case 0x58:    /* X key */
-                key = pok_input_key_BBUTTON;
-                break;
-            }
-            (*sys->keyup)(key);
+        if (sys->keyupHook.top > 0 || sys->textentryHook.top > 0) {
+            uint16_t i;
+            BYTE kbs[256];
+            WORD output[2];
+            char asciiValue;
+            enum pok_input_key gameKey = PokKeyFromVirtualKeyCode(wParam);
+            GetKeyboardState(kbs);
+            ToAscii(wParam,(lParam>>16)&0xf,kbs,output,0);
+            asciiValue = (char) output[0];
+            if (gameKey != pok_input_key_unknown)
+                for (i = 0;i < sys->keyupHook.top;++i)
+                    if (sys->keyupHook.routines[i])
+                        sys->keyupHook.routines[i](gameKey,sys->keyupHook.contexts[i]);
+            if (asciiValue >= ' ' && asciiValue <= '~')
+                for (i = 0;i < sys->textentryHook.top;++i)
+                    if (sys->textentryHook.routines[i])
+                        sys->textentryHook.routines[i](asciiValue,sys->textentryHook.contexts[i]);
         }
         break;
     default:

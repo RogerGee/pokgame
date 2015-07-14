@@ -29,6 +29,8 @@ static struct pok_character* dude1;
 static void init();
 static void load_maps();
 static void load_characters();
+static void aux_graphics_load();
+static void aux_graphics_unload();
 
 /* entry point */
 int main_test()
@@ -37,6 +39,8 @@ int main_test()
     sys = pok_graphics_subsystem_new();
     if (sys == NULL)
         pok_error_fromstack(pok_error_fatal);
+    sys->loadRoutine = aux_graphics_load;
+    sys->unloadRoutine = aux_graphics_unload;
     game = pok_game_new(sys,NULL);
     init();
     printf("finished: %d\n",update_proc(game));
@@ -124,4 +128,14 @@ void load_characters()
     dude1->tilePos = (struct pok_location){4,4};
     assert( pok_character_render_context_add(game->charRC,friend) );
     assert( pok_character_render_context_add(game->charRC,dude1) );
+}
+
+void aux_graphics_load()
+{
+    pok_glyphs_load();
+}
+
+void aux_graphics_unload()
+{
+    pok_glyphs_unload();
 }

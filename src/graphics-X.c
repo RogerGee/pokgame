@@ -191,8 +191,10 @@ static KeySym pok_input_key_to_keysym(enum pok_input_key key)
         return XK_X;
     case pok_input_key_ENTER:
         return XK_Return;
-    case pok_input_key_ALT:
+    case pok_input_key_BACK:
         return XK_BackSpace;
+    case pok_input_key_DEL:
+        return XK_Delete;
     case pok_input_key_UP:
         return XK_Up;
     case pok_input_key_DOWN:
@@ -211,13 +213,17 @@ static enum pok_input_key pok_input_key_from_keysym(KeySym keysym)
     /* convert X11 key constant to pok_input_key enumerator equivilent */
     switch (keysym) {
     case XK_Z:
+    case XK_z:
         return pok_input_key_ABUTTON;
     case XK_X:
+    case XK_x:
         return pok_input_key_BBUTTON;
     case XK_Return:
         return pok_input_key_ENTER;
     case XK_BackSpace:        
-        return pok_input_key_ALT;
+        return pok_input_key_BACK;
+    case XK_Delete:
+        return pok_input_key_DEL;
     case XK_Up:
         return pok_input_key_UP;
     case XK_Down:
@@ -411,6 +417,7 @@ void close_frame(struct pok_graphics_subsystem* sys)
 /* graphics rendering loop */
 void* graphics_loop(struct pok_graphics_subsystem* sys)
 {
+    uint16_t index;
     int framerate = 0;
     useconds_t sleepamt = 0;
 
@@ -426,6 +433,10 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
     /* call function to setup OpenGL */
     gl_init(sys->wwidth,sys->wheight);
+
+    /* call load routine on graphics subsystem (if specified) */
+    if (sys->loadRoutine != NULL)
+        sys->loadRoutine();
 
     /* begin rendering loop */
     while (sys->impl->rendering) {
@@ -449,9 +460,21 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
                 glViewport(x,y,sys->wwidth,sys->wheight);
             }
             else if (evnt.type == KeyRelease) {
-                KeySym sym = XLookupKeysym(&evnt.xkey,0);
-                if (sys->keyup != NULL)
-                    (*sys->keyup)( pok_input_key_from_keysym(sym) );
+                /* handle key release hooks */
+                KeySym sym;
+                char asciiValue;
+                enum pok_input_key gameKey;
+                XLookupString(&evnt.xkey,&asciiValue,1,&sym,NULL);
+                gameKey = pok_input_key_from_keysym(sym);
+                if (gameKey != pok_input_key_unknown)
+                    for (index = 0;index < sys->keyupHook.top;++index)
+                        if (sys->keyupHook.routines[index])
+                            sys->keyupHook.routines[index](gameKey,sys->keyupHook.contexts[index]);
+                if (sym >= XK_space && sym <= XK_asciitilde)
+                    if (asciiValue != -1)
+                        for (index = 0;index < sys->textentryHook.top;++index)
+                            if (sys->textentryHook.routines[index])
+                                sys->textentryHook.routines[index](asciiValue,sys->textentryHook.contexts[index]);
             }
         }
 
@@ -488,14 +511,14 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
         /* rendering */
         if (sys->impl->gameRendering) {
-            uint16_t index;
             /* go through and call each render function; we need to obtain
                a lock for the right to render; this allows for synchronization
                with the update process */
             pthread_mutex_lock(&sys->impl->mutex);
 
             for (index = 0;index < sys->routinetop;++index)
-                (*sys->routines[index])(sys,sys->contexts[index]);
+                if (sys->routines[index])
+                    sys->routines[index](sys,sys->contexts[index]);
             /* expose the backbuffer */
             glXSwapBuffers(display,sys->impl->window);
 
@@ -516,6 +539,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
         usleep(sleepamt);
     }
 
+    /* cleanup */
 done:
     sys->impl->gameRendering = FALSE;
     sys->impl->rendering = FALSE;
@@ -523,6 +547,8 @@ done:
         glDeleteTextures(sys->impl->gltexinfo.textureCount,sys->impl->gltexinfo.textureNames);
         sys->impl->gltexinfo.textureCount = 0;
     }
+    if (sys->unloadRoutine != NULL)
+        sys->unloadRoutine();
     close_frame(sys);
     do_x_close();
     return NULL;

@@ -96,7 +96,9 @@ void pok_error(enum pok_errorkind kind,const char* message, ...)
     va_start(args,message);
     vsnprintf(finalMessage,sizeof(finalMessage),message,args);
     va_end(args);
-    if (kind == pok_error_warning)
+    if (kind == pok_error_message)
+        fprintf(stderr,"%s: %s\n",POKGAME_NAME,finalMessage);
+    else if (kind == pok_error_warning)
         fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,finalMessage);
     else if (kind == pok_error_unimplemented)
         fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,finalMessage);
@@ -110,7 +112,9 @@ void pok_error_fromstack(enum pok_errorkind kind)
     const struct pok_exception* ex;
     ex = pok_exception_pop();
     if (ex != NULL) {
-        if (kind == pok_error_warning)
+        if (kind == pok_error_message)
+            fprintf(stderr,"%s: %s\n",POKGAME_NAME,ex->message);
+        else if (kind == pok_error_warning)
             fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,ex->message);
         else if (kind == pok_error_unimplemented)
             fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,ex->message);
@@ -118,7 +122,7 @@ void pok_error_fromstack(enum pok_errorkind kind)
             fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,ex->message);
     }
     else
-        fprintf(stderr,"%s: error stack was empty!\n",POKGAME_NAME);
+        fprintf(stderr,"%s: error stack was empty when error was requested!\n",POKGAME_NAME);
     if (kind == pok_error_fatal)
         exit(EXIT_FAILURE);
 }

@@ -11,19 +11,6 @@
 
 /* this file provides functionality for the pokgame engine that is specific to the linux platform */
 
-void configure_stderr()
-{
-#ifndef POKGAME_DEBUG
-    int fd;
-    struct pok_string* path = pok_get_content_root_path();
-    pok_string_concat(path, "/" POKGAME_CONTENT_LOG_FILE);
-    fd = open(path->buf,O_WRONLY | O_CREAT | O_APPEND,0777);
-    if (fd == -1 || dup2(fd,STDERR_FILENO)==-1)
-        _exit(2);
-    close(fd);
-#endif
-}
-
 struct pok_string* pok_get_content_root_path()
 {
     const char* username;
@@ -66,6 +53,10 @@ struct pok_string* pok_get_install_root_path()
     /* create string with install directory path; do not attempt to create
        the path if it does not exist: it should already exist */
     struct pok_string* path = pok_string_new_ex(64);
+    if (path == NULL) {
+        pok_error(pok_error_fatal,"memory exception in pok_get_install_root_path()");
+        return NULL;
+    }
     pok_string_assign(path,POKGAME_INSTALL_DIRECTORY);
     return path;
 }

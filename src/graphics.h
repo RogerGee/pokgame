@@ -35,7 +35,8 @@ enum pok_input_key
     pok_input_key_ABUTTON,
     pok_input_key_BBUTTON,
     pok_input_key_ENTER,
-    pok_input_key_ALT,
+    pok_input_key_BACK,
+    pok_input_key_DEL,
     pok_input_key_UP,
     pok_input_key_DOWN,
     pok_input_key_LEFT,
@@ -49,10 +50,11 @@ enum pok_input_key
    can be obtained via the graphics subsystem) */
 struct pok_graphics_subsystem;
 typedef void (*graphics_routine_t)(const struct pok_graphics_subsystem* sys,void* context);
+typedef void (*graphics_load_routine_t)();
 
-/* other hook routine types; a hook is a called hooked in on the graphics thread that doesn't
-   render (they are and should be only used for testing) */
-typedef void (*keyup_routine_t)(enum pok_input_key key);
+/* hook routine types */
+typedef void (*keyup_routine_t)(enum pok_input_key key,void* context);
+typedef void (*textentry_routine_t)(char asciiValue,void* context);
 
 /* define graphics subsystem object; this abstracts input/output to a graphical window frame */
 struct _pok_graphics_subsystem_impl;
@@ -65,13 +67,34 @@ struct pok_graphics_subsystem
     struct pok_location _playerLocationInv; /* (used by the implementation) */
     int16_t playerOffsetX, playerOffsetY; /* pixel offset for player sprite (must be within 'dimension') */
 
-    /* graphics routines called by the subsystem */
+    /* BEGIN hooks: a hook is a procedure that is called on the graphics procedure such as when an input event 
+       occurs or a frame is rendered */
+
+    /* graphics rendering routines called by the subsystem: these hooks in order each time a frame is rendered; a
+       graphics rendering routine can be added/removed using the 'register' methods */
     uint16_t routinetop;
     graphics_routine_t routines[MAX_GRAPHICS_ROUTINES];
     void* contexts[MAX_GRAPHICS_ROUTINES];
 
-    /* hooks */
-    keyup_routine_t keyup;
+    /* graphics load/unload routines: these are special "one-time" hooks that are called when the subsystem begins and ends */
+    graphics_load_routine_t loadRoutine;
+    graphics_load_routine_t unloadRoutine;
+
+    /* other hooks: these can be conveniently added using the 'pok_graphics_subsystem_append_hook' macro */
+    struct {
+        /* called when a keyup event occurs: only the game keys enumerated in 'enum pok_input_key' are specified */
+        uint16_t top;
+        keyup_routine_t routines[MAX_GRAPHICS_ROUTINES];
+        void* contexts[MAX_GRAPHICS_ROUTINES];
+    } keyupHook;
+    struct {
+        /* like keyup, except the specified key is mapped to ASCII for text entry input */
+        uint16_t top;
+        textentry_routine_t routines[MAX_GRAPHICS_ROUTINES];
+        void* contexts[MAX_GRAPHICS_ROUTINES];
+    } textentryHook;
+
+    /* END hooks */
 
     /* misc info used by rendering contexts */
     struct pok_image* blacktile; /* solid black tile image */
@@ -115,5 +138,10 @@ void pok_image_render(struct pok_image* img,int32_t x,int32_t y);
 /* globals */
 extern const union pixel BLACK_PIXEL;
 extern const float BLACK_PIXEL_FLOAT[];
+
+/* this macro adds a hook routine to a hook */
+#define pok_graphics_subsystem_append_hook(hook,routine,context) \
+    hook.routines[hook.top] = routine; \
+    hook.contexts[hook.top++] = context
 
 #endif

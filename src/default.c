@@ -46,7 +46,11 @@ void setup_tileman(struct pok_tile_manager* tman)
 {
     /* load tile manager for the default game */
     int i;
-    B( pok_tile_manager_fromfile_tiles_png(tman,POKGAME_INSTALL_DIRECTORY POKGAME_DEFAULT_DIRECTORY POKGAME_STS_IMAGE) );
+    struct pok_string* path;
+    path = pok_get_install_root_path();
+    pok_string_concat(path,POKGAME_DEFAULT_DIRECTORY POKGAME_STS_IMAGE);
+    B( pok_tile_manager_fromfile_tiles_png(tman,path->buf) );
+    pok_string_free(path);
     tman->impassibility = DEFAULT_TILEMAN_IMPASSIBILITY;
     tman->flags |= pok_tile_manager_flag_terrain_byref;
     for (i = 0;i < POK_TILE_TERRAIN_TOP;++i) {
@@ -60,10 +64,14 @@ void setup_tileman(struct pok_tile_manager* tman)
 
 void setup_spriteman(struct pok_sprite_manager* sman)
 {
+    struct pok_string* path;
+    path = pok_get_install_root_path();
+    pok_string_concat(path,POKGAME_DEFAULT_DIRECTORY POKGAME_SSS_IMAGE);
     B( pok_sprite_manager_fromfile_png(
             sman,
-            POKGAME_INSTALL_DIRECTORY POKGAME_DEFAULT_DIRECTORY POKGAME_SSS_IMAGE,
+            path->buf,
             pok_sprite_manager_updown_alt) );
+    pok_string_free(path);
 }
 
 struct pok_map* create_default_map()

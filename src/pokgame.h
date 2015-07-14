@@ -8,6 +8,7 @@
 #include "map-context.h"
 #include "character-context.h"
 #include "effect.h"
+#include "menu.h"
 
 /* timeout_interval: structure to represent game time */
 struct pok_timeout_interval

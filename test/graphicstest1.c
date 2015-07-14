@@ -2,6 +2,7 @@
 #include "graphics.h"
 #include "tileman.h"
 #include "map-context.h"
+#include "menu.h"
 #include "error.h"
 #include <stdio.h>
 #include <string.h>
@@ -18,37 +19,48 @@ struct pok_image* get_tile_image(int no); /* make these visable to other compila
 struct pok_map* get_map(int no);
 
 /* test routines */
-static const int TEST_ROUT_TOP = 2;
+static const int TEST_ROUT_TOP = 3;
 static void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void** contexts);
-static void keyup_routine(enum pok_input_key key);
+static void keyup_routine(enum pok_input_key key,struct pok_text_input* input);
+static void textentry_routine(char c,struct pok_text_input* input);
 static void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman);
-static void routineB(struct pok_graphics_subsystem* sys,struct pok_map_render_context* context);
+static void routineB(struct pok_graphics_subsystem* sys,struct pok_text_input* input);
 static graphics_routine_t routines[] = {
     (graphics_routine_t) routineA,
-    (graphics_routine_t) pok_map_render
+    (graphics_routine_t) pok_map_render,
+    (graphics_routine_t) routineB
 };
+
+static void gload();
+static void gunload();
 
 /* global game objects for this test */
 struct __
 {
+    int cycle;
     struct pok_map_render_context* mcxt;
 } globals;
 
 int graphics_main_test1()
 {
-    int cycle, nxt;
+    int nxt;
     char inbuf[1024];
     struct pok_location loc;
     struct pok_point pnt;
+    struct pok_size sz;
     struct pok_map* map;
     struct pok_image* tileimg;
     struct pok_tile_manager* tman;
     struct pok_graphics_subsystem* sys;
+    struct pok_text_input textInput;
     void* contexts[10];
 
     sys = pok_graphics_subsystem_new();
     pok_graphics_subsystem_default(sys);
-    sys->keyup = keyup_routine;
+    pok_graphics_subsystem_append_hook(sys->keyupHook,(keyup_routine_t)keyup_routine,&textInput);
+    pok_graphics_subsystem_append_hook(sys->textentryHook,(textentry_routine_t)textentry_routine,&textInput);
+    sys->loadRoutine = gload;
+    sys->unloadRoutine = gunload;
 
     /* load up tiles for this test */
     tman = pok_tile_manager_new(sys);
@@ -75,11 +87,19 @@ int graphics_main_test1()
     assert( pok_map_render_context_center_on(globals.mcxt,&pnt,&loc) );
     contexts[1] = globals.mcxt;
 
+    /* text input control */
+    sz = (struct pok_size){ sys->windowSize.columns * 2, sys->windowSize.rows };
+    pok_text_input_init(&textInput);
+    pok_text_input_assign(&textInput,"Enter text:",&sz);
+    textInput.base.progress = textInput.base.curcount;
+    textInput.base.finished = TRUE;
+    contexts[2] = &textInput;
+
     pok_graphics_subsystem_begin(sys);
     pok_graphics_subsystem_register(sys,routines[0],contexts[0]);
 
     /* read messages from stdin */
-    cycle = nxt = 0;
+    globals.cycle = nxt = 0;
     while (fgets(inbuf,sizeof(inbuf),stdin) != NULL) {
         int i, j;
         size_t len = strlen(inbuf);
@@ -153,14 +173,15 @@ int graphics_main_test1()
             else
                 globals.mcxt->offset[0] = -16;
         }
-        if (nxt != cycle) {
-            replace_routine(sys,cycle,nxt,contexts);
-            cycle = nxt;
+        if (nxt != globals.cycle) {
+            replace_routine(sys,globals.cycle,nxt,contexts);
+            globals.cycle = nxt;
         }
     }
 
     pok_graphics_subsystem_end(sys);
 
+    pok_text_input_delete(&textInput);
     pok_map_render_context_free(globals.mcxt);
     pok_map_free(map);
     pok_tile_manager_free(tman);
@@ -230,9 +251,10 @@ void replace_routine(struct pok_graphics_subsystem* sys,int this,int that,void**
     pok_graphics_subsystem_register(sys,routines[that],contexts[that]);
 }
 
-void keyup_routine(enum pok_input_key key)
+void keyup_routine(enum pok_input_key key,struct pok_text_input* input)
 {
-    /*printf("key up: %d\n",key);*/
+    printf("key up: %d\n",key);
+
     if (key == pok_input_key_UP)
         pok_map_render_context_move(globals.mcxt,pok_direction_up,0,FALSE);
     else if (key == pok_input_key_DOWN)
@@ -241,6 +263,26 @@ void keyup_routine(enum pok_input_key key)
         pok_map_render_context_move(globals.mcxt,pok_direction_left,0,FALSE);
     else if (key == pok_input_key_RIGHT)
         pok_map_render_context_move(globals.mcxt,pok_direction_right,0,FALSE);
+
+    if (globals.cycle == 2) {
+        if ( pok_text_input_ctrl_key(input,key) ) {
+            struct pok_string s;
+            pok_string_init(&s);
+            pok_text_input_read(input,&s);
+            pok_text_input_reset(input);
+            printf("User Input: \"%s\"\n",s.buf);
+            pok_string_delete(&s);
+        }
+    }
+            
+}
+
+void textentry_routine(char c,struct pok_text_input* input)
+{
+    printf("textentry: %c\n",c);
+
+    if (globals.cycle == 2)
+        pok_text_input_entry(input,c);
 }
 
 void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)
@@ -251,4 +293,19 @@ void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)
     pok_image_render(tman->tileset[4],sys->dimension,sys->dimension*2);
     pok_image_render(tman->tileset[2],sys->dimension*3,sys->dimension*3);
     pok_image_render(tman->tileset[2],-sys->dimension/2,sys->dimension*2);
+}
+
+void routineB(struct pok_graphics_subsystem* sys,struct pok_text_input* input)
+{
+    pok_text_input_render(sys,input);
+}
+
+void gload()
+{
+    pok_glyphs_load();
+}
+
+void gunload()
+{
+    pok_glyphs_unload();
 }

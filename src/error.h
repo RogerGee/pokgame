@@ -7,12 +7,14 @@
    stderr channel; they are used primarily to test assertions */
 enum pok_errorkind
 {
+    pok_error_message, /* the error is merely just a message the program wants to log to its stderr */
     pok_error_warning, /* the error doesn't effect the operation of the process but was not expected */
     pok_error_fatal, /* the error is un-recoverable and the process will terminate */
     pok_error_unimplemented /* the control tried to execute a feature not yet supported */
 };
 void pok_error(enum pok_errorkind kind,const char* message, ...);
 void pok_error_fromstack(enum pok_errorkind kind);
+#define pok_message(s, ...) pok_error(pok_error_message, s, __VA_ARGS__) /* note: variadic macro is C99 */
 
 /* exception categories are enumerated by the modules that generate them */
 enum pok_ex_kind

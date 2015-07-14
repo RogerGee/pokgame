@@ -4,30 +4,24 @@
 #include <Windows.h>
 #include <Shlobj.h>
 
-void configure_stderr()
+static void assign_app_data_path(struct pok_string* path)
 {
-    struct pok_string* path = pok_get_content_root_path();
-    pok_string_concat(path,"pokgame.log");
-
-    HANDLE hLog = CreateFile(path->buf,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,0,NULL);
-    SetStdHandle(STD_ERROR_HANDLE,hLog);
-
-    pok_string_free(path);
-}
-
-struct pok_string* pok_get_content_root_path()
-{
-    DWORD dwAttrib;
     CHAR appData[MAX_PATH];
-    struct pok_string* path = pok_string_new_ex(64);
-    if (path == NULL)
-        pok_error(pok_error_fatal, "memory exception in pok_get_content_root_path()");
-#ifndef POKGAME_DEBUG
     /* lookup the application data folder */
     if (SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, SHGFP_TYPE_CURRENT, appData) != S_OK)
         pok_error(pok_error_fatal, "fail SHGetFolderPath() for content directory path");
     pok_string_assign(path, appData);
     pok_string_concat_char(path, '/');
+}
+
+struct pok_string* pok_get_content_root_path()
+{
+    DWORD dwAttrib;
+    struct pok_string* path = pok_string_new_ex(64);
+    if (path == NULL)
+        pok_error(pok_error_fatal, "memory exception in pok_get_content_root_path()");
+#ifndef POKGAME_DEBUG
+    assign_app_data_path(path);
 #endif
     /* append content directory */
     pok_string_concat(path, POKGAME_CONTENT_DIRECTORY);
@@ -46,7 +40,12 @@ struct pok_string* pok_get_content_root_path()
 
 struct pok_string* pok_get_install_root_path()
 {
+    /* the install directory is relative to the user's AppData directory; we do
+       not have to verify that it exists or create it */
     struct pok_string* path = pok_string_new_ex(64);
-    pok_string_assign(path, POKGAME_INSTALL_DIRECTORY);
+#ifndef POKGAME_DEBUG
+    assign_app_data_path(path);
+#endif
+    pok_string_concat(path, POKGAME_INSTALL_DIRECTORY);
     return path;
 }

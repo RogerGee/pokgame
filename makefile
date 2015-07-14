@@ -78,10 +78,10 @@ MAP_H = src/map.h $(NETOBJ_H) $(TILE_H) $(PROTOCOL_H)
 MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
 CHARACTER_H = src/character.h $(NETOBJ_H)
 CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
-POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H)
+POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H) $(MENU_H)
 DEFAULT_H = src/default.h $(POKGAME_H) $(CONFIG_H) $(STANDARD_H)
 USER_H = src/user.h $(TYPES_H)
-MENU_H = src/menu.h $(GRAPHICS_H) $(IMAGE_H)
+MENU_H = src/menu.h $(GRAPHICS_H) $(IMAGE_H) $(PROTOCOL_H)
 
 # object code files: library objects are used both by the game engine and game versions
 OBJECTS = pokgame.o graphics.o graphics-impl.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o \
@@ -170,7 +170,7 @@ $(OBJDIR)/maintest.o: test/maintest.c $(POKGAME_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/maintest.o test/maintest.c
 $(OBJDIR)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c
-$(OBJDIR)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_CONTEXT_H) $(ERROR_H)
+$(OBJDIR)/graphicstest1.o: test/graphicstest1.c $(GRAPHICS_H) $(TILEMAN_H) $(MAP_CONTEXT_H) $(MENU_H) $(ERROR_H)
 	$(COMPILE) $(INC) $(OUT)$(OBJECT_DIRECTORY_TEST)/graphicstest1.o test/graphicstest1.c
 
 # other targets

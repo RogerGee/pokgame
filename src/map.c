@@ -26,9 +26,9 @@ static void chunk_insert_hint_init(struct chunk_insert_hint* hint,uint16_t cCnt,
 struct chunk_adj_info
 {
     uint16_t n;
-    uint8_t a[pok_max_initial_chunks];
-    struct pok_point p[pok_max_initial_chunks];
-    struct pok_map_chunk* c[pok_max_initial_chunks];
+    uint8_t a[POK_MAX_INITIAL_CHUNKS];
+    struct pok_point p[POK_MAX_INITIAL_CHUNKS];
+    struct pok_map_chunk* c[POK_MAX_INITIAL_CHUNKS];
 };
 
 struct chunk_recursive_info
@@ -370,8 +370,8 @@ bool_t pok_map_configure(struct pok_map* map,const struct pok_size* chunkSize,co
         uint16_t i, j;
         uint32_t k = 0;
         /* validate chunk size */
-        if (chunkSize->columns < pok_min_map_chunk_dimension || chunkSize->columns > pok_max_map_chunk_dimension
-            || chunkSize->rows < pok_min_map_chunk_dimension || chunkSize->rows > pok_max_map_chunk_dimension) {
+        if (chunkSize->columns < POK_MIN_MAP_CHUNK_DIMENSION || chunkSize->columns > POK_MAX_MAP_CHUNK_DIMENSION
+            || chunkSize->rows < POK_MIN_MAP_CHUNK_DIMENSION || chunkSize->rows > POK_MAX_MAP_CHUNK_DIMENSION) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return FALSE;
         }
@@ -488,8 +488,8 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc)
         if (!pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns) || !pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows))
             return FALSE;
         /* ensure chunk dimensions are correct */
-        if (map->chunkSize.columns < pok_min_map_chunk_dimension || map->chunkSize.columns > pok_max_map_chunk_dimension
-            || map->chunkSize.rows < pok_min_map_chunk_dimension || map->chunkSize.rows > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.columns < POK_MIN_MAP_CHUNK_DIMENSION || map->chunkSize.columns > POK_MAX_MAP_CHUNK_DIMENSION
+            || map->chunkSize.rows < POK_MIN_MAP_CHUNK_DIMENSION || map->chunkSize.rows > POK_MAX_MAP_CHUNK_DIMENSION) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return FALSE;
         }
@@ -551,7 +551,7 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
         struct pok_size lefttop, rightbottom;
         const uint16_t* td[3];
         struct chunk_insert_hint hint;
-        mapArea = pok_util_compute_chunk_size(columns,rows,pok_max_map_chunk_dimension,&map->chunkSize,&lefttop,&rightbottom);
+        mapArea = pok_util_compute_chunk_size(columns,rows,POK_MAX_MAP_CHUNK_DIMENSION,&map->chunkSize,&lefttop,&rightbottom);
         chunk_insert_hint_init(&hint,mapArea.columns,mapArea.rows);
         td[0] = tiledata;
         for (i = 0;i < mapArea.rows;++i) {
@@ -794,7 +794,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.columns);
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
-        if (map->chunkSize.columns < pok_min_map_chunk_dimension || map->chunkSize.columns > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.columns < POK_MIN_MAP_CHUNK_DIMENSION || map->chunkSize.columns > POK_MAX_MAP_CHUNK_DIMENSION) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }
@@ -803,7 +803,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
         pok_data_stream_read_uint16(dsrc,&map->chunkSize.rows);
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
-        if (map->chunkSize.rows < pok_min_map_chunk_dimension || map->chunkSize.rows > pok_max_map_chunk_dimension) {
+        if (map->chunkSize.rows < POK_MIN_MAP_CHUNK_DIMENSION || map->chunkSize.rows > POK_MAX_MAP_CHUNK_DIMENSION) {
             pok_exception_new_ex(pok_ex_map,pok_ex_map_bad_chunk_size);
             return pok_net_failed_protocol;
         }

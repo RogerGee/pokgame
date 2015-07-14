@@ -113,13 +113,13 @@ union pok_map_method_params
 
 enum pok_limit
 {
-    pok_max_tile_images = 1024,
-    pok_max_dimension = 128,
-    pok_min_dimension = 8,
-    pok_max_image_size = 5242880,
-    pok_max_map_chunk_dimension = 128,
-    pok_min_map_chunk_dimension = 16,
-    pok_max_initial_chunks = 255
+    POK_MAX_TILE_IMAGES = 1024,
+    POK_MAX_DIMENSION = 128,
+    POK_MIN_DIMENSION = 8,
+    POK_MAX_IMAGE_SIZE = 5242880,
+    POK_MAX_MAP_CHUNK_DIMENSION = 128,
+    POK_MIN_MAP_CHUNK_DIMENSION = 16,
+    POK_MAX_INITIAL_CHUNKS = 255
 };
 
 #endif
