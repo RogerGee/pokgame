@@ -1,7 +1,13 @@
+old/
 obj/
 dobj/
 tobj/
+lib/
+dylib/
+include/
 *.o
+*.bin
+._*
 pokgame
 pokgame-debug
 pokgame-test

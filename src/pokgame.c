@@ -48,8 +48,11 @@ int main(int argc,const char* argv[])
     if ( !sys->background ) {
         /* the platform cannot run the window on another thread, so start up the IO
            procedure on a background thread and run the window on this thread */
-
-
+        struct pok_thread* iothread;
+        iothread = pok_thread_new(io_proc,sys);
+        pok_thread_start(iothread);
+        pok_graphics_subsystem_render_loop(sys);
+        pok_thread_free(iothread);
     }
     else
         /* begin the IO procedure; this is the entry point into the game */

@@ -31,6 +31,7 @@ static void load_maps();
 static void load_characters();
 static void aux_graphics_load();
 static void aux_graphics_unload();
+static int play_game();
 
 /* entry point */
 int main_test()
@@ -43,7 +44,7 @@ int main_test()
     sys->unloadRoutine = aux_graphics_unload;
     game = pok_game_new(sys,NULL);
     init();
-    printf("finished: %d\n",update_proc(game));
+    printf("finished: %d\n",play_game());
     pok_game_free(game);
     pok_character_free(friend);
     pok_character_free(dude1);
@@ -138,4 +139,21 @@ void aux_graphics_load()
 void aux_graphics_unload()
 {
     pok_glyphs_unload();
+}
+
+int play_game()
+{
+    int retval;
+    struct pok_thread* upthread;
+    /* if the UI is running in the background, the use this thread to 
+       run the update procedure */
+    if (game->sys->background)
+        return update_proc(game);
+    /* otherwise run the UI on this thread and run the update procedure in the background */
+    upthread = pok_thread_new((pok_thread_entry)update_proc,game);
+    pok_thread_start(upthread);
+    pok_graphics_subsystem_render_loop(game->sys);
+    retval = pok_thread_join(upthread);
+    pok_thread_free(upthread);
+    return retval;
 }

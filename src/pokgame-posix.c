@@ -1,7 +1,57 @@
 /* pokgame-posix.c - pokgame */
 #include <pthread.h>
-#include <semaphore.h>
 #include <unistd.h>
+
+#ifdef POKGAME_OSX
+#include <sys/time.h>
+#include <dispatch/dispatch.h>
+#define CLOCK_MONOTONIC 0
+
+/* clock_gettime is not implemented on OSX */
+int clock_gettime(int id,struct timespec* t) {
+    struct timeval now;
+    int rv = gettimeofday(&now,NULL);
+    if (rv) return rv;
+    t->tv_sec  = now.tv_sec;
+    t->tv_nsec = now.tv_usec * 1000;
+    return 0;
+    (void)id;
+}
+
+/* OSX doesn't implement POSIX semaphores completely so we wrap other semaphore calls */
+typedef struct {
+    dispatch_semaphore_t sem;
+    int counter;
+} sem_t;
+static int sem_init(sem_t* sem,int pshared,unsigned int value)
+{
+    sem->sem = dispatch_semaphore_create(value);
+    sem->counter = value;
+    return 0;
+    (void)pshared;
+}
+static int sem_wait(sem_t* sem)
+{
+    dispatch_semaphore_wait(sem->sem,DISPATCH_TIME_FOREVER);
+    --sem->counter;
+    return 0;
+}
+static int sem_post(sem_t* sem)
+{
+    dispatch_semaphore_signal(sem->sem);
+    ++sem->counter;
+    return 0;
+}
+static int sem_getvalue(sem_t* sem,int* sval)
+{
+    *sval = sem->counter;
+    return 0;
+}
+
+#elif defined(POKGAME_LINUX)
+#include <semaphore.h>
+
+#endif
 
 #define SEMAPHORE_MAX 10
 
@@ -16,7 +66,7 @@
 struct gamelock
 {
     void* object;          /* we need to provide synchronization for this object */
-    sem_t readOnly;        /* this semaphore allows more than 2 process to read the object */
+    sem_t readOnly;        /* this semaphore allows more than 1 process to read the object */
     sem_t modify;          /* this mutex allows 1 process to modify the object */
     pthread_mutex_t atom;  /* this mutex makes certain operations atomic */
 };
@@ -41,17 +91,21 @@ void gamelock_free(struct gamelock* lock)
 }
 inline void gamelock_aquire(struct gamelock* lock)
 {
+    /* aquire writer's lock */
     CHECK_SUCCESS( sem_wait(&lock->modify) );
 }
 void gamelock_release(struct gamelock* lock)
 {
+    /* release writer's lock */
     CHECK_SUCCESS( sem_post(&lock->modify) );
 }
 void gamelock_up(struct gamelock* lock)
 {
-    /* make the following region executes atomically */
+    /* aquire readers' lock; make the following region executes atomically; the
+       mutex will also act as a queue for clients wishing to aquire read lock */
     CHECK_SUCCESS( pthread_mutex_lock(&lock->atom) );
     {
+        /* since this is a critical region, then we can accurately read the semaphore's value */
         int value;
         CHECK_SUCCESS( sem_getvalue(&lock->readOnly,&value) );
         /* if no one has entered the readOnly context, then seal off the modify context
@@ -69,9 +123,11 @@ void gamelock_up(struct gamelock* lock)
 }
 void gamelock_down(struct gamelock* lock)
 {
-    /* make sure the following region executes atomically */
+    /* release readers' lock; make sure the following region executes atomically; the
+       mutex will also act as a queue for clients wishing to release read lock */
     CHECK_SUCCESS( pthread_mutex_lock(&lock->atom) );
     {
+        /* since this is a critical region, then we can accurately read the semaphore's value */
         int value;
         CHECK_SUCCESS( sem_post(&lock->readOnly) );
         CHECK_SUCCESS( sem_getvalue(&lock->readOnly,&value) );

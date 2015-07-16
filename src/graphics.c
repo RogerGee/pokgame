@@ -24,6 +24,7 @@ struct pok_graphics_hook
     graphics_routine_t routines[MAX_GRAPHICS_ROUTINES];
     void* contexts[MAX_GRAPHICS_ROUTINES];
 };
+
 void pok_graphics_hook_init(struct pok_graphics_hook* hook)
 {
     int i;

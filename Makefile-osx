@@ -1,6 +1,6 @@
 ################################################################################
 # Makefile for 'pokgame' #######################################################
-## targets: GNU/Linux with X11 #################################################
+## targets: Mac OS X with Cocoa ################################################
 ################################################################################
 .PHONY: debug test clean install uninstall
 
@@ -13,12 +13,12 @@ endif
 endif
 
 # output files
-PROGRAM_NAME = pokgame
-PROGRAM_NAME_DEBUG = pokgame-debug
-PROGRAM_NAME_TEST = pokgame-test
-LIBRARY_REALNAME = libpokgame.so.0.0.0
-LIBRARY_SONAME = libpokgame.so.0
-LIBRARY_LINKNAME = libpokgame.so
+PROGRAM_NAME = pokgame.bin
+PROGRAM_NAME_DEBUG = pokgame-debug.bin
+PROGRAM_NAME_TEST = pokgame-test.bin
+LIBRARY_REALNAME = libpokgame.dylib.0.0.0
+LIBRARY_SONAME = libpokgame.dylib.0
+LIBRARY_LINKNAME = libpokgame.dylib
 
 # output locations
 OBJECT_DIRECTORY = obj
@@ -26,16 +26,17 @@ OBJECT_DIRECTORY_DEBUG = dobj
 OBJECT_DIRECTORY_TEST = tobj
 
 # options
+INCPATH = -Iinclude
+LIBPATH = -Llib
 OUT = -o
-MACROS = -DPOKGAME_LINUX -DPOKGAME_POSIX -DPOKGAME_X11
-LIB = -lGL -lX11 -lpthread
-LIBRARY_LIB = -ldstructs -lpng
+MACROS = -DPOKGAME_OSX -DPOKGAME_POSIX
+LIB = -framework Cocoa -framework OpenGL
+LIBRARY_LIB = -ldstructs -lpng -lz
 ifneq "$(or $(MAKE_DEBUG),$(MAKE_TEST))" ""
 MACROS_DEBUG = -DPOKGAME_DEBUG
-COMPILE = gcc -c -g -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors -Wno-unused-parameter -Wno-unused-variable\
-		-Wno-unused-function -std=gnu99 $(MACROS) $(MACROS_DEBUG)
+COMPILE = clang -c -g $(INCPATH) $(MACROS) $(MACROS_DEBUG)
 COMPILE_SHARED = $(COMPILE)
-LINK = gcc
+LINK = clang $(LIBPATH)
 ifdef MAKE_TEST
 DEBUG_BINARY = $(PROGRAM_NAME_TEST)
 MACROS_DEBUG := $(MACROS_DEBUG) -DPOKGAME_TEST
@@ -47,9 +48,9 @@ endif
 else
 LIB := $(LIB) -lpokgame
 #MACROS_RELEASE =
-COMPILE = gcc -c -O3 -Wall -pedantic-errors -Werror -Wextra -Wshadow -Wfatal-errors -std=gnu99 $(MACROS)#$(MACROS_RELEASE)
-COMPILE_SHARED = $(COMPILE) -fPIC
-LINK = gcc -s
+COMPILE = clang -c $(INCPATH) $(MACROS)#$(MACROS_RELEASE)
+COMPILE_SHARED = $(COMPILE) #TODO: OS X shared library flags...
+LINK = clang $(LIBPATH)
 OBJDIR = $(OBJECT_DIRECTORY)
 BINARY = $(PROGRAM_NAME)
 endif
@@ -104,7 +105,8 @@ test: $(OBJDIR) $(DEBUG_BINARY)
 $(BINARY): $(OBJECTS)
 	$(LINK) $(OUT)$(BINARY) $(OBJECTS) $(LIB)
 $(LIBRARY_REALNAME): $(OBJECTS_LIB)
-	gcc -shared -Wl,-soname,$(LIBRARY_SONAME) -o $(LIBRARY_REALNAME) $(OBJECTS_LIB) $(LIBRARY_LIB)
+	echo unimplemented
+	#gcc -shared -Wl,-soname,$(LIBRARY_SONAME) -o $(LIBRARY_REALNAME) $(OBJECTS_LIB) $(LIBRARY_LIB)
 $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB) $(LIBRARY_LIB)
 
@@ -113,8 +115,8 @@ $(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H) $
 	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
 $(OBJDIR)/graphics.o: src/graphics.c $(GRAPHICS_H) $(GRAPHICS_IMPL_H) $(ERROR_H) $(PROTOCOL_H) $(OPENGL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
-$(OBJDIR)/graphics-impl.o: src/graphics-X.c $(GRAPHICS_IMPL_H) $(ERROR_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/graphics-impl.o src/graphics-X.c
+$(OBJDIR)/graphics-impl.o: src/graphics-cocoa.m $(GRAPHICS_IMPL_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/graphics-impl.o src/graphics-cocoa.m
 $(OBJDIR)/effect.o: src/effect.c $(EFFECT_H) $(ERROR_H) $(OPENGL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/effect.o src/effect.c
 $(OBJDIR)/tileman.o: src/tileman.c $(TILEMAN_H) $(ERROR_H)
@@ -131,8 +133,8 @@ $(OBJDIR)/io-proc.o: src/io-proc.c $(POKGAME_H) $(ERROR_H) $(PROTOCOL_H) $(DEFAU
 	$(COMPILE) $(OUT)$(OBJDIR)/io-proc.o src/io-proc.c
 $(OBJDIR)/default.o: src/default.c $(DEFAULT_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/default.o src/default.c
-$(OBJDIR)/config.o: src/config-linux.c $(CONFIG_H) $(ERROR_H)
-	$(COMPILE) $(OUT)$(OBJDIR)/config.o src/config-linux.c
+$(OBJDIR)/config.o: src/config-osx.m $(CONFIG_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/config.o src/config-osx.m
 $(OBJDIR)/standard.o: src/standard1.c $(STANDARD_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/standard.o src/standard1.c
 $(OBJDIR)/user.o: src/user.c $(USER_H) $(NET_H) $(ERROR_H) $(CONFIG_H) $(POK_STDENUM_H)

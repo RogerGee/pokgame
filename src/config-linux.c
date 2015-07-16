@@ -9,7 +9,8 @@
 #include <string.h>
 #include <errno.h>
 
-/* this file provides functionality for the pokgame engine that is specific to the linux platform */
+/* this file provides configuration functionality for the pokgame engine 
+   that is specific to the linux platform */
 
 struct pok_string* pok_get_content_root_path()
 {

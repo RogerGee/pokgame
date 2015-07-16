@@ -26,7 +26,7 @@
 #include <gl/GL.h>
 
 #elif defined(POKGAME_OSX)
-
+#include <OpenGL/gl.h>
 
 #endif
 

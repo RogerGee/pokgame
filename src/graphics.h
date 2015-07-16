@@ -131,6 +131,7 @@ bool_t pok_graphics_subsystem_is_running(struct pok_graphics_subsystem* sys);
 bool_t pok_graphics_subsystem_has_window(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_lock(struct pok_graphics_subsystem* sys);
 void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys);
+void pok_graphics_subsystem_render_loop(struct pok_graphics_subsystem* sys);
 
 /* other graphics-related routines */
 void pok_image_render(struct pok_image* img,int32_t x,int32_t y);

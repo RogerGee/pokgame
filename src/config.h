@@ -36,8 +36,11 @@ struct pok_string* pok_get_install_root_path();
 
 #ifdef POKGAME_LINUX
 
+/* linux: the content directory is relative to the current user's home directory; the current
+   user name is obtained via the process's environment; the install directory is an absolute
+   path under the /usr tree */
 #define POKGAME_INSTALL_DIRECTORY "/usr/share/pokgame/"
-#define POKGAME_CONTENT_DIRECTORY ".pokgame/" /* relative to user home directory */
+#define POKGAME_CONTENT_DIRECTORY ".pokgame/"
 
 #elif defined(POKGAME_WIN32)
 
@@ -47,6 +50,11 @@ struct pok_string* pok_get_install_root_path();
 #define POKGAME_CONTENT_DIRECTORY "pokgame/content/"
 
 #elif defined(POKGAME_OSX)
+
+/* OS X: the content directory is located in the Application Support directory for
+   the current user; the install path is determined from the application bundle,
+   therefore it does not have any absolute path strings */
+#define POKGAME_CONTENT_DIRECTORY "pokgame"
 
 #endif
 
