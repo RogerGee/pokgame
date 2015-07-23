@@ -51,7 +51,7 @@ static int sem_getvalue(sem_t* sem,int* sval)
 #elif defined(POKGAME_LINUX)
 #include <semaphore.h>
 
-#endif
+#endif /* POKGAME_OSX/POKGAME_LINUX */
 
 #define SEMAPHORE_MAX 10
 
@@ -137,6 +137,11 @@ void gamelock_down(struct gamelock* lock)
             CHECK_SUCCESS( sem_post(&lock->modify) );
     }
     CHECK_SUCCESS( pthread_mutex_unlock(&lock->atom) );
+}
+int gamelock_compar(const struct gamelock* left,const struct gamelock* right)
+{
+    long long int result = (long long int)left->object - (long long int)right->object;
+    return result < 0 ? -1 : (result > 0 ? 1 : 0);
 }
 
 /* implement 'pok_timeout' from 'pokgame.h' */

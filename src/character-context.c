@@ -2,6 +2,7 @@
 #include "character-context.h"
 #include "error.h"
 #include "pokgame.h"
+#include "primatives.h"
 #include <stdlib.h>
 
 /* pok_character_context */
@@ -16,7 +17,8 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
     context->character = character;
     /* set map and chunk references to NULL initially; they will be used by the
        implementation; if they remain NULL, then this means that the character
-       should not be managed by the update functionality (such as with the user's character) */
+       should not be managed by the normal character logic functionality (such as
+       with the user's character); such an NPC is called a "ghost" character */
     context->map = NULL;
     context->chunk = NULL;
     /* get frame based on initial direction */
@@ -26,10 +28,10 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
     context->shadow = FALSE;
     context->eff = pok_character_no_effect;
     context->resolveFrame = 0;
-    context->granularity = 1;
+    context->granularity = 8;
     context->slowDown = FALSE;
     context->aniTicks = 0;
-    context->aniTicksAmt = 1;
+    context->aniTicksAmt = 30;
     context->frameAlt = 0;
     context->update = FALSE;
     return context;
@@ -43,15 +45,30 @@ static void pok_character_context_render(struct pok_character_context* context,c
         for (i = 0;i < 4;++i) {
             if (mapRC->info[i].chunk != NULL && mapRC->info[i].chunkPos.X == context->character->chunkPos.X
                       && mapRC->info[i].chunkPos.Y == context->character->chunkPos.Y) { /* same chunk */
-                int cols, rows;
+                int32_t cols, rows;
                 cols = context->character->tilePos.column - mapRC->info[i].loc.column;
                 if (cols >= 0 && cols < mapRC->info[i].across) { /* same viewable column space */
                     rows = context->character->tilePos.row - mapRC->info[i].loc.row;
                     if (rows >= 0 && rows < mapRC->info[i].down) { /* same viewable row space */
+                        int32_t x, y;
+                        x = mapRC->info[i].px + cols * sys->dimension + mapRC->offset[0] + sys->playerOffsetX;
+                        y = mapRC->info[i].py + rows * sys->dimension + mapRC->offset[1] + sys->playerOffsetY;
                         pok_image_render(
                             sman->spriteassoc[context->character->spriteIndex][context->frame],
-                            mapRC->info[i].px + cols * sys->dimension + sys->playerOffsetX + context->offset[0] + mapRC->offset[0],
-                            mapRC->info[i].py + rows * sys->dimension + sys->playerOffsetY + context->offset[1] + mapRC->offset[1]);
+                            x + context->offset[0],
+                            y + context->offset[1] );
+                        if (context->shadow) {
+                            /* draw the shadow (the character is probably hopping over something) */
+                            pok_primative_setup_modelview(
+                                x + sys->dimension / 2,
+                                y + sys->dimension + context->offset[1] / 2,
+                                sys->dimension,
+                                sys->dimension );
+                            glVertexPointer(2,GL_FLOAT,0,POK_SHADOW_ELLIPSE);
+                            glColor4f(BLACK_PIXEL_FLOAT[0],BLACK_PIXEL_FLOAT[1],BLACK_PIXEL_FLOAT[2],0.5);
+                            glDrawArrays(GL_POLYGON,0,POK_SHADOW_ELLIPSE_VERTEX_COUNT);
+                            glLoadIdentity();
+                        }
                         break;
                     }
                 }
@@ -110,6 +127,7 @@ void pok_character_context_set_update(struct pok_character_context* context,
     else if (effect == pok_character_jump_effect) {
         context->character->direction = direction;
         context->resolveFrame = pok_to_frame_direction(direction);
+        context->shadow = TRUE;
         /* set sprite offset to double the dimension (jump skips a tile); the jump only
            occurs in the down, left and right directions */
         parameter <<= 1;
@@ -240,6 +258,7 @@ static bool_t pok_character_context_jump_update(struct pok_character_context* co
     }
     if (!--context->update && context->offset[0] == 0 && context->offset[1] == 0) {
         context->frame = context->resolveFrame;
+        context->shadow = FALSE;
         return TRUE;
     }
     return FALSE;

@@ -3,8 +3,8 @@
 #include "error.h"
 #include "user.h"
 #include "config.h"
-#include <dstructs/hashmap.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -32,7 +32,7 @@ int main(int argc,const char* argv[])
     pok_exception_load_module();
     pok_user_load_module();
     pok_netobj_load_module();
-    pok_game_load_module();
+    pok_gamelock_load_module();
 
     /* initialize a graphics subsystem for the game; this corresponds to the
        application's top-level window; start up the window and renderer before
@@ -49,7 +49,7 @@ int main(int argc,const char* argv[])
         /* the platform cannot run the window on another thread, so start up the IO
            procedure on a background thread and run the window on this thread */
         struct pok_thread* iothread;
-        iothread = pok_thread_new(io_proc,sys);
+        iothread = pok_thread_new((pok_thread_entry)io_proc,sys);
         pok_thread_start(iothread);
         pok_graphics_subsystem_render_loop(sys);
         pok_thread_free(iothread);
@@ -64,7 +64,7 @@ int main(int argc,const char* argv[])
     pok_graphics_subsystem_free(sys);
 
     /* unload all modules */
-    pok_game_unload_module();
+    pok_gamelock_unload_module();
     pok_netobj_unload_module();
     pok_user_unload_module();
     pok_exception_unload_module();
@@ -125,122 +125,65 @@ void log_termination()
 #endif
 }
 
-#endif
+#endif /* POKGAME_TEST */
 
-/* pok game module - mutual exclusion */
-
-struct gamelock;
-static struct gamelock* glock; /* global lock */
-static struct hashmap locks; /* void* --> void* */
-static struct gamelock* gamelock_new(void* object);
-static void gamelock_free(struct gamelock* lock);
-static void gamelock_aquire(struct gamelock* lock);
-static void gamelock_release(struct gamelock* lock);
-static void gamelock_up(struct gamelock* lock);
-static void gamelock_down(struct gamelock* lock);
-
-/* include platform-specific code */
-#if defined(POKGAME_POSIX)
-#include "pokgame-posix.c"
-#elif defined(POKGAME_WIN32)
-#include "pokgame-win32.c"
-#endif
-
-static int gamelock_hash(const void** obj,int size)
+/* pok_intermsg */
+void pok_intermsg_setup(struct pok_intermsg* im,enum pok_intermsg_kind kind,int32_t delay)
 {
-    return (long long int)*obj % size;
-}
-
-static int gamelock_compar(const struct gamelock* left,const struct gamelock* right)
-{
-    long long int result = (long long int)left->object - (long long int)right->object;
-    return result < 0 ? -1 : (result > 0 ? 1 : 0);
-}
-
-void pok_game_load_module()
-{
-    glock = gamelock_new(NULL);
-    hashmap_init(&locks,20,(hash_function)gamelock_hash,(key_comparator)gamelock_compar);
-}
-void pok_game_unload_module()
-{
-    hashmap_delete_ex(&locks,(destructor)gamelock_free);
-    gamelock_free(glock);
-}
-
-void pok_game_modify_enter(void* object)
-{
-    /* see if a gamelock exists for the specified object */
-    struct gamelock* lock;
-    gamelock_up(glock);
-    lock = hashmap_lookup(&locks,&object); /* thread safe */
-    gamelock_down(glock);
-    if (lock == NULL) {
-        /* create a new lock */
-        lock = gamelock_new(object);
-        if (lock == NULL)
-            pok_error(pok_error_fatal,"memory fail in pok_game_modify_enter()");
-        gamelock_aquire(glock);
-        hashmap_insert(&locks,lock);
-        gamelock_release(glock);
+    im->ready = FALSE; /* delay readiness until caller can set content */
+    im->kind = kind;
+    im->processed = FALSE;
+    im->delay = delay;
+    im->modflags = 0;
+    switch (kind) {
+    case pok_stringinput_intermsg:
+    case pok_menu_intermsg:
+        im->payload.string = pok_string_new();
+        break;
+    case pok_keyinput_intermsg:
+        im->payload.key = pok_input_key_unknown;
+        break;
+    case pok_selection_intermsg:
+        im->payload.index = -1;
+        break;
+    default:
+        break;
     }
-    gamelock_aquire(lock);
 }
-void pok_game_modify_exit(void* object)
+bool_t pok_intermsg_update(struct pok_intermsg* im,uint32_t ticks)
 {
-    /* see if a gamelock exists for the specified object (it should) */
-    struct gamelock* lock;
-    gamelock_up(glock);
-    lock = hashmap_lookup(&locks,&object); /* thread safe */
-    gamelock_down(glock);
-    if (lock != NULL)
-        gamelock_release(lock);
-}
-void pok_game_lock(void* object)
-{
-    struct gamelock* lock;
-    gamelock_up(glock);
-    lock = hashmap_lookup(&locks,&object); /* thread safe */
-    if (lock == NULL) {
-        gamelock_down(glock);
-        /* create a new lock */
-        lock = gamelock_new(object);
-        if (lock == NULL)
-            pok_error(pok_error_fatal,"memory fail in pok_game_modify_enter()");
-        gamelock_aquire(glock);
-        hashmap_insert(&locks,lock);
-        gamelock_release(glock);
-        gamelock_up(glock);
+    /* update elapsed time; if the timeout has occurred then return TRUE,
+       FALSE otherwise */
+    if (im->ready) {
+        im->delay -= ticks;
+        if (im->delay <= 0)
+            return TRUE;
     }
-    gamelock_up(lock);
-    gamelock_down(glock);
+    return FALSE;
 }
-void pok_game_unlock(void* object)
+void pok_intermsg_discard(struct pok_intermsg* im)
 {
-    struct gamelock* lock;
-    gamelock_up(glock);
-    lock = hashmap_lookup(&locks,&object); /* thread safe */
-    if (lock == NULL) {
-        gamelock_down(glock);
-        /* create a new lock */
-        lock = gamelock_new(object);
-        if (lock == NULL)
-            pok_error(pok_error_fatal,"memory fail in pok_game_modify_enter()");
-        gamelock_aquire(glock);
-        hashmap_insert(&locks,lock);
-        gamelock_release(glock);
-        gamelock_up(glock);
+    switch (im->kind) {
+    case pok_stringinput_intermsg:
+    case pok_menu_intermsg:
+        pok_string_delete(im->payload.string);
+        break;
+    default:
+        break;
     }
-    gamelock_down(lock);
-    gamelock_down(glock);
+    im->processed = TRUE;
+    im->delay = 0;
+    im->kind = pok_uninitialized_intermsg;
+    im->ready = FALSE;
 }
 
-/* pok_timeout_interval */
-void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds)
+static void pok_game_render_menus(const struct pok_graphics_subsystem* sys,struct pok_game_info* game)
 {
-    t->mseconds = mseconds;
-    t->useconds = mseconds * 1000;
-    t->elapsed = 0;
+    /* this function is a high-level entry to rendering the game's menus */
+    if (game->messageMenu.base.active)
+        pok_message_menu_render(&game->messageMenu);
+
+    (void)sys;
 }
 
 /* pok_game_info */
@@ -259,6 +202,7 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     game->staticOwnerMask = template == NULL ? (2 << _pok_static_obj_top) - 1 : 0x00;
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
+    game->pausePlayerMap = FALSE;
     game->versionProc = NULL;
     game->versionCBack = NULL;
     pok_string_init(&game->versionLabel);
@@ -307,10 +251,16 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     game->playerContext = pok_character_render_context_add_ex(game->charRC,game->player);
     if (game->playerContext == NULL)
         pok_error_fromstack(pok_error_fatal);
+    pok_intermsg_setup(&game->updateInterMsg,pok_uninitialized_intermsg,0);
+    pok_intermsg_setup(&game->ioInterMsg,pok_uninitialized_intermsg,0);
+    pok_message_menu_init(&game->messageMenu,sys);
     return game;
 }
 void pok_game_free(struct pok_game_info* game)
 {
+    pok_message_menu_delete(&game->messageMenu);
+    pok_intermsg_discard(&game->updateInterMsg);
+    pok_intermsg_discard(&game->ioInterMsg);
     pok_character_free(game->player);
     pok_character_render_context_free(game->charRC);
     pok_world_free(game->world);
@@ -358,12 +308,14 @@ void pok_game_register(struct pok_game_info* game)
     /* the order of the graphics routines is important */
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_game_render_menus,game);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }
 void pok_game_unregister(struct pok_game_info* game)
 {
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_game_render_menus,game);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }
 void pok_game_load_textures(struct pok_game_info* game)
@@ -381,4 +333,23 @@ void pok_game_delete_textures(struct pok_game_info* game)
         2,
         game->tman->tileset, game->tman->tilecnt,
         game->sman->spritesets, game->sman->imagecnt );
+}
+void pok_game_activate_menu(struct pok_game_info* game,enum pok_menu_kind menuKind,struct pok_string* assignText)
+{
+    /* activate specified menu; it is given focus by default; we don't care if a menu is already activated; in
+       that case the menu will simply be reset and start over again */
+    if (menuKind == pok_message_menu) {
+        if (assignText != NULL)
+            pok_message_menu_activate(&game->messageMenu,assignText->buf);
+        else {
+            /* activate with no text [ pok_message_menu_activate(&game->messageMenu,"") ] */
+            pok_text_context_reset(&game->messageMenu.text);
+            game->messageMenu.base.active = TRUE;
+        }
+    }
+}
+void pok_game_deactivate_menus(struct pok_game_info* game)
+{
+    pok_message_menu_deactivate(&game->messageMenu);
+
 }

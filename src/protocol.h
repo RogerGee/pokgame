@@ -122,4 +122,31 @@ enum pok_limit
     POK_MAX_INITIAL_CHUNKS = 255
 };
 
+/* pok_menu_kind: defines the standard menus available to game versions */
+
+enum pok_menu_kind
+{
+    pok_message_menu,
+    pok_input_menu,
+    pok_selection_menu,
+    pok_yesno_menu
+};
+
+/* pok_menu_color: defines the preset text color options for menus; they must be non-zero
+   so that they can fit within strings without terminating them */
+
+enum pok_menu_color
+{
+    pok_menu_color_white = 1,
+    pok_menu_color_black,
+    pok_menu_color_gray,
+    pok_menu_color_blue,
+    pok_menu_color_red,
+    pok_menu_color_purple,
+    pok_menu_color_yellow,
+    pok_menu_color_orange,
+    pok_menu_color_green,
+    pok_menu_color_TOP = 9
+};
+
 #endif

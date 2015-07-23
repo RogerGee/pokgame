@@ -59,4 +59,20 @@ struct pok_size pok_util_compute_chunk_size(
     struct pok_size* lefttop,
     struct pok_size* rightbottom);
 
+/* pok_util_is_next_to: determines if a location is immediately next to another
+
+   chunkSize      - chunk size for implied map
+   chunk1, chunk2 - chunk coordinates for locations
+   pos1, pos2     - tile coordinates for locations
+
+   return:        a 'pok_direction' flag that indicates the direction from location 2 to location 1, or
+                  'pok_direction_none' if locations 1 and 2 are not immediately next to one another
+ */
+enum pok_direction pok_util_is_next_to(
+    const struct pok_size* chunkSize,
+    const struct pok_point* chunk1,
+    const struct pok_point* chunk2,
+    const struct pok_location* pos1,
+    const struct pok_location* pos2);
+
 #endif

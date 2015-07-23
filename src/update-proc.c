@@ -20,25 +20,30 @@
 #define WARP_FADEIN_TIME         400
 #define WARP_FADEIN_DELAY        350
 
+#define INTERMSG_DELAY          2400 /* number of ticks for intermsg response before canceling */
+
 /* globals */
 static struct
 {
     uint32_t mapTicksNormal; /* ticks for normal map scroll */
     uint32_t mapTicksFast;   /* ticks for fast map scroll */
-    bool_t pausePlayerMap;   /* if non-zero, then stop updating player and map */
 } globals;
 
 /* functions */
 static void set_defaults(struct pok_game_info* info);
 static void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t);
 static void update_key_input(struct pok_game_info* info);
+static void menu_keyup_hook(enum pok_input_key key,struct pok_game_info* info);
+static void menu_textentry_hook(char c,struct pok_game_info* info);
 static void character_update(struct pok_game_info* info);
+static void menu_update(struct pok_game_info* info);
 static bool_t check_collisions(struct pok_game_info* info);
 static void player_move_logic(struct pok_game_info* info,enum pok_direction direction);
 static void fadeout_logic(struct pok_game_info* info);
 static void map_terrain_logic(struct pok_game_info* info);
 static bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction);
 static bool_t warp_logic(struct pok_game_info* info);
+static void intermsg_logic(struct pok_game_info* info);
 static enum pok_character_effect get_effect_from_terrain(struct pok_map_render_context* mapRC,
     struct pok_tile_manager* tman,
     enum pok_direction direction);
@@ -56,7 +61,11 @@ int update_proc(struct pok_game_info* info)
     /* setup parameters */
     set_defaults(info);
     set_tick_amounts(info,&info->updateTimeout);
-    globals.pausePlayerMap = FALSE;
+    info->pausePlayerMap = FALSE;
+
+    /* setup graphics subsystem hooks */
+    pok_graphics_subsystem_append_hook(info->sys->keyupHook,(keyup_routine_t)menu_keyup_hook,info);
+    pok_graphics_subsystem_append_hook(info->sys->textentryHook,(textentry_routine_t)menu_textentry_hook,info);
 
     /* setup initial screen fade in (fade out with reverse set to true) */
     info->fadeout.delay = INITIAL_FADEIN_DELAY;
@@ -69,7 +78,7 @@ int update_proc(struct pok_game_info* info)
         /* key input logic */
         update_key_input(info);
 
-        if (!globals.pausePlayerMap) {
+        if (!info->pausePlayerMap) {
             /* perform input-sensitive update operations; if an update operation just completed, then skip the timeout;
                these must be performed at the same time before a frame is updated */
             pok_graphics_subsystem_lock(info->sys);
@@ -80,10 +89,12 @@ int update_proc(struct pok_game_info* info)
 
         /* perform other updates */
         character_update(info);
+        menu_update(info);
 
-        /* perform game logic updates */
+        /* perform game logic operations */
         fadeout_logic(info);
         map_terrain_logic(info);
+        intermsg_logic(info);
 
         if (!skip) {
             /* update global counter and map context's tile animation counter */
@@ -106,12 +117,15 @@ int update_proc(struct pok_game_info* info)
         }
     } while (info->control);
 
+    /* remove hooks from graphics subsystem */
+    pok_graphics_subsystem_pop_hook(info->sys->textentryHook);
+    pok_graphics_subsystem_pop_hook(info->sys->keyupHook);
+
     return r;
 }
 
 void set_defaults(struct pok_game_info* info)
 {
-    /* TODO: load defaults from init file */
     info->mapRC->granularity = MAP_GRANULARITY;
     info->playerContext->granularity = MAP_GRANULARITY;
 
@@ -150,33 +164,69 @@ void update_key_input(struct pok_game_info* info)
                player moving around the screen and potentially interacting with
                objects in the game world */
 
-            /* update player and map based on keyboard input by checking the directional
-               keys; make sure the map and player are not already updating already */
-            if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_UP,FALSE) )
-                direction = pok_direction_up;
-            else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_DOWN,FALSE) )
-                direction = pok_direction_down;
-            else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_LEFT,FALSE) )
-                direction = pok_direction_left;
-            else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_RIGHT,FALSE) )
-                direction = pok_direction_right;
-
-            /* check B key for fast scrolling (player running) */
-            if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_BBUTTON,FALSE) ) {
-                if (!running) {
-                    running = TRUE;
-                    info->mapRC->scrollTicksAmt = globals.mapTicksFast;
-                    info->playerContext->aniTicksAmt = globals.mapTicksFast;
+            /* handle interaction key (A button) input; this allows the player to interact with
+               the game world by pressing A next to something */
+            if (pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_ABUTTON,FALSE)) {
+                if (!info->playerContext->update) {
+                    /* create a key input intermsg for the A button event and change the game context */
+                    pok_intermsg_setup(&info->updateInterMsg,pok_keyinput_intermsg,INTERMSG_DELAY);
+                    info->updateInterMsg.payload.key = pok_input_key_ABUTTON;
+                    info->updateInterMsg.ready = TRUE;
+                    info->gameContext = pok_game_intermsg_context;
                 }
             }
-            else if (running) {
-                running = FALSE;
-                info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
-                info->playerContext->aniTicksAmt = globals.mapTicksNormal;
-            }
+            else {
+                /* update player and map based on keyboard input by checking the directional
+                   keys; make sure the map and player are not already updating already */
+                if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_UP,FALSE) )
+                    direction = pok_direction_up;
+                else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_DOWN,FALSE) )
+                    direction = pok_direction_down;
+                else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_LEFT,FALSE) )
+                    direction = pok_direction_left;
+                else if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_RIGHT,FALSE) )
+                    direction = pok_direction_right;
 
-            player_move_logic(info,direction);
+                /* check B key for fast scrolling (player running) */
+                if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_BBUTTON,FALSE) ) {
+                    if (!running) {
+                        running = TRUE;
+                        info->mapRC->scrollTicksAmt = globals.mapTicksFast;
+                        info->playerContext->aniTicksAmt = globals.mapTicksFast;
+                    }
+                }
+                else if (running) {
+                    running = FALSE;
+                    info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
+                    info->playerContext->aniTicksAmt = globals.mapTicksNormal;
+                }
+
+                player_move_logic(info,direction);
+            }
         }
+    }
+}
+
+void menu_keyup_hook(enum pok_input_key key,struct pok_game_info* info)
+{
+    /* this function is executed on the rendering thread; it checks to see
+       if a menu is active and focused and, if so, delivers the control key */
+    if (info->gameContext == pok_game_menu_context) {
+        if (info->messageMenu.base.active && info->messageMenu.base.focused)
+            /* ignore the return value; we can check later to see if the menu has
+               completed */
+            pok_message_menu_ctrl_key(&info->messageMenu,key);
+
+    }
+}
+
+void menu_textentry_hook(char c,struct pok_game_info* info)
+{
+    /* this function is executed on the rendering thread; it checks to see
+       if a menu is active and focused and, if so, delivers the text entry
+       character message to the menu; this only is done for the text input menu */
+    if (info->gameContext == pok_game_menu_context /* && */) {
+
     }
 }
 
@@ -187,13 +237,32 @@ void character_update(struct pok_game_info* info)
     pok_game_lock(info->charRC);
     for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
         struct pok_character_context* context = (struct pok_character_context*) info->charRC->chars.da_data[iter];
-        if (context != info->playerContext)
+        if (context != info->playerContext) {
             pok_character_context_update(
                 context,
                 info->sys->dimension,
                 info->updateTimeout.elapsed );
+        }
     }
     pok_game_unlock(info->charRC);
+}
+
+void menu_update(struct pok_game_info* info)
+{
+    /* if focused, update menu text contexts; if the menu finishes updating, then
+       exit menu context and create an intermsg to handle menu completion; make sure
+       to remove the menu's focus so that we keep one or less menus focused at a time */
+    if (info->gameContext == pok_game_menu_context) {
+        if (info->messageMenu.base.active && info->messageMenu.base.focused) {
+            if (!pok_text_context_update(&info->messageMenu.text,info->updateTimeout.elapsed) && info->messageMenu.text.finished) {
+                info->messageMenu.base.focused = FALSE;
+                pok_intermsg_setup(&info->updateInterMsg,pok_completed_intermsg,INTERMSG_DELAY);
+                info->updateInterMsg.ready = TRUE;
+                info->gameContext = pok_game_intermsg_context;
+            }
+        }
+
+    }
 }
 
 bool_t check_collisions(struct pok_game_info* info)
@@ -405,7 +474,7 @@ void fadeout_logic(struct pok_game_info* info)
                         }
                         pok_graphics_subsystem_unlock(info->sys);
                         /* pause the map scrolling until the fadein effect completes */
-                        globals.pausePlayerMap = TRUE;
+                        info->pausePlayerMap = TRUE;
                     }
                 }
                 info->mapTrans = NULL;
@@ -415,7 +484,7 @@ void fadeout_logic(struct pok_game_info* info)
         else if (info->gameContext == pok_game_warp_fadein_context) {
             /* fade in to world from warp */
             info->gameContext = pok_game_world_context;
-            globals.pausePlayerMap = FALSE;
+            info->pausePlayerMap = FALSE;
         }
     }
 }
@@ -488,6 +557,44 @@ bool_t warp_logic(struct pok_game_info* info)
         return TRUE;
     }
     return FALSE;
+}
+
+static void intermsg_noop(struct pok_game_info* info)
+{
+    pok_game_deactivate_menus(info); /* clear menu effects */
+    info->gameContext = pok_game_world_context;
+}
+
+void intermsg_logic(struct pok_game_info* info)
+{
+    if (info->gameContext == pok_game_intermsg_context) {
+        pok_game_modify_enter(&info->updateInterMsg);
+        if (info->ioInterMsg.ready && info->updateInterMsg.processed) {
+            /* we got a response: process it immediately so that it's synchronized with the
+               initial input operation */
+            pok_intermsg_discard(&info->updateInterMsg);
+            if (info->ioInterMsg.kind == pok_noop_intermsg) {
+                /* this is a noop response (no action to be taken) */
+                intermsg_noop(info);
+            }
+            else if (info->ioInterMsg.kind == pok_menu_intermsg) {
+                /* begin a menu sequence; look at the modifier flags to determine which
+                   kind of menu to create; we only create a single menu at a time until; this
+                   lets the menus "stack up" on the screen; a future no-op intermsg will close
+                   them all when the menu sequence is finished */
+                pok_game_activate_menu(info,info->ioInterMsg.modflags,info->ioInterMsg.payload.string);
+                info->gameContext = pok_game_menu_context;
+            }
+            /* it is our responsibility to discard the IO intermsg when we are done */
+            pok_intermsg_discard(&info->ioInterMsg);
+        }
+        else if (pok_intermsg_update(&info->updateInterMsg,info->updateTimeout.elapsed)) {
+            /* the timeout occurred: discard the intermsg and perform a no-op */
+            pok_intermsg_discard(&info->updateInterMsg);
+            intermsg_noop(info);
+        }
+        pok_game_modify_exit(&info->updateInterMsg);
+    }
 }
 
 enum pok_character_effect get_effect_from_terrain(struct pok_map_render_context* mapRC,

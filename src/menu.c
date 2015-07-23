@@ -2,20 +2,34 @@
 #include "menu.h"
 #include "error.h"
 #include "config.h"
-#include "opengl.h"
+#include "primatives.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
-/* default parameters */
+/* constants and default parameters */
 #define DEFAULT_TEXT_UPDATE_TICKS 30
+#define COLOR_ESCAPE_CHAR '\033'
+#define MESSAGE_MENU_TEXT_SIZE 2.0
+
+const GLfloat* MENU_COLORS[] = {
+    (const GLfloat[]){1.0, 1.0, 1.0}, /* white */
+    (const GLfloat[]){0.0, 0.0, 0.0}, /* black */
+    (const GLfloat[]){0.167480315, 0.167480315, 0.167480315}, /* gray */
+    (const GLfloat[]){0.0, 0.0, 1.0}, /* blue */
+    (const GLfloat[]){1.0, 0.0, 0.0}, /* red */
+    (const GLfloat[]){0.498039216, 0.0, 0.498039216}, /* purple */
+    (const GLfloat[]){1.0, 1.0, 0.0}, /* yellow */
+    (const GLfloat[]){1.0, 0.549019608, 0.0}, /* orange */
+    (const GLfloat[]){0.0, 0.501960784, 0.0} /* green */
+};
 
 /* glyph functionality */
 #define POK_GLYPH_COUNT 94
 #define POK_GLYPH_START 33
 #define POK_GLYPH_END   126
-#define POK_GLYPH_WIDTH 16
-#define POK_GLYPH_HEIGHT 32
+#define POK_GLYPH_WIDTH 8
+#define POK_GLYPH_HEIGHT 16
 #define FROM_ASCII(c) c >= POK_GLYPH_START && c <= POK_GLYPH_END ? c - POK_GLYPH_START : -1
 
 /* we read glyphs as OpenGL textures from a source image in the install directory */
@@ -49,8 +63,8 @@ void pok_glyphs_load()
     glGenTextures(POK_GLYPH_COUNT,glyphTextures);
     for (i = 0;i < POK_GLYPH_COUNT;++i) {
         glBindTexture(GL_TEXTURE_2D,glyphTextures[i]);
-        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_BASE_LEVEL,TEXPARAM);
-        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_LEVEL,TEXPARAM);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
         glTexImage2D(
             GL_TEXTURE_2D,
             0,GL_RGBA,
@@ -81,15 +95,15 @@ struct pok_image* pok_glyph(int c)
     glyphImage.texref = glyphTextures[c];
     return &glyphImage;
 }
-static void pok_glyph_render(int c,int32_t x,int32_t y)
+static void pok_glyph_render(int c,int32_t x,int32_t y,int32_t w,int32_t h)
 {
     int32_t X, Y;
     c = FROM_ASCII(c);
     if (c == -1)
         /* character has no associated glyph */
         return;
-    X = x + POK_GLYPH_WIDTH;
-    Y = y + POK_GLYPH_HEIGHT;
+    X = x + w;
+    Y = y + h;
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D,glyphTextures[c]);
     glBegin(GL_QUADS);
@@ -114,18 +128,23 @@ struct text_position
 };
 
 /* pok_text_context */
-void pok_text_context_init(struct pok_text_context* text)
+void pok_text_context_init(struct pok_text_context* text,const struct pok_size* region)
 {
     text->x = 0;
     text->y = 0;
-    text->region = (struct pok_size){ 0, 0 };
+    text->textSize = 1.0;
+    text->region = *region;
     text->finished = TRUE;
     text->curline = 0;
     text->curcount = 0;
     text->progress = 0;
+    text->cprogress = 0;
     text->lines = NULL;
     text->linecnt = 0;
     text->linealloc = 0;
+    text->defaultColor = pok_menu_color_white;
+    text->colorbuf = NULL;
+    text->coloralloc = 0;
     text->updateTicks = 0;
     text->updateTicksAmt = DEFAULT_TEXT_UPDATE_TICKS;
 }
@@ -135,9 +154,12 @@ void pok_text_context_delete(struct pok_text_context* text)
     for (i = 0;i < text->linealloc;++i)
         free(text->lines[i]);
     free(text->lines);
+    free(text->colorbuf);
 }
 static bool_t allocate_lines(struct pok_text_context* text)
 {
+    /* reallocate line buffers and color buffer; the color buffer will have an allocation high
+       enough to handle all potential characters on all lines */
     if (text->linecnt >= text->linealloc) {
         char** lines;
         size_t alloc = text->linealloc;
@@ -145,12 +167,14 @@ static bool_t allocate_lines(struct pok_text_context* text)
             /* keep doubling the allocation until it is high enough */
             alloc = alloc == 0 ? 8 : (alloc << 1);
         } while (alloc < text->linecnt);
+        /* allocate line buffer pointers */
         lines = realloc(text->lines,sizeof(char*) * alloc);
         if (lines == NULL) {
             pok_error(pok_error_warning,"failed memory allocation for pok_text_context");
             return FALSE;
         }
         text->lines = lines;
+        /* allocate individual line buffers */
         for (;text->linealloc < alloc;++text->linealloc) {
             lines[text->linealloc] = malloc(text->region.columns + 1);
             if (lines[text->linealloc] == NULL) {
@@ -158,6 +182,20 @@ static bool_t allocate_lines(struct pok_text_context* text)
                 return FALSE;
             }
             lines[text->linealloc][0] = 0; /* terminate string */
+        }
+        /* make sure color buffer is large enough to support all potential characters */
+        alloc *= text->region.columns;
+        if (alloc > text->coloralloc) {
+            int8_t* colorbuf;
+            colorbuf = realloc(text->colorbuf,sizeof(int8_t) * alloc);
+            if (colorbuf == NULL) {
+                pok_error(pok_error_warning,"failed memory allocation for pok_text_context");
+                return FALSE;
+            }
+            /* set new buffer region to default color */
+            memset(colorbuf + text->coloralloc,text->defaultColor,alloc - text->coloralloc);
+            text->coloralloc = alloc;
+            text->colorbuf = colorbuf;
         }
     }
     return TRUE;
@@ -341,13 +379,30 @@ static void post_edit(struct pok_text_context* text,struct text_position* startP
     for (dummy.pos = 0, dummy.line = startPos->line+1;dummy.line < (int32_t)text->linecnt;++dummy.line)
         check_wrap(text,startPos,&dummy);
 }
+static void strip_leading_spaces(struct pok_text_context* text)
+{
+    /* move line contents over to avoid leading spaces for display formatting; we must
+       also shift values in the text context's color buffer */
+    int32_t line;
+    uint32_t cprog = 0;
+    for (line = 0;line < (int32_t)text->linecnt;++line) {
+        if (isspace(text->lines[line][0])) {
+            int i = 0;
+            while (isspace(text->lines[line][i]))
+                ++i;
+            if (i > 0) {
+                strcpy(text->lines[line],text->lines[line] + i);
+                memcpy(text->colorbuf + cprog,text->colorbuf + cprog + i,text->coloralloc - cprog - i);
+            }
+        }
+    }
+}
 static void insert_text(struct pok_text_context* text,const char* message,struct text_position* startPos)
 {
     /* insert a text string and then perform the post edit operation to format the text */
     insert_text_recursive(text,message,startPos);
     post_edit(text,startPos);
 }
-
 static struct text_position remove_text(struct pok_text_context* text,struct text_position startPos,struct text_position endPos)
 {
     char* linebuf;
@@ -398,17 +453,68 @@ static struct text_position remove_text(struct pok_text_context* text,struct tex
     post_edit(text,&cpy);
     return cpy;
 }
-void pok_text_context_assign(struct pok_text_context* text,const char* message,const struct pok_size* region)
+void pok_text_context_assign(struct pok_text_context* text,const char* message)
 {
-    size_t i;
+    int8_t clr;
+    size_t i, j;
+    char buf[4096];
     struct text_position pos;
     /* deallocate any allocated lines by assigning a null byte to the beginning */
     for (;text->linecnt > 0;--text->linecnt)
         text->lines[text->linecnt-1][0] = 0;
-    text->region = *region;
+    /* reset color buffer info and make sure buffer has high enough allocation for all the
+       characters in 'message' */
+    if (text->colorbuf != NULL)
+        memset(text->colorbuf,0,text->coloralloc);
+    i = strlen(message);
+    if (text->coloralloc < i) {
+        int8_t* colorbuf;
+        colorbuf = realloc(text->colorbuf,i);
+        if (colorbuf == NULL) {
+            pok_error(pok_error_warning,"failed memory allocation for pok_text_context");
+            return;
+        }
+        memset(colorbuf,text->defaultColor,i - text->coloralloc);
+        text->colorbuf = colorbuf;
+        text->coloralloc = i;
+    }
+    /* assign text and color data from 'message' string to context buffers; copy the human-readable text
+       into the temporary 'buf'; if the 'message' exceeds the size of 'buf', then just reiterate and
+       use the buffer again */
+    i = j = 0;
+    clr = text->defaultColor;
     pos.line = 0;
     pos.pos = 0;
-    insert_text(text,message,&pos);
+    do {
+        size_t k;
+        bool_t flag = FALSE;
+        k = 0;
+        while (message[i] && k < sizeof(buf)-1) {
+            /* we expect the message to encode color information using the ASCII escape character; when an
+               escape character is found, it changes the current color context (like terminal escape sequences) */
+            if (message[i] == COLOR_ESCAPE_CHAR)
+                flag = TRUE;
+            else if (flag) {
+                /* assign color code; make sure it is in range by bringing it into the number space of values
+                   mode 'pok_menu_color_TOP' (the number of colors enumerated); since the enumerators start at
+                   1 we have to offset the values appropriately */
+                clr = (message[i]-1) % pok_menu_color_TOP + 1;
+                flag = FALSE;
+            }
+            else {
+                buf[k++] = message[i];
+                text->colorbuf[j++] = clr;
+            }
+            ++i;
+        }
+        /* null-terminate the string and insert it into the text context */
+        buf[k] = 0;
+        insert_text_recursive(text,buf,&pos);
+    } while (message[i]);
+    /* post edit the text to format it correctly; we must do this from the top to bottom */
+    pos = (struct text_position){ 0, 0 };
+    post_edit(text,&pos);
+    strip_leading_spaces(text);
     /* setup contextual information */
     text->finished = FALSE;
     text->curline = 0;
@@ -416,6 +522,19 @@ void pok_text_context_assign(struct pok_text_context* text,const char* message,c
     for (i = 0;i < text->region.rows && i < text->linecnt;++i)
         text->curcount += strlen(text->lines[i]);
     text->progress = 0;
+    text->cprogress = 0;
+}
+void pok_text_context_reset(struct pok_text_context* text)
+{
+    text->finished = TRUE;
+    text->curline = 0;
+    text->curcount = 0;
+    text->progress = 0;
+    text->cprogress = 0;
+    for (;text->linecnt > 0;--text->linecnt)
+        text->lines[text->linecnt-1][0] = 0;
+    if (text->colorbuf != NULL)
+        memset(text->colorbuf,0,text->coloralloc);
 }
 bool_t pok_text_context_update(struct pok_text_context* text,uint32_t ticks)
 {
@@ -433,53 +552,83 @@ bool_t pok_text_context_update(struct pok_text_context* text,uint32_t ticks)
     }
     return FALSE;
 }
-bool_t pok_text_context_next(struct pok_text_context* text)
+void pok_text_context_cancel_update(struct pok_text_context* text)
 {
-    /* displays the next sequence of lines; returns false if there are no more lines
-       to display on the next call to this function (in other words if the context has
-       not finished), true otherwise */
+    /* skip text animation by making progress counter as large as possible; the
+       user will have to call this at each animation stage to avoid all possible
+       text animations */
+    if (!text->finished)
+        text->progress = text->curcount = 0xffffffff;
+}
+void pok_text_context_next(struct pok_text_context* text)
+{
+    /* displays the next sequence of lines if any */
     if (!text->finished) {
         uint32_t i, r;
+        if ((uint32_t)text->curline + text->region.rows >= text->linecnt) {
+            /* only mark finished as true if we attempt a next page after having shown the last page */
+            text->finished = TRUE;
+            return;
+        }
+        /* compute color buffer position, current line position and the number of characters through
+           which to progress on the next page */
+        text->cprogress += text->curcount;
         text->curline += text->region.rows;
         text->curcount = 0;
         for (i = 0, r = text->curline;i < text->region.rows && r < text->linecnt;++i, ++r)
             text->curcount += strlen(text->lines[r]);
         text->progress = 0;
-        /* we want to return true if THE NEXT call will still have text to show */
-        text->finished = text->linecnt - text->curline <= text->region.rows;
-        return !text->finished;
     }
-    return FALSE;
 }
-void pok_text_context_render(struct pok_graphics_subsystem* sys,struct pok_text_context* text)
+void pok_text_context_render(struct pok_text_context* text)
 {
     uint32_t i;
     uint32_t line;
     uint32_t c;
     uint32_t y;
+    size_t bufDex;
+    int8_t lastColor = text->defaultColor;
+    int32_t w, h;
+
+    /* change texture environment mode to GL_MODULATE; this will allow color blending on
+       the opaque parts of the font glyphs; we reset the mode back to GL_REPLACE afterwards */
+    glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
+    glColor3fv(MENU_COLORS[lastColor-1]);
+
+    /* compute adjustments based on glyph width and height and text size */
+    w = POK_GLYPH_WIDTH * text->textSize;
+    h = POK_GLYPH_HEIGHT * text->textSize;
 
     /* render just the viewable lines of text (defined by text region) */
     c = 0;
-    for (i = 0, line = text->curline, y = text->y;i < text->region.rows && line < text->linecnt;++i, ++line, y += POK_GLYPH_HEIGHT) {
+    bufDex = text->cprogress;
+    for (i = 0, line = text->curline, y = text->y;i < text->region.rows && line < text->linecnt;++i, ++line, y += h) {
         uint32_t x = text->x;
         const char* linebuf = text->lines[line];
         /* render a line of text: if we have rendered up to 'progress' number of characters then stop */
-        while (*linebuf && (c < text->progress || text->finished)) {
+        while (*linebuf && c < text->progress) {
             /* render glyph */
-            pok_glyph_render(*linebuf,x,y);
-            ++linebuf, ++c, x += POK_GLYPH_WIDTH;
+            if (bufDex < text->coloralloc && text->colorbuf[bufDex] != lastColor) {
+                lastColor = text->colorbuf[bufDex++];
+                glColor3fv(MENU_COLORS[lastColor-1]);
+            }
+            else
+                ++bufDex;
+            pok_glyph_render(*linebuf,x,y,w,h);
+            ++linebuf, ++c, x += w;
         }
     }
 
-    (void)sys;
+    glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
 }
 
 /* pok_text_input */
-void pok_text_input_init(struct pok_text_input* ti)
+void pok_text_input_init(struct pok_text_input* ti,const struct pok_size* region)
 {
-    pok_text_context_init(&ti->base);
+    pok_text_context_init(&ti->base,region);
     ti->line = ti->iniLine = 0;
     ti->pos = ti->iniPos = 0;
+    ti->cursorColor = pok_menu_color_gray;
     ti->finished = TRUE;
 }
 void pok_text_input_delete(struct pok_text_input* ti)
@@ -577,11 +726,11 @@ static bool_t move_cursor_right(struct pok_text_input* ti)
     update_render_position_bypage(ti);
     return TRUE;
 }
-void pok_text_input_assign(struct pok_text_input* ti,const char* prompt,const struct pok_size* region)
+void pok_text_input_assign(struct pok_text_input* ti,const char* prompt)
 {
     struct text_position pos;
     /* assign prompt as initial text in text context */
-    pok_text_context_assign(&ti->base,prompt,region);
+    pok_text_context_assign(&ti->base,prompt);
     pos.line = ti->base.linecnt - 1;
     pos.pos = strlen(ti->base.lines[ti->line]);
     ti->finished = FALSE;
@@ -701,16 +850,20 @@ void pok_text_input_read(struct pok_text_input* ti,struct pok_string* buffer)
         buffer->buf[buffer->len] = 0;
     }
 }
-void pok_text_input_render(struct pok_graphics_subsystem* sys,struct pok_text_input* ti)
+void pok_text_input_render(struct pok_text_input* ti)
 {
-    int32_t x, X, y, Y;
+    int32_t x, X, y, Y, w, h;
 
-    /* draw the cursor (a box that inverts the pixels it bounds) */
-    x = ti->base.x + ti->pos * POK_GLYPH_WIDTH;
-    y = ti->base.y + (ti->line % ti->base.region.rows) * POK_GLYPH_HEIGHT;
-    X = x + POK_GLYPH_WIDTH;
-    Y = y + POK_GLYPH_HEIGHT;
-    glColor3b(20,20,20);
+    /* compute adjustment amounts based on glyph dimensions and text size */
+    w = POK_GLYPH_WIDTH * ti->base.textSize;
+    h = POK_GLYPH_HEIGHT * ti->base.textSize;
+
+    /* draw the cursor (a box over which a glyph may be painted) */
+    x = ti->base.x + ti->pos * w;
+    y = ti->base.y + (ti->line % ti->base.region.rows) * h;
+    X = x + w;
+    Y = y + h;
+    glColor3fv(MENU_COLORS[ti->cursorColor-1]);
     glBegin(GL_QUADS);
     {
         glVertex2i(x,y);
@@ -721,5 +874,95 @@ void pok_text_input_render(struct pok_graphics_subsystem* sys,struct pok_text_in
     glEnd();
 
     /* call base class render function */
-    pok_text_context_render(sys,&ti->base);
+    pok_text_context_render(&ti->base);
+}
+
+/* pok_menu */
+static void pok_menu_base_render(struct pok_menu* menu)
+{
+    int8_t lineWidth;
+    int8_t twice;
+
+    /* draw the menu background */
+    pok_primative_setup_modelview(
+        menu->pos.column + menu->size.columns/2,
+        menu->pos.row + menu->size.rows/2,
+        menu->size.columns,
+        menu->size.rows );
+    glVertexPointer(2,GL_FLOAT,0,POK_BOX);
+    glColor3fv(MENU_COLORS[menu->fillColor-1]);
+    glDrawArrays(GL_QUADS,0,POK_BOX_VERTEX_COUNT);
+    glLoadIdentity();
+
+    /* draw the border (just a line) that takes up a third of the padding space; if
+       this amount is zero then no border is drawn */
+    lineWidth = menu->padding / 3;
+    twice = lineWidth * 2;
+    if (lineWidth > 0) {
+        int32_t w, h;
+        w = menu->size.columns - twice;
+        h = menu->size.rows - twice;
+        pok_primative_setup_modelview(
+            menu->pos.column + lineWidth + w/2,
+            menu->pos.row + lineWidth + h/2,
+            w,
+            h );
+        glLineWidth(lineWidth);
+        glVertexPointer(2,GL_FLOAT,0,POK_BOX);
+        glColor3fv(MENU_COLORS[menu->borderColor-1]);
+        glDrawArrays(GL_LINE_LOOP,0,POK_BOX_VERTEX_COUNT);
+        glLoadIdentity();
+    }
+}
+
+/* pok_message_menu */
+void pok_message_menu_init(struct pok_message_menu* menu,const struct pok_graphics_subsystem* sys)
+{
+    struct pok_size textRegion;
+    menu->base.active = FALSE;
+    menu->base.focused = FALSE;
+    menu->base.padding = sys->dimension / 2;
+    menu->base.fillColor = pok_menu_color_white;
+    menu->base.borderColor = pok_menu_color_black;
+    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
+    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
+    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
+    pok_text_context_init(&menu->text,&textRegion);
+    menu->text.textSize = MESSAGE_MENU_TEXT_SIZE;
+    menu->text.defaultColor = pok_menu_color_black;
+    menu->text.x = menu->base.pos.column + menu->base.padding;
+    menu->text.y = menu->base.pos.row + menu->base.padding;
+}
+void pok_message_menu_delete(struct pok_message_menu* menu)
+{
+    pok_text_context_delete(&menu->text);
+}
+void pok_message_menu_ctrl_key(struct pok_message_menu* menu,enum pok_input_key key)
+{
+    /* if the user pressed either the A or B buttons then advance to the next page of text */
+    if (!menu->text.finished) {
+        if (key == pok_input_key_ABUTTON || key == pok_input_key_BBUTTON) {
+            /* make sure the text context is not currently updating */
+            if (menu->text.progress >= menu->text.curcount)
+                pok_text_context_next(&menu->text);
+        }
+    }
+}
+void pok_message_menu_activate(struct pok_message_menu* menu,const char* message)
+{
+    pok_text_context_assign(&menu->text,message);
+    menu->base.active = TRUE; /* set after assignment */
+    menu->base.focused = TRUE;
+}
+void pok_message_menu_deactivate(struct pok_message_menu* menu)
+{
+    menu->base.active = FALSE; /* set before reset */
+    menu->base.focused = FALSE;
+    pok_text_context_reset(&menu->text);
+}
+void pok_message_menu_render(struct pok_message_menu* menu)
+{
+    pok_menu_base_render(&menu->base); /* render background before text */
+    pok_text_context_render(&menu->text);
 }

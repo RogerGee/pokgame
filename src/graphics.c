@@ -366,6 +366,7 @@ void gl_init(int32_t viewWidth,int32_t viewHeight)
     glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
     glPixelZoom(1,-1);
     glDrawBuffer(GL_BACK);
+    glEnableClientState(GL_VERTEX_ARRAY);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(0,viewWidth,viewHeight,0,-1.0,1.0);
@@ -418,8 +419,8 @@ void gl_create_textures(struct gl_texture_info* info,struct texture_info* texinf
                 info->textureNames[index] = names[j];
                 /* create texture object */
                 glBindTexture(GL_TEXTURE_2D,names[j]);
-                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_BASE_LEVEL,TEXPARAM);
-                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_LEVEL,TEXPARAM);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
                 if (img->flags & pok_image_flag_alpha)
                     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,img->width,img->height,0,GL_RGBA,GL_UNSIGNED_BYTE,img->pixels.data);
                 else

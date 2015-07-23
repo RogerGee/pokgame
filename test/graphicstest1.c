@@ -88,9 +88,10 @@ int graphics_main_test1()
     contexts[1] = globals.mcxt;
 
     /* text input control */
-    sz = (struct pok_size){ sys->windowSize.columns * 2, sys->windowSize.rows };
-    pok_text_input_init(&textInput);
-    pok_text_input_assign(&textInput,"Enter text:",&sz);
+    sz = (struct pok_size){ sys->windowSize.columns * 4, sys->windowSize.rows * 2 };
+    pok_text_input_init(&textInput,&sz);
+    /*textInput.base.textSize = 2.0;*/
+    pok_text_input_assign(&textInput,"Enter " POK_TEXT_COLOR_BLUE "text" POK_TEXT_COLOR_WHITE ":");
     textInput.base.progress = textInput.base.curcount;
     textInput.base.finished = TRUE;
     contexts[2] = &textInput;
@@ -297,7 +298,8 @@ void routineA(struct pok_graphics_subsystem* sys,struct pok_tile_manager* tman)
 
 void routineB(struct pok_graphics_subsystem* sys,struct pok_text_input* input)
 {
-    pok_text_input_render(sys,input);
+    pok_text_input_render(input);
+    (void)sys;
 }
 
 void gload()

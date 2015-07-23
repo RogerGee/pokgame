@@ -1,6 +1,7 @@
 /* maintest.c -- pokgame main test bed; this
    test only tests render and update functionality,
-   not the IO functionality */
+   not the main IO functionality (though we provide some
+   basic functionality to test certain features) */
 #include "pokgame.h"
 #include "error.h"
 #include "pok.h"
@@ -22,8 +23,8 @@ struct pok_tile_ani_data ANIDATA[] = {
 
 /* globals */
 static struct pok_game_info* game;
-static struct pok_character* friend;
-static struct pok_character* dude1;
+static struct pok_character_context* friend1;
+static struct pok_character_context* friend2;
 
 /* functions */
 static void init();
@@ -32,6 +33,7 @@ static void load_characters();
 static void aux_graphics_load();
 static void aux_graphics_unload();
 static int play_game();
+static int game_io();
 
 /* entry point */
 int main_test()
@@ -40,14 +42,15 @@ int main_test()
     sys = pok_graphics_subsystem_new();
     if (sys == NULL)
         pok_error_fromstack(pok_error_fatal);
+    pok_graphics_subsystem_default(sys);
     sys->loadRoutine = aux_graphics_load;
     sys->unloadRoutine = aux_graphics_unload;
     game = pok_game_new(sys,NULL);
     init();
     printf("finished: %d\n",play_game());
+    pok_character_free(friend1->character);
+    pok_character_free(friend2->character);
     pok_game_free(game);
-    pok_character_free(friend);
-    pok_character_free(dude1);
     pok_graphics_subsystem_free(sys);
     return 0;
 }
@@ -59,7 +62,6 @@ void init()
     static const struct pok_location START_LOCATION = {4,6};
     fputs("doing init...",stdout);
     fflush(stdout);
-    pok_graphics_subsystem_default(game->sys);
     if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts0.data") )
         pok_error_fromstack(pok_error_fatal);
     game->tman->impassibility = 32;
@@ -120,15 +122,18 @@ void load_maps()
 
 void load_characters()
 {
-    friend = pok_character_new();
-    friend->mapNo = 1;
-    friend->tilePos = (struct pok_location){22,16};
-    friend->direction = pok_direction_right;
-    dude1 = pok_character_new();
-    dude1->mapNo = 2;
-    dude1->tilePos = (struct pok_location){4,4};
-    assert( pok_character_render_context_add(game->charRC,friend) );
-    assert( pok_character_render_context_add(game->charRC,dude1) );
+    struct pok_character* ch;
+    ch = pok_character_new();
+    ch->mapNo = 1;
+    ch->tilePos = (struct pok_location){22,16};
+    ch->direction = pok_direction_right;
+    friend1 = pok_character_render_context_add_ex(game->charRC,ch);
+    assert(friend1);
+    ch = pok_character_new();
+    ch->mapNo = 2;
+    ch->tilePos = (struct pok_location){4,4};
+    friend2 = pok_character_render_context_add_ex(game->charRC,ch);
+    assert(friend2);
 }
 
 void aux_graphics_load()
@@ -143,17 +148,78 @@ void aux_graphics_unload()
 
 int play_game()
 {
-    int retval;
+    int retval = 0;
     struct pok_thread* upthread;
-    /* if the UI is running in the background, the use this thread to 
-       run the update procedure */
-    if (game->sys->background)
-        return update_proc(game);
-    /* otherwise run the UI on this thread and run the update procedure in the background */
+    /* create a new thread on which to run the update thread */
     upthread = pok_thread_new((pok_thread_entry)update_proc,game);
     pok_thread_start(upthread);
-    pok_graphics_subsystem_render_loop(game->sys);
+    /* run the test io procedure */
+    if (game->sys->background)
+        /* rendering is done on background thread, so we can use
+           this thread for the test io procedure */
+        game_io(game);
+    else {
+        /* the graphics subsystem requires that the rendering is done
+           on this main thread; so create a new thread for the IO proc */
+        struct pok_thread* gameThread;
+        gameThread = pok_thread_new(game_io,game);
+        pok_thread_start(gameThread);
+        pok_graphics_subsystem_render_loop(game->sys);
+        pok_thread_join(gameThread);
+        pok_thread_free(gameThread);
+    }
     retval = pok_thread_join(upthread);
     pok_thread_free(upthread);
     return retval;
+}
+
+/* implement a minimal IO procedure to test game functionality */
+static void noop()
+{
+    /* take no action; reply with no-op intermsg response */
+    game->updateInterMsg.processed = TRUE;
+    pok_intermsg_setup(&game->ioInterMsg,pok_noop_intermsg,0);
+    game->ioInterMsg.ready = TRUE;
+}
+static void message_menu(const char* contents)
+{
+    game->updateInterMsg.processed = TRUE;
+    pok_intermsg_setup(&game->ioInterMsg,pok_menu_intermsg,0);
+    game->ioInterMsg.modflags = pok_message_menu;
+    pok_string_assign(game->ioInterMsg.payload.string,contents);
+    game->ioInterMsg.ready = TRUE;
+}
+int game_io(void* p)
+{
+    enum pok_direction dir;
+    while ( pok_graphics_subsystem_has_window(game->sys) ) {
+        /* check to make sure update intermsg was not discarded */
+        pok_game_modify_enter(&game->updateInterMsg);
+        if (game->updateInterMsg.kind != pok_uninitialized_intermsg && game->updateInterMsg.ready) {
+            /* process game world interactions */
+            if (game->updateInterMsg.kind == pok_keyinput_intermsg) {
+                if ((dir = pok_util_is_next_to(
+                            &game->mapRC->map->chunkSize,
+                            &game->player->chunkPos,
+                            &friend1->character->chunkPos,
+                            &game->player->tilePos,
+                            &friend1->character->tilePos)) != pok_direction_none) {
+                    if (friend1->character->direction != dir)
+                        pok_character_context_set_update(friend1,dir,pok_character_normal_effect,0,TRUE);
+                    message_menu("Hi, my name is James B. Grossweiner. I am training to be a "
+                        "PokGame Master. However, pok monsters don't exist yet.... I am told that the \"powers that be\" are trying "
+                        "to implement features as quickly as possible. However, as with all good things, it takes time. It will "
+                        "be a " POK_TEXT_COLOR_BLUE "fantastic" POK_TEXT_COLOR_BLACK " day when version 1 comes out!");
+                }
+                else
+                    noop();
+            }
+            else
+                noop();
+        }
+        pok_game_modify_exit(&game->updateInterMsg);
+
+        pok_timeout_no_elapsed(&game->ioTimeout);
+    }
+    return 0;
 }

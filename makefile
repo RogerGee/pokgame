@@ -2,7 +2,7 @@
 # Makefile for 'pokgame' #######################################################
 ## targets: GNU/Linux with X11 #################################################
 ################################################################################
-.PHONY: debug test clean install uninstall
+.PHONY: debug test clean
 
 ifeq ($(MAKECMDGOALS),debug)
 MAKE_DEBUG = yes
@@ -58,10 +58,12 @@ endif
 OPENGL_H = src/opengl.h
 TYPES_H = src/types.h
 POK_STDENUM_H = src/pok-stdenum.h
+PRIMATIVES_H = src/primatives.h $(OPENGL_H)
 CONFIG_H = src/config.h $(TYPES_H)
 PROTOCOL_H = src/protocol.h $(TYPES_H)
 STANDARD_H = src/standard1.h $(TYPES_H) $(POK_STDENUM_H)
 PARSER_H = src/parser.h $(TYPES_H)
+GAMELOCK_H = src/gamelock.h $(TYPES_H)
 POK_H = src/pok.h $(PROTOCOL_H) $(POK_STDENUM_H)
 ERROR_H = src/error.h $(TYPES_H)
 NET_H = src/net.h $(TYPES_H)
@@ -77,14 +79,15 @@ MAP_H = src/map.h $(NETOBJ_H) $(TILE_H) $(PROTOCOL_H)
 MAP_CONTEXT_H = src/map-context.h $(MAP_H) $(GRAPHICS_H)
 CHARACTER_H = src/character.h $(NETOBJ_H)
 CHARACTER_CONTEXT_H = src/character-context.h $(MAP_CONTEXT_H) $(SPRITEMAN_H) $(CHARACTER_H)
-POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) $(CHARACTER_CONTEXT_H) $(EFFECT_H) $(MENU_H)
+POKGAME_H = src/pokgame.h $(NET_H) $(GRAPHICS_H) $(GAMELOCK_H) $(TILEMAN_H) $(SPRITEMAN_H) $(MAP_CONTEXT_H) \
+			$(CHARACTER_CONTEXT_H) $(EFFECT_H) $(MENU_H) $(PROTOCOL_H)
 DEFAULT_H = src/default.h $(POKGAME_H) $(CONFIG_H) $(STANDARD_H)
 USER_H = src/user.h $(TYPES_H)
 MENU_H = src/menu.h $(GRAPHICS_H) $(IMAGE_H) $(PROTOCOL_H)
 
 # object code files: library objects are used both by the game engine and game versions
-OBJECTS = pokgame.o graphics.o graphics-impl.o effect.o tileman.o spriteman.o map-context.o character-context.o update-proc.o \
-          io-proc.o default.o config.o standard.o user.o menu.o
+OBJECTS = pokgame.o gamelock.o graphics.o graphics-impl.o effect.o tileman.o spriteman.o map-context.o character-context.o \
+          update-proc.o io-proc.o default.o config.o standard.o user.o menu.o primatives.o
 OBJECTS := $(addprefix $(OBJDIR)/,$(OBJECTS))
 OBJECTS_LIB = image.o error.o net.o netobj.o types.o parser.o pok-util.o tile.o map.o character.o
 OBJECTS_LIB := $(addprefix $(OBJDIR)/,$(OBJECTS_LIB))
@@ -109,8 +112,10 @@ $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB) $(LIBRARY_LIB)
 
 # src targets (only for the game engine)
-$(OBJDIR)/pokgame.o: src/pokgame.c src/pokgame-posix.c $(POKGAME_H) $(ERROR_H) $(USER_H) $(CONFIG_H)
+$(OBJDIR)/pokgame.o: src/pokgame.c $(POKGAME_H) $(ERROR_H) $(USER_H) $(CONFIG_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/pokgame.o src/pokgame.c
+$(OBJDIR)/gamelock.o: src/gamelock.c src/gamelock-posix.c $(GAMELOCK_H) $(ERROR_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/gamelock.o src/gamelock.c
 $(OBJDIR)/graphics.o: src/graphics.c $(GRAPHICS_H) $(GRAPHICS_IMPL_H) $(ERROR_H) $(PROTOCOL_H) $(OPENGL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/graphics.o src/graphics.c
 $(OBJDIR)/graphics-impl.o: src/graphics-X.c $(GRAPHICS_IMPL_H) $(ERROR_H)
@@ -123,7 +128,7 @@ $(OBJDIR)/spriteman.o: src/spriteman.c $(SPRITEMAN_H) $(ERROR_H) $(PROTOCOL_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/spriteman.o src/spriteman.c
 $(OBJDIR)/map-context.o: src/map-context.c $(MAP_CONTEXT_H) $(PROTOCOL_H) $(POKGAME_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/map-context.o src/map-context.c
-$(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(ERROR) $(POKGAME_H)
+$(OBJDIR)/character-context.o: src/character-context.c $(CHARACTER_CONTEXT_H) $(ERROR) $(POKGAME_H) $(PRIMATIVES_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/character-context.o src/character-context.c
 $(OBJDIR)/update-proc.o: src/update-proc.c $(POKGAME_H) $(PROTOCOL_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/update-proc.o src/update-proc.c
@@ -137,8 +142,10 @@ $(OBJDIR)/standard.o: src/standard1.c $(STANDARD_H) $(ERROR_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/standard.o src/standard1.c
 $(OBJDIR)/user.o: src/user.c $(USER_H) $(NET_H) $(ERROR_H) $(CONFIG_H) $(POK_STDENUM_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/user.o src/user.c
-$(OBJDIR)/menu.o: src/menu.c $(MENU_H) $(ERROR_H) $(OPENGL_H)
+$(OBJDIR)/menu.o: src/menu.c $(MENU_H) $(ERROR_H) $(CONFIG_H) $(PRIMATIVES_H)
 	$(COMPILE) $(OUT)$(OBJDIR)/menu.o src/menu.c
+$(OBJDIR)/primatives.o: src/primatives.c $(PRIMATIVES_H)
+	$(COMPILE) $(OUT)$(OBJDIR)/primatives.o src/primatives.c
 
 # src targets for the library
 $(OBJDIR)/image.o: src/image.c $(IMAGE_H) $(ERROR_H) $(PROTOCOL_H)
@@ -165,7 +172,7 @@ $(OBJDIR)/character.o: src/character.c $(CHARACTER_H) $(ERROR_H)
 # test targets
 $(OBJDIR)/main.o: test/main.c
 	$(COMPILE) -Isrc $(OUT)$(OBJECT_DIRECTORY_TEST)/main.o test/main.c
-$(OBJDIR)/maintest.o: test/maintest.c $(POKGAME_H) $(ERROR_H)
+$(OBJDIR)/maintest.o: test/maintest.c $(POKGAME_H) $(ERROR_H) $(POK_H)
 	$(COMPILE) -Isrc $(OUT)$(OBJECT_DIRECTORY_TEST)/maintest.o test/maintest.c
 $(OBJDIR)/nettest.o: test/nettest.c $(NET_H) $(ERROR_H)
 	$(COMPILE) -Isrc $(OUT)$(OBJECT_DIRECTORY_TEST)/nettest.o test/nettest.c

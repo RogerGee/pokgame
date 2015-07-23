@@ -63,6 +63,11 @@ void gamelock_down(struct gamelock* lock)
     ReleaseMutex(lock->atom);
     ReleaseSemaphore(lock->readOnly, 1, NULL);
 }
+int gamelock_compar(const struct gamelock* left,const struct gamelock* right)
+{
+    long long int result = (long long int)left->object - (long long int)right->object;
+    return result < 0 ? -1 : (result > 0 ? 1 : 0);
+}
 
 /* implement 'pok_timeout' from 'pokgame.h' */
 void pok_timeout(struct pok_timeout_interval* interval)

@@ -31,7 +31,7 @@ int main(int argc,const char* argv[])
 
     /* load modules */
     pok_exception_load_module();
-    pok_game_load_module();
+    pok_gamelock_load_module();
 
     /* find a temporary directory */
     if ((TMPDIR = getenv("TEMPDIR")) == NULL && (TMPDIR = getenv("TMPDIR")) == NULL && (TMPDIR = getenv("TMP")) == NULL) {
@@ -58,7 +58,7 @@ int main(int argc,const char* argv[])
         main_test();
 
     /* unload modules */
-    pok_game_unload_module();
+    pok_gamelock_unload_module();
     pok_exception_unload_module();
 
     return 0;

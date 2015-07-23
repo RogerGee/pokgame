@@ -318,6 +318,10 @@ void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
     /* this function is the same as 'impl_unlock' however it is visible to other modules */
     pthread_mutex_unlock(&sys->impl->mutex);
 }
+void pok_graphics_subsystem_render_loop(struct pok_graphics_subsystem* sys)
+{
+    graphics_loop(sys);
+}
 
 /* x11 functions */
 void do_x_init()

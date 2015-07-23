@@ -80,7 +80,10 @@ struct pok_graphics_subsystem
     graphics_load_routine_t loadRoutine;
     graphics_load_routine_t unloadRoutine;
 
-    /* other hooks: these can be conveniently added using the 'pok_graphics_subsystem_append_hook' macro */
+    /* other hooks: these can be conveniently added using the 'pok_graphics_subsystem_append_hook' macro and
+       removed using the 'pok_graphics_subsystem_pop_hook' macro; hooks should function like a stack; whenever
+       a context is finished with a hook it should pop it off; this should always happen before a previous context
+       is finished */
     struct {
         /* called when a keyup event occurs: only the game keys enumerated in 'enum pok_input_key' are specified */
         uint16_t top;
@@ -142,7 +145,12 @@ extern const float BLACK_PIXEL_FLOAT[];
 
 /* this macro adds a hook routine to a hook */
 #define pok_graphics_subsystem_append_hook(hook,routine,context) \
-    hook.routines[hook.top] = routine; \
-    hook.contexts[hook.top++] = context
+    hook.contexts[hook.top] = context;                           \
+    hook.routines[hook.top++] = routine
+
+/* this macro removes the top hook routine from a hook */
+#define pok_graphics_subsystem_pop_hook(hook) \
+    hook.routines[--hook.top] = NULL;         \
+    hook.contexts[hook.top] = NULL
 
 #endif

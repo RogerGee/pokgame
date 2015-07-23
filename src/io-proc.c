@@ -96,7 +96,7 @@ int io_proc(struct pok_graphics_subsystem* sys)
         else if (game->versionChannel != NULL) {
             /* the version is specifying a data channel; we can use this to engage the pokgame
                protocol with a peer; the peer could be a pokgame version process executing on
-               a remote host or the local host */
+               a remote or local host */
             enum pok_io_result result;
 
             pok_game_register(game);              /* register game rendering functions */
@@ -155,6 +155,8 @@ enum pok_io_result run_game(struct pok_game_info* game)
         result = exch_gener(game,&info);
         if (result != pok_io_result_finished && result != pok_io_result_waiting)
             break;
+
+        /* intermessage processing */
 
     }
 
