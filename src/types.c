@@ -135,7 +135,7 @@ void pok_string_concat_obj(struct pok_string* str,const struct pok_string* opera
     len = str->len + operand->len;
     zlen = len+1;
     if (zlen<=str->cap || pok_string_realloc(str,zlen)) {
-        strncpy(str->buf+str->len,operand->buf,zlen);
+        strncpy(str->buf+str->len,operand->buf,operand->len+1);
         str->len = len;
     }
 }

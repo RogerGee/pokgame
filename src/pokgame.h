@@ -133,7 +133,7 @@ struct pok_game_info
 
     /* menu structures */
     struct pok_message_menu messageMenu;
-
+    struct pok_input_menu inputMenu;
 };
 
 /* main pokgame procedures (the other procedure is graphics which is handled by the graphics subsystem) */

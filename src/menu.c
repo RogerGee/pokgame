@@ -211,6 +211,14 @@ static void insert_text_recursive(struct pok_text_context* text,const char* mess
         text->linecnt = startPos->line+1;
         allocate_lines(text);
     }
+    else if (startPos->pos >= text->region.columns) {
+        ++startPos->line;
+        startPos->pos = 0;
+        if (startPos->line >= (int32_t)text->linecnt) {
+            text->linecnt = startPos->line+1;
+            allocate_lines(text);
+        }
+    }
     linebuf = text->lines[startPos->line] + startPos->pos;
 
     /* compute length of message substring that we can append to this line */
@@ -247,7 +255,7 @@ static void insert_text_recursive(struct pok_text_context* text,const char* mess
         linebuf[length] = 0;
 
         /* compute position for potential recursive insertion */
-        if (startPos->pos + length >= text->region.columns) {
+        if (startPos->pos + length >= text->region.columns || message[length-1] == '\n') {
             /* the insertion filled up the linebuffer so update the position to the beginning of the next line */
             startPos->pos = 0;
             ++startPos->line;
@@ -383,18 +391,18 @@ static void strip_leading_spaces(struct pok_text_context* text)
 {
     /* move line contents over to avoid leading spaces for display formatting; we must
        also shift values in the text context's color buffer */
-    int32_t line;
-    uint32_t cprog = 0;
-    for (line = 0;line < (int32_t)text->linecnt;++line) {
-        if (isspace(text->lines[line][0])) {
-            int i = 0;
-            while (isspace(text->lines[line][i]))
-                ++i;
-            if (i > 0) {
-                strcpy(text->lines[line],text->lines[line] + i);
-                memcpy(text->colorbuf + cprog,text->colorbuf + cprog + i,text->coloralloc - cprog - i);
-            }
+    uint32_t line;
+    int8_t* cbuf = text->colorbuf;
+    for (line = 0;line < text->linecnt;++line) {
+        int i = 0;
+        while (isspace(text->lines[line][i]))
+            ++i;
+        if (i > 0) {
+            /* shift the line down to delete the leading whitespace */
+            strcpy(text->lines[line],text->lines[line] + i);
+            memmove(cbuf,cbuf + i,text->colorbuf+text->coloralloc - cbuf - i);
         }
+        cbuf += strlen(text->lines[line]);
     }
 }
 static void insert_text(struct pok_text_context* text,const char* message,struct text_position* startPos)
@@ -465,7 +473,7 @@ void pok_text_context_assign(struct pok_text_context* text,const char* message)
     /* reset color buffer info and make sure buffer has high enough allocation for all the
        characters in 'message' */
     if (text->colorbuf != NULL)
-        memset(text->colorbuf,0,text->coloralloc);
+        memset(text->colorbuf,text->defaultColor,text->coloralloc);
     i = strlen(message);
     if (text->coloralloc < i) {
         int8_t* colorbuf;
@@ -498,7 +506,7 @@ void pok_text_context_assign(struct pok_text_context* text,const char* message)
                 /* assign color code; make sure it is in range by bringing it into the number space of values
                    mode 'pok_menu_color_TOP' (the number of colors enumerated); since the enumerators start at
                    1 we have to offset the values appropriately */
-                clr = (message[i]-1) % pok_menu_color_TOP + 1;
+                clr = ((uint32_t)message[i]-1) % pok_menu_color_TOP + 1;
                 flag = FALSE;
             }
             else {
@@ -587,12 +595,13 @@ void pok_text_context_render(struct pok_text_context* text)
     uint32_t c;
     uint32_t y;
     size_t bufDex;
-    int8_t lastColor = text->defaultColor;
+    int8_t lastColor;
     int32_t w, h;
 
     /* change texture environment mode to GL_MODULATE; this will allow color blending on
        the opaque parts of the font glyphs; we reset the mode back to GL_REPLACE afterwards */
     glTexEnvf(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
+    lastColor = text->defaultColor;
     glColor3fv(MENU_COLORS[lastColor-1]);
 
     /* compute adjustments based on glyph width and height and text size */
@@ -606,16 +615,15 @@ void pok_text_context_render(struct pok_text_context* text)
         uint32_t x = text->x;
         const char* linebuf = text->lines[line];
         /* render a line of text: if we have rendered up to 'progress' number of characters then stop */
-        while (*linebuf && c < text->progress) {
+        while (*linebuf && (c < text->progress || text->finished)) {
             /* render glyph */
             if (bufDex < text->coloralloc && text->colorbuf[bufDex] != lastColor) {
-                lastColor = text->colorbuf[bufDex++];
+                lastColor = text->colorbuf[bufDex];
                 glColor3fv(MENU_COLORS[lastColor-1]);
             }
-            else
-                ++bufDex;
+
             pok_glyph_render(*linebuf,x,y,w,h);
-            ++linebuf, ++c, x += w;
+            ++linebuf, ++c, x += w, ++bufDex;
         }
     }
 
@@ -629,6 +637,7 @@ void pok_text_input_init(struct pok_text_input* ti,const struct pok_size* region
     ti->line = ti->iniLine = 0;
     ti->pos = ti->iniPos = 0;
     ti->cursorColor = pok_menu_color_gray;
+    ti->accepting = FALSE;
     ti->finished = TRUE;
 }
 void pok_text_input_delete(struct pok_text_input* ti)
@@ -732,7 +741,8 @@ void pok_text_input_assign(struct pok_text_input* ti,const char* prompt)
     /* assign prompt as initial text in text context */
     pok_text_context_assign(&ti->base,prompt);
     pos.line = ti->base.linecnt - 1;
-    pos.pos = strlen(ti->base.lines[ti->line]);
+    pos.pos = strlen(ti->base.lines[pos.line]);
+    ti->accepting = FALSE;
     ti->finished = FALSE;
     /* insert two space characters:
         the first makes sure that the prompt is separated from the user text
@@ -761,6 +771,7 @@ void pok_text_input_reset(struct pok_text_input* ti)
         ti->pos = ti->iniPos;
         ti->line = ti->iniLine;
         update_render_position_bypage(ti);
+        ti->accepting = FALSE;
         ti->finished = FALSE;
     }
 }
@@ -778,8 +789,9 @@ static void protect_inipos(struct pok_text_input* ti)
 }
 void pok_text_input_entry(struct pok_text_input* ti,char c)
 {
-    /* only accept input once the text context has finished displaying the prompt */
-    if (ti->base.finished && !ti->finished) {
+    /* only accept input once the text context has finished displaying the prompt
+       and not after the user has finished entering input */
+    if (ti->accepting && !ti->finished) {
         char message[2] = { c, 0 };
         struct text_position pos = { ti->line, ti->pos };
 
@@ -794,7 +806,7 @@ void pok_text_input_entry(struct pok_text_input* ti,char c)
 bool_t pok_text_input_ctrl_key(struct pok_text_input* ti,enum pok_input_key key)
 {
     /* returns non-zero if the input object has finished gathering input */
-    if (ti->base.finished && !ti->finished) {
+    if (ti->accepting && !ti->finished) {
         if (key == pok_input_key_ENTER)
             /* when the user types enter they complete the input sequence */
             ti->finished = TRUE;
@@ -828,6 +840,18 @@ bool_t pok_text_input_ctrl_key(struct pok_text_input* ti,enum pok_input_key key)
     }
     return ti->finished;
 }
+bool_t pok_text_input_update(struct pok_text_input* ti,uint32_t ticks)
+{
+    struct pok_text_context* text = &ti->base;
+    if (!pok_text_context_update(text,ticks)) {
+        if ((size_t)text->curline + text->region.rows >= text->linecnt) {
+            ti->accepting = TRUE;
+            pok_text_context_cancel_update(text);
+        }
+        return FALSE;
+    }
+    return TRUE;
+}
 void pok_text_input_read(struct pok_text_input* ti,struct pok_string* buffer)
 {
     uint32_t i;
@@ -852,26 +876,28 @@ void pok_text_input_read(struct pok_text_input* ti,struct pok_string* buffer)
 }
 void pok_text_input_render(struct pok_text_input* ti)
 {
-    int32_t x, X, y, Y, w, h;
+    if (ti->accepting) {
+        int32_t x, X, y, Y, w, h;
 
-    /* compute adjustment amounts based on glyph dimensions and text size */
-    w = POK_GLYPH_WIDTH * ti->base.textSize;
-    h = POK_GLYPH_HEIGHT * ti->base.textSize;
+        /* compute adjustment amounts based on glyph dimensions and text size */
+        w = POK_GLYPH_WIDTH * ti->base.textSize;
+        h = POK_GLYPH_HEIGHT * ti->base.textSize;
 
-    /* draw the cursor (a box over which a glyph may be painted) */
-    x = ti->base.x + ti->pos * w;
-    y = ti->base.y + (ti->line % ti->base.region.rows) * h;
-    X = x + w;
-    Y = y + h;
-    glColor3fv(MENU_COLORS[ti->cursorColor-1]);
-    glBegin(GL_QUADS);
-    {
-        glVertex2i(x,y);
-        glVertex2i(X,y);
-        glVertex2i(X,Y);
-        glVertex2i(x,Y);
+        /* draw the cursor (a box over which a glyph may be painted) */
+        x = ti->base.x + ti->pos * w;
+        y = ti->base.y + (ti->line % ti->base.region.rows) * h;
+        X = x + w;
+        Y = y + h;
+        glColor3fv(MENU_COLORS[ti->cursorColor-1]);
+        glBegin(GL_QUADS);
+        {
+            glVertex2i(x,y);
+            glVertex2i(X,y);
+            glVertex2i(X,Y);
+            glVertex2i(x,Y);
+        }
+        glEnd();
     }
-    glEnd();
 
     /* call base class render function */
     pok_text_context_render(&ti->base);
@@ -965,4 +991,62 @@ void pok_message_menu_render(struct pok_message_menu* menu)
 {
     pok_menu_base_render(&menu->base); /* render background before text */
     pok_text_context_render(&menu->text);
+}
+
+/* pok_input_menu */
+void pok_input_menu_init(struct pok_input_menu* menu,const struct pok_graphics_subsystem* sys)
+{
+    struct pok_size textRegion;
+    menu->base.active = FALSE;
+    menu->base.focused = FALSE;
+    menu->base.padding = sys->dimension / 2;
+    menu->base.fillColor = pok_menu_color_white;
+    menu->base.borderColor = pok_menu_color_black;
+    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
+    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
+    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
+    pok_text_input_init(&menu->input,&textRegion);
+    menu->input.base.textSize = MESSAGE_MENU_TEXT_SIZE;
+    menu->input.base.defaultColor = pok_menu_color_black;
+    menu->input.base.x = menu->base.pos.column + menu->base.padding;
+    menu->input.base.y = menu->base.pos.row + menu->base.padding;
+}
+void pok_input_menu_delete(struct pok_input_menu* menu)
+{
+    pok_text_input_delete(&menu->input);
+}
+void pok_input_menu_ctrl_key(struct pok_input_menu* menu,enum pok_input_key key)
+{
+    /* if the text input context is still showing its message (prompt), then let
+       the A and B keys advance to the next page; otherwise call the text input
+       context's ctrl_key function */
+    if (!menu->input.accepting) {
+        if (key == pok_input_key_ABUTTON || key == pok_input_key_BBUTTON) {
+            /* make sure the text context is not currently updating */
+            struct pok_text_context* tctx = &menu->input.base;
+            if (tctx->progress >= tctx->curcount) {
+                pok_text_context_next(tctx);
+            }
+        }
+    }
+    else
+        pok_text_input_ctrl_key(&menu->input,key);
+}
+void pok_input_menu_activate(struct pok_input_menu* menu,const char* prompt)
+{
+    pok_text_input_assign(&menu->input,prompt);
+    menu->base.active = TRUE; /* set after assignment */
+    menu->base.focused = TRUE;
+}
+void pok_input_menu_deactivate(struct pok_input_menu* menu)
+{
+    menu->base.active = FALSE; /* set before reset */
+    menu->base.focused = FALSE;
+    pok_text_context_reset(&menu->input.base);
+}
+void pok_input_menu_render(struct pok_input_menu* menu)
+{
+    pok_menu_base_render(&menu->base); /* render background before input text */
+    pok_text_input_render(&menu->input);
 }

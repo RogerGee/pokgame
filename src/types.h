@@ -75,7 +75,8 @@ enum pok_direction
     pok_direction_none
 };
 
-#define pok_direction_opposite(dir) (dir==pok_direction_none ? (int)pok_direction_none : ((int)dir + ((int)dir%2==0 ? 1 : -1)))
+#define pok_direction_opposite(dir)                                     \
+    (enum pok_direction) (dir==pok_direction_none ? (int)pok_direction_none : ((int)dir + ((int)dir%2==0 ? 1 : -1)))
 #define pok_direction_orthog1(dir) (dir==pok_direction_up || dir==pok_direction_down ? (int)pok_direction_left \
         : (dir==pok_direction_left || dir==pok_direction_right ? pok_direction_up : pok_direction_none))
 #define pok_direction_orthog2(dir) (dir==pok_direction_up || dir==pok_direction_down ? (int)pok_direction_right \

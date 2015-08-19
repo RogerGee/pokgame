@@ -183,43 +183,131 @@ static void noop()
 }
 static void message_menu(const char* contents)
 {
-    game->updateInterMsg.processed = TRUE;
+    game->updateInterMsg.processed = TRUE; /* we are responding to update intermsg */
     pok_intermsg_setup(&game->ioInterMsg,pok_menu_intermsg,0);
     game->ioInterMsg.modflags = pok_message_menu;
     pok_string_assign(game->ioInterMsg.payload.string,contents);
     game->ioInterMsg.ready = TRUE;
 }
-int game_io(void* p)
+static void input_menu(const char* prompt)
+{
+    game->updateInterMsg.processed = TRUE; /* we are responding to update intermsg */
+    pok_intermsg_setup(&game->ioInterMsg,pok_menu_intermsg,0);
+    game->ioInterMsg.modflags = pok_input_menu;
+    pok_string_assign(game->ioInterMsg.payload.string,prompt);
+    game->ioInterMsg.ready = TRUE;
+}
+static inline bool_t next_to(struct pok_location* loc)
 {
     enum pok_direction dir;
+    return (dir = pok_util_is_next_to(
+        &game->mapRC->map->chunkSize,
+        &game->player->chunkPos,
+        &ORIGIN, /* assume chunk pos */
+        &game->player->tilePos,
+        loc)) != pok_direction_none && pok_direction_opposite(dir) == game->player->direction;
+}
+static inline bool_t next_to_character(struct pok_character* character,enum pok_direction* outDir)
+{
+    return (*outDir = pok_util_is_next_to(
+            &game->mapRC->map->chunkSize,
+            &game->player->chunkPos,
+            &character->chunkPos,
+            &game->player->tilePos,
+            &character->tilePos)) != pok_direction_none && pok_direction_opposite(*outDir) == game->player->direction;
+}
+int game_io(void* p)
+{
+    static int context = 0;
+    enum pok_direction dir;
+    struct pok_location loc;
+    struct pok_string stringbuilder;
+    pok_string_init(&stringbuilder);
     while ( pok_graphics_subsystem_has_window(game->sys) ) {
         /* check to make sure update intermsg was not discarded */
         pok_game_modify_enter(&game->updateInterMsg);
         if (game->updateInterMsg.kind != pok_uninitialized_intermsg && game->updateInterMsg.ready) {
             /* process game world interactions */
-            if (game->updateInterMsg.kind == pok_keyinput_intermsg) {
-                if ((dir = pok_util_is_next_to(
-                            &game->mapRC->map->chunkSize,
-                            &game->player->chunkPos,
-                            &friend1->character->chunkPos,
-                            &game->player->tilePos,
-                            &friend1->character->tilePos)) != pok_direction_none) {
-                    if (friend1->character->direction != dir)
-                        pok_character_context_set_update(friend1,dir,pok_character_normal_effect,0,TRUE);
-                    message_menu("Hi, my name is James B. Grossweiner. I am training to be a "
-                        "PokGame Master. However, pok monsters don't exist yet.... I am told that the \"powers that be\" are trying "
-                        "to implement features as quickly as possible. However, as with all good things, it takes time. It will "
-                        "be a " POK_TEXT_COLOR_BLUE "fantastic" POK_TEXT_COLOR_BLACK " day when version 1 comes out!");
+            if (game->updateInterMsg.kind == pok_keyinput_intermsg && game->updateInterMsg.payload.key == pok_input_key_ABUTTON) {
+                if (game->player->mapNo == 1) {
+                    /* character James */
+                    if ( next_to_character(friend1->character,&dir) ) {
+                        if (friend1->character->direction != dir)
+                            pok_character_context_set_update(friend1,dir,pok_character_normal_effect,0,TRUE);
+                        message_menu("Hi, my name is James B. Grossweiner. I am training to be a "
+                            "pokgame master! Unfortunately, poks don't exist yet so I will have to hold up until "
+                            "I can catch 'em (not \"all\" of them, obviously). I am told that the \"powers that be\" "
+                            "are trying to implement features as quickly as possible. However, as with all good things, "
+                            "it takes time. It will be a " POK_TEXT_COLOR_BLUE "fantastic" POK_TEXT_COLOR_BLACK " day when "
+                            "version 1 comes out!");
+                        goto finish;
+                    }
+
+                    /* Map sign */
+                    loc.column = 32;
+                    loc.row = 18;
+                    if ( next_to(&loc) ) {
+                        message_menu(POK_TEXT_COLOR_BLUE "Testimatica" POK_TEXT_COLOR_BLACK " --- "
+                            "founded by the pokgame author for testing purposes; " POK_TEXT_COLOR_RED "only authorized persons "
+                            "may plant cabbage in designated areas!");
+                        goto finish;
+                    }
+
+                    /* center house sign */
+                    loc.column = 21;
+                    loc.row = 8;
+                    if ( next_to(&loc) ) {
+                        message_menu("Bart's House");
+                        goto finish;
+                    }
+
+                    /* talking shrubbery */
+                    loc.column = 41;
+                    loc.row = 15;
+                    if ( next_to(&loc) ) {
+                        context = 1;
+                        input_menu("Hello, I am a talking shrub. I am something of a local legend... Anyway, enough about "
+                            "me! What is your name?");
+                        goto finish;
+                    }
+
                 }
-                else
-                    noop();
-            }
-            else
+                else if (game->player->mapNo == 2) {
+                    /* character Bart */
+                    if ( next_to_character(friend2->character,&dir) ) {
+                        if (friend2->character->direction != dir)
+                            pok_character_context_set_update(friend2,dir,pok_character_normal_effect,0,TRUE);
+                        message_menu("Hi!\n\nThe name's Bart! This is my abode. I know, it's not much, but I "
+                            "am a PIONEER! Soon there will be fuller worlds filled with WONDER! From dirt floors "
+                            "will rise kingdoms!");
+                        goto finish;
+                    }
+
+                }
+
+                context = 0;
                 noop();
+            }
+            else if (game->updateInterMsg.kind == pok_stringinput_intermsg) {
+                if (context == 1) { /* talking shrubbery response */
+                    pok_string_assign(&stringbuilder,"Nice to meet you, ");
+                    pok_string_concat_obj(&stringbuilder,game->updateInterMsg.payload.string);
+                    pok_string_concat_char(&stringbuilder,'!');
+                    message_menu(stringbuilder.buf);
+                    goto finish;
+                }
+
+            }
+            else {
+                context = 0;
+                noop();
+            }
         }
+    finish:
         pok_game_modify_exit(&game->updateInterMsg);
 
         pok_timeout_no_elapsed(&game->ioTimeout);
     }
+    pok_string_delete(&stringbuilder);
     return 0;
 }

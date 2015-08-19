@@ -209,24 +209,28 @@ void update_key_input(struct pok_game_info* info)
 
 void menu_keyup_hook(enum pok_input_key key,struct pok_game_info* info)
 {
-    /* this function is executed on the rendering thread; it checks to see
-       if a menu is active and focused and, if so, delivers the control key */
+    /* this function is executed on the rendering thread when a control key
+       is pressed; it checks to see if a menu is active and focused and, if
+       so, delivers the control key */
     if (info->gameContext == pok_game_menu_context) {
         if (info->messageMenu.base.active && info->messageMenu.base.focused)
-            /* ignore the return value; we can check later to see if the menu has
-               completed */
             pok_message_menu_ctrl_key(&info->messageMenu,key);
+        else if (info->inputMenu.base.active && info->inputMenu.base.focused)
+            pok_input_menu_ctrl_key(&info->inputMenu,key);
 
     }
 }
 
 void menu_textentry_hook(char c,struct pok_game_info* info)
 {
-    /* this function is executed on the rendering thread; it checks to see
-       if a menu is active and focused and, if so, delivers the text entry
-       character message to the menu; this only is done for the text input menu */
-    if (info->gameContext == pok_game_menu_context /* && */) {
-
+    /* this function is executed on the rendering thread when a text input
+       key is pressed; it checks to see if a menu is active and focused
+       and, if so, delivers the text entry character message to the menu;
+       this only is done for the text input menu */
+    if (info->gameContext == pok_game_menu_context && info->inputMenu.base.active
+        && info->inputMenu.base.focused)
+    {
+        pok_text_input_entry(&info->inputMenu.input,c);
     }
 }
 
@@ -255,8 +259,19 @@ void menu_update(struct pok_game_info* info)
     if (info->gameContext == pok_game_menu_context) {
         if (info->messageMenu.base.active && info->messageMenu.base.focused) {
             if (!pok_text_context_update(&info->messageMenu.text,info->updateTimeout.elapsed) && info->messageMenu.text.finished) {
+                /* send 'completed' intermsg as result of message menu */
                 info->messageMenu.base.focused = FALSE;
                 pok_intermsg_setup(&info->updateInterMsg,pok_completed_intermsg,INTERMSG_DELAY);
+                info->updateInterMsg.ready = TRUE;
+                info->gameContext = pok_game_intermsg_context;
+            }
+        }
+        else if (info->inputMenu.base.active && info->inputMenu.base.focused) {
+            if (!pok_text_input_update(&info->inputMenu.input,info->updateTimeout.elapsed) && info->inputMenu.input.finished) {
+                /* send string input intermsg as result of input menu */
+                info->inputMenu.base.focused = FALSE;
+                pok_intermsg_setup(&info->updateInterMsg,pok_stringinput_intermsg,INTERMSG_DELAY);
+                pok_text_input_read(&info->inputMenu.input,info->updateInterMsg.payload.string);
                 info->updateInterMsg.ready = TRUE;
                 info->gameContext = pok_game_intermsg_context;
             }
@@ -571,17 +586,18 @@ void intermsg_logic(struct pok_game_info* info)
         pok_game_modify_enter(&info->updateInterMsg);
         if (info->ioInterMsg.ready && info->updateInterMsg.processed) {
             /* we got a response: process it immediately so that it's synchronized with the
-               initial input operation */
+               initial input operation; also, the remote thread processed the update
+               intermsg, so discard it */
             pok_intermsg_discard(&info->updateInterMsg);
             if (info->ioInterMsg.kind == pok_noop_intermsg) {
                 /* this is a noop response (no action to be taken) */
                 intermsg_noop(info);
             }
             else if (info->ioInterMsg.kind == pok_menu_intermsg) {
-                /* begin a menu sequence; look at the modifier flags to determine which
-                   kind of menu to create; we only create a single menu at a time until; this
-                   lets the menus "stack up" on the screen; a future no-op intermsg will close
-                   them all when the menu sequence is finished */
+                /* begin a menu sequence; look at the modifier flags to determine which kind
+                   of menu to create; we only create a single menu at a time until the current
+                   menu is finished; this lets the menus "stack up" on the screen; a future
+                   no-op intermsg will close them all when the menu sequences are finished */
                 pok_game_activate_menu(info,info->ioInterMsg.modflags,info->ioInterMsg.payload.string);
                 info->gameContext = pok_game_menu_context;
             }

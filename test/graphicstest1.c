@@ -91,9 +91,11 @@ int graphics_main_test1()
     sz = (struct pok_size){ sys->windowSize.columns * 4, sys->windowSize.rows * 2 };
     pok_text_input_init(&textInput,&sz);
     /*textInput.base.textSize = 2.0;*/
+    textInput.base.defaultColor = pok_menu_color_white;
     pok_text_input_assign(&textInput,"Enter " POK_TEXT_COLOR_BLUE "text" POK_TEXT_COLOR_WHITE ":");
     textInput.base.progress = textInput.base.curcount;
     textInput.base.finished = TRUE;
+    textInput.accepting = TRUE;
     contexts[2] = &textInput;
 
     pok_graphics_subsystem_begin(sys);

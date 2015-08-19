@@ -67,6 +67,7 @@ struct pok_text_input
     int32_t pos;  /* edit position (characters inserted here) */
 
     int8_t cursorColor; /* 'pok_menu_color' flag representing cursor fill color*/
+    bool_t accepting; /* if non-zero, then the text input is ready to accept input */
     bool_t finished; /* if non-zero, then the user has finished entering input */
 };
 void pok_text_input_init(struct pok_text_input* ti,const struct pok_size* region);
@@ -75,6 +76,7 @@ void pok_text_input_assign(struct pok_text_input* ti,const char* prompt);
 void pok_text_input_reset(struct pok_text_input* ti);
 void pok_text_input_entry(struct pok_text_input* ti,char c);
 bool_t pok_text_input_ctrl_key(struct pok_text_input* ti,enum pok_input_key key);
+bool_t pok_text_input_update(struct pok_text_input* ti,uint32_t ticks);
 void pok_text_input_read(struct pok_text_input* ti,struct pok_string* buffer);
 void pok_text_input_render(struct pok_text_input* ti);
 
@@ -110,6 +112,12 @@ struct pok_input_menu
     struct pok_menu base;
     struct pok_text_input input;  /* menu input object */
 };
+void pok_input_menu_init(struct pok_input_menu* menu,const struct pok_graphics_subsystem* sys);
+void pok_input_menu_delete(struct pok_input_menu* menu);
+void pok_input_menu_ctrl_key(struct pok_input_menu* menu,enum pok_input_key key);
+void pok_input_menu_activate(struct pok_input_menu* menu,const char* prompt);
+void pok_input_menu_deactivate(struct pok_input_menu* menu);
+void pok_input_menu_render(struct pok_input_menu* menu);
 
 /* pok_selection_menu: represents a menu where each text line is a selection choice; the
    menu automatically sizes according to the longest text string item */

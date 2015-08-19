@@ -166,7 +166,7 @@ void pok_intermsg_discard(struct pok_intermsg* im)
     switch (im->kind) {
     case pok_stringinput_intermsg:
     case pok_menu_intermsg:
-        pok_string_delete(im->payload.string);
+        pok_string_free(im->payload.string);
         break;
     default:
         break;
@@ -182,6 +182,8 @@ static void pok_game_render_menus(const struct pok_graphics_subsystem* sys,struc
     /* this function is a high-level entry to rendering the game's menus */
     if (game->messageMenu.base.active)
         pok_message_menu_render(&game->messageMenu);
+    else if (game->inputMenu.base.active)
+        pok_input_menu_render(&game->inputMenu);
 
     (void)sys;
 }
@@ -254,10 +256,12 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     pok_intermsg_setup(&game->updateInterMsg,pok_uninitialized_intermsg,0);
     pok_intermsg_setup(&game->ioInterMsg,pok_uninitialized_intermsg,0);
     pok_message_menu_init(&game->messageMenu,sys);
+    pok_input_menu_init(&game->inputMenu,sys);
     return game;
 }
 void pok_game_free(struct pok_game_info* game)
 {
+    pok_input_menu_delete(&game->inputMenu);
     pok_message_menu_delete(&game->messageMenu);
     pok_intermsg_discard(&game->updateInterMsg);
     pok_intermsg_discard(&game->ioInterMsg);
@@ -347,9 +351,18 @@ void pok_game_activate_menu(struct pok_game_info* game,enum pok_menu_kind menuKi
             game->messageMenu.base.active = TRUE;
         }
     }
+    else if (menuKind == pok_input_menu) {
+        if (assignText != NULL)
+            pok_input_menu_activate(&game->inputMenu,assignText->buf);
+        else {
+            /* activate with no text [ pok_input_menu_activate(&game->inputMenu,"") ] */
+            pok_text_context_reset(&game->inputMenu.input.base);
+            game->inputMenu.base.active = TRUE;
+        }
+    }
 }
 void pok_game_deactivate_menus(struct pok_game_info* game)
 {
     pok_message_menu_deactivate(&game->messageMenu);
-
+    pok_input_menu_deactivate(&game->inputMenu);
 }
