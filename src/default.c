@@ -64,6 +64,7 @@ void setup_tileman(struct pok_tile_manager* tman)
 
 void setup_spriteman(struct pok_sprite_manager* sman)
 {
+    /* load sprite manager for the default game */
     struct pok_string* path;
     path = pok_get_install_root_path();
     pok_string_concat(path,POKGAME_DEFAULT_DIRECTORY POKGAME_SSS_IMAGE);
@@ -87,7 +88,8 @@ struct pok_map* create_default_map()
 
 struct pok_game_info* default_io_proc(struct pok_game_info* game)
 {
-    /* loop while the window is still open */
+    /* loop while the window is still open: this procedure will handle
+       default game IO operations */
     while ( pok_graphics_subsystem_has_window(game->sys) ) {
 
 

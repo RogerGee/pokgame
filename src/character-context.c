@@ -15,12 +15,6 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
         return NULL;
     }
     context->character = character;
-    /* set map and chunk references to NULL initially; they will be used by the
-       implementation; if they remain NULL, then this means that the character
-       should not be managed by the normal character logic functionality (such as
-       with the user's character); such an NPC is called a "ghost" character */
-    context->map = NULL;
-    context->chunk = NULL;
     /* get frame based on initial direction */
     context->frame = pok_to_frame_direction(character->direction);
     context->offset[0] = 0;
@@ -28,6 +22,8 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
     context->shadow = FALSE;
     context->eff = pok_character_no_effect;
     context->resolveFrame = 0;
+    context->spinRate = 0;
+    context->spinTicks = 0;
     context->granularity = 8;
     context->slowDown = FALSE;
     context->aniTicks = 0;
@@ -40,21 +36,22 @@ static void pok_character_context_render(struct pok_character_context* context,c
     const struct pok_sprite_manager* sman,const struct pok_graphics_subsystem* sys)
 {
     /* check to see if the character is within the viewing area defined by the map render context */
-    if (context->character->mapNo == mapRC->map->mapNo) { /* same map */
+    struct pok_character* ch = context->character;
+    if (ch->mapNo == mapRC->map->mapNo) { /* same map */
         int i;
         for (i = 0;i < 4;++i) {
-            if (mapRC->info[i].chunk != NULL && mapRC->info[i].chunkPos.X == context->character->chunkPos.X
-                      && mapRC->info[i].chunkPos.Y == context->character->chunkPos.Y) { /* same chunk */
+            if (mapRC->info[i].chunk != NULL && mapRC->info[i].chunkPos.X == ch->chunkPos.X
+                      && mapRC->info[i].chunkPos.Y == ch->chunkPos.Y) { /* same chunk */
                 int32_t cols, rows;
-                cols = context->character->tilePos.column - mapRC->info[i].loc.column;
+                cols = ch->tilePos.column - mapRC->info[i].loc.column;
                 if (cols >= 0 && cols < mapRC->info[i].across) { /* same viewable column space */
-                    rows = context->character->tilePos.row - mapRC->info[i].loc.row;
+                    rows = ch->tilePos.row - mapRC->info[i].loc.row;
                     if (rows >= 0 && rows < mapRC->info[i].down) { /* same viewable row space */
                         int32_t x, y;
                         x = mapRC->info[i].px + cols * sys->dimension + mapRC->offset[0] + sys->playerOffsetX;
                         y = mapRC->info[i].py + rows * sys->dimension + mapRC->offset[1] + sys->playerOffsetY;
                         pok_image_render(
-                            sman->spriteassoc[context->character->spriteIndex][context->frame],
+                            sman->spriteassoc[ch->spriteIndex][context->frame],
                             x + context->offset[0],
                             y + context->offset[1] );
                         if (context->shadow) {
@@ -78,6 +75,10 @@ static void pok_character_context_render(struct pok_character_context* context,c
 }
 bool_t pok_character_context_move(struct pok_character_context* context,enum pok_direction direction)
 {
+    /* this function updates a character in the specified direction; this is the basic logic that the
+       engine performs on NPC's; the character is never updated: just an update is performed for
+       animation's sake */
+
     return FALSE;
 }
 void pok_character_context_set_player(struct pok_character_context* context,struct pok_map_render_context* mapRC)
@@ -147,6 +148,30 @@ void pok_character_context_set_update(struct pok_character_context* context,
         /* let 'context->update' hold the number of iterations for the update; let a jump
            take twice as long as a normal update */
         context->update = context->granularity << 1;
+    }
+    else if (effect == pok_character_spin_effect) {
+        /* the spin effect causes the player to spin in place; the parameter determines
+           how many update cycles occur before the player is spun next; we must take (at
+           least) as much time as is required to spin the player around once */
+        int t = pok_direction_cycle_distance(context->character->direction,direction,1,FALSE);
+        context->resolveFrame = pok_to_frame_direction(direction);
+
+        if (parameter > 0) {
+            /* remember spin rate in this variable so we can advance the
+               animation frames at the specified interval */
+            context->spinRate = parameter;
+        }
+        else {
+            if (context->spinRate == 0)
+                pok_error(pok_error_fatal,"character context spin rate was zero in pok_character_context_set_update()",1);
+            /* remember spin rate from previous iteration */
+            parameter = context->spinRate;
+        }
+
+        /* 'context->update' will hold the number of iterations for the update */
+        context->update = t;
+        if (context->update == 0)
+            context->update = 1;
     }
 
     /* reset tick counter if specified; otherwise keep any extra time
@@ -263,6 +288,31 @@ static bool_t pok_character_context_jump_update(struct pok_character_context* co
     }
     return FALSE;
 }
+static bool_t pok_character_context_spin_update(struct pok_character_context* context,int gameTicks)
+{
+    if (context->update > 0) {
+        /* determine number of spin cycles that have elapsed */
+        uint16_t t = (context->spinTicks += gameTicks) / context->spinRate;
+        context->spinTicks %= context->spinRate;
+
+        if (t > 0) {
+            /* for good configuration, t should be close to 1; we apply the correct number to imitate (as best we
+               can) the desired spin rate */
+            for (uint16_t i = 0;i < t;++i) {
+                /* change the animation frame by one counter-clockwise rotation */
+                context->character->direction = pok_direction_counterclockwise_next(context->character->direction);
+                context->frame = pok_to_frame_direction(context->character->direction);
+            }
+            --context->update;
+        }
+
+        return FALSE;
+    }
+    context->character->direction = pok_from_frame_direction(context->resolveFrame);
+    context->frame = context->resolveFrame;
+
+    return TRUE;
+}
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks)
 {
     if (context->update) {
@@ -289,6 +339,8 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                 return pok_character_context_slide_update(context,inc);
             else if (context->eff == pok_character_jump_effect)
                 return pok_character_context_jump_update(context,inc);
+            else if (context->eff == pok_character_spin_effect)
+                return pok_character_context_spin_update(context,ticks);
         }
     }
     return FALSE;

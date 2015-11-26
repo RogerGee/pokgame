@@ -81,6 +81,13 @@ enum pok_direction
         : (dir==pok_direction_left || dir==pok_direction_right ? pok_direction_up : pok_direction_none))
 #define pok_direction_orthog2(dir) (dir==pok_direction_up || dir==pok_direction_down ? (int)pok_direction_right \
         : (dir==pok_direction_left || dir==pok_direction_right ? pok_direction_down : pok_direction_none))
+#define pok_direction_clockwise_next(dir) (dir==pok_direction_up ? pok_direction_right : \
+        (dir==pok_direction_right ? pok_direction_down : (dir==pok_direction_down ? pok_direction_left : \
+            (dir==pok_direction_left ? pok_direction_up : pok_direction_none))))
+#define pok_direction_counterclockwise_next(dir) (dir==pok_direction_up ? pok_direction_left : \
+        (dir==pok_direction_left ? pok_direction_down : (dir==pok_direction_down ? pok_direction_right : \
+            (dir==pok_direction_right ? pok_direction_up : pok_direction_none))))
+int pok_direction_cycle_distance(enum pok_direction start,enum pok_direction end,int times,bool_t clockwise);
 
 /* callback types */
 typedef void (*pok_error_callback)(int id,int kind);

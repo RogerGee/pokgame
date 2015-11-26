@@ -306,6 +306,25 @@ int game_io(void* p)
     finish:
         pok_game_modify_exit(&game->updateInterMsg);
 
+        /* test spin animation */
+        static bool_t spinAttempt = FALSE;
+        if (game->playerContext->character->tilePos.column == 5 && game->playerContext->character->tilePos.row == 3) {
+            if (!spinAttempt && !game->playerContext->update) {
+                pok_game_modify_enter(game->playerContext);
+                pok_character_context_set_update(
+                    game->playerContext,
+                    pok_direction_down,
+                    pok_character_spin_effect,
+                    game->playerContext->aniTicksAmt,
+                    FALSE );
+                pok_game_modify_exit(game->playerContext);
+                spinAttempt = TRUE;
+            }
+        }
+        else {
+            spinAttempt = FALSE;
+        }
+
         pok_timeout_no_elapsed(&game->ioTimeout);
     }
     pok_string_delete(&stringbuilder);

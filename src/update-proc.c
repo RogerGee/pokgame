@@ -284,17 +284,18 @@ bool_t check_collisions(struct pok_game_info* info)
 {
     size_t iter;
     bool_t status = TRUE;
-    /* check against all player contexts in the character render context; this
-       procedure assumes that the map render context is currently locked */
+    /* check against all character contexts in the character render context; this
+       procedure assumes that the map render context is currently locked; we only
+       check NPCs for character collisions */
     pok_game_lock(info->charRC);
     for (iter = 0;iter < info->charRC->chars.da_top;++iter) {
+        struct pok_character* ch;
         struct pok_character_context* ctx;
         ctx = info->charRC->chars.da_data[iter];
-        if (ctx->character->mapNo == info->mapRC->map->mapNo
-            && ctx->character->chunkPos.X == info->mapRC->chunkpos.X
-            && ctx->character->chunkPos.Y == info->mapRC->chunkpos.Y
-            && ctx->character->tilePos.column == info->mapRC->relpos.column
-            && ctx->character->tilePos.row == info->mapRC->relpos.row)
+        ch = ctx->character;
+        if (!ch->isPlayer && ch->mapNo == info->mapRC->map->mapNo && ch->chunkPos.X == info->mapRC->chunkpos.X
+            && ch->chunkPos.Y == info->mapRC->chunkpos.Y && ch->tilePos.column == info->mapRC->relpos.column
+            && ch->tilePos.row == info->mapRC->relpos.row)
         {
             status = FALSE;
             break;

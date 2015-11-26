@@ -172,3 +172,23 @@ int pok_point_compar(struct pok_point* left,struct pok_point* right)
         return 1;
     return 0;
 }
+
+/* pok_direction_operations */
+int pok_direction_cycle_distance(enum pok_direction start,enum pok_direction end,int times,bool_t clockwise)
+{
+    /* compute how many moves it takes to get from 'start' direction
+       to 'end' to do at least 'times' number of cycles */
+    int c = 0;
+    if (start!=pok_direction_none && end!=pok_direction_none) {
+        do {
+            if (clockwise)
+                start = pok_direction_clockwise_next(start);
+            else
+                start = pok_direction_counterclockwise_next(start);
+            ++c;
+        } while (start != end);
+        if (times > 0)
+            c += (times - c/4) * 4;
+    }
+    return c;
+}

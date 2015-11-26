@@ -15,8 +15,7 @@ enum pok_character_effect
     pok_character_no_effect,
     pok_character_normal_effect,    /* the character moves around in a normal fashion (parameter is dimension) */
     pok_character_jump_effect,      /* the character jumps over a specified number of tiles (parameter is dimension) */
-    pok_character_spin_off_effect,  /* the character spins to warp off the map (parameter is acceleration) */
-    pok_character_spin_on_effect,   /* the character spins to warp on to the map (parameter is de-acceleration) */
+    pok_character_spin_effect,      /* the character spins in place (parameter is spin delay) */
     pok_character_slide_effect      /* the character slides to the next tile (parameter is dimension) */
 };
 
@@ -26,16 +25,16 @@ enum pok_character_effect
 struct pok_character_context
 {
     struct pok_character* character;  /* the character to be drawn */
-    struct pok_map* map;              /* cache a reference to the current map */
-    struct pok_map_chunk* chunk;      /* cache a reference to the current map chunk */
     uint8_t frame;                    /* which frame is used to render the character (direction is implied here) */
     int offset[2];                    /* x/y offset from current position (in pixels; used for moving sprites/effects) */
     bool_t shadow;                    /* if non-zero, a shadow is drawn on the occupied tile */
     enum pok_character_effect eff;    /* specifies the effect to use */
     uint8_t resolveFrame;             /* resolution frame */
+    uint16_t spinRate;                /* character spin rate */
+    uint32_t spinTicks;               /* tick counter for spin animation */
     uint16_t granularity;             /* granularity of animation (how many update cycles does it take to complete?) */
-    bool_t slowDown;                  /* takes twice as long to animate (for effect) */
-    uint32_t aniTicks;                /* animation ticks up to this point */
+    bool_t slowDown;                  /* takes twice as long for move animation (for effect) */
+    uint32_t aniTicks;                /* animation (character movement) ticks up to this point */
     uint32_t aniTicksAmt;             /* number of animation ticks needed before each update */
     uint8_t frameAlt;                 /* sprite frame alternation counter */
     bool_t update;                    /* is the character context being updated? */
