@@ -15,13 +15,13 @@
 const GLfloat* MENU_COLORS[] = {
     (const GLfloat[]){1.0, 1.0, 1.0}, /* white */
     (const GLfloat[]){0.0, 0.0, 0.0}, /* black */
-    (const GLfloat[]){0.167480315, 0.167480315, 0.167480315}, /* gray */
+    (const GLfloat[]){0.167480315f, 0.167480315f, 0.167480315f}, /* gray */
     (const GLfloat[]){0.0, 0.0, 1.0}, /* blue */
     (const GLfloat[]){1.0, 0.0, 0.0}, /* red */
-    (const GLfloat[]){0.498039216, 0.0, 0.498039216}, /* purple */
+    (const GLfloat[]){0.498039216f, 0.0, 0.498039216f}, /* purple */
     (const GLfloat[]){1.0, 1.0, 0.0}, /* yellow */
-    (const GLfloat[]){1.0, 0.549019608, 0.0}, /* orange */
-    (const GLfloat[]){0.0, 0.501960784, 0.0} /* green */
+    (const GLfloat[]){1.0, 0.549019608f, 0.0}, /* orange */
+    (const GLfloat[]){0.0, 0.501960784f, 0.0} /* green */
 };
 
 /* glyph functionality */
@@ -605,8 +605,8 @@ void pok_text_context_render(struct pok_text_context* text)
     glColor3fv(MENU_COLORS[lastColor-1]);
 
     /* compute adjustments based on glyph width and height and text size */
-    w = POK_GLYPH_WIDTH * text->textSize;
-    h = POK_GLYPH_HEIGHT * text->textSize;
+    w =(int32_t) (POK_GLYPH_WIDTH * text->textSize);
+    h = (int32_t) (POK_GLYPH_HEIGHT * text->textSize);
 
     /* render just the viewable lines of text (defined by text region) */
     c = 0;
@@ -880,8 +880,8 @@ void pok_text_input_render(struct pok_text_input* ti)
         int32_t x, X, y, Y, w, h;
 
         /* compute adjustment amounts based on glyph dimensions and text size */
-        w = POK_GLYPH_WIDTH * ti->base.textSize;
-        h = POK_GLYPH_HEIGHT * ti->base.textSize;
+        w = (int32_t) (POK_GLYPH_WIDTH * ti->base.textSize);
+        h = (int32_t) (POK_GLYPH_HEIGHT * ti->base.textSize);
 
         /* draw the cursor (a box over which a glyph may be painted) */
         x = ti->base.x + ti->pos * w;
@@ -952,8 +952,8 @@ void pok_message_menu_init(struct pok_message_menu* menu,const struct pok_graphi
     menu->base.borderColor = pok_menu_color_black;
     menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
     menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
-    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
-    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
     pok_text_context_init(&menu->text,&textRegion);
     menu->text.textSize = MESSAGE_MENU_TEXT_SIZE;
     menu->text.defaultColor = pok_menu_color_black;
@@ -1004,8 +1004,8 @@ void pok_input_menu_init(struct pok_input_menu* menu,const struct pok_graphics_s
     menu->base.borderColor = pok_menu_color_black;
     menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
     menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
-    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
-    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
+    textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
     pok_text_input_init(&menu->input,&textRegion);
     menu->input.base.textSize = MESSAGE_MENU_TEXT_SIZE;
     menu->input.base.defaultColor = pok_menu_color_black;

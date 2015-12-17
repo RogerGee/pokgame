@@ -1,3 +1,4 @@
+#include "error.h"
 #include <Windows.h>
 
 #define MAX_SEMAPHORE 10

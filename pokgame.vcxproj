@@ -5,8 +5,16 @@
       <Configuration>Debug</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="TestDebug|Win32">
+      <Configuration>TestDebug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|Win32">
       <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="TestRelease|Win32">
+      <Configuration>TestRelease</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
   </ItemGroup>
@@ -20,7 +28,18 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='TestDebug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='TestRelease|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
@@ -32,12 +51,25 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='TestDebug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='TestRelease|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='TestDebug|Win32'">
+    <TargetName>$(ProjectName)-test</TargetName>
+    <TargetExt>.exe</TargetExt>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='TestRelease|Win32'">
+    <TargetName>$(ProjectName)-test</TargetName>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -45,6 +77,21 @@
       <SDLCheck>true</SDLCheck>
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>POKGAME_VISUAL_STUDIO;POKGAME_WIN32;_CRT_SECURE_NO_WARNINGS;POKGAME_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>dstructs.lib;png.lib;OpenGL32.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='TestDebug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <CompileAs>CompileAsC</CompileAs>
+      <PreprocessorDefinitions>POKGAME_VISUAL_STUDIO;POKGAME_WIN32;_CRT_SECURE_NO_WARNINGS;POKGAME_DEBUG;POKGAME_TEST;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\Roger\Code\pokgame\pokgame\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -68,6 +115,23 @@
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='TestRelease|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>POKGAME_VISUAL_STUDIO;POKGAME_WIN32;_CRT_SECURE_NO_WARNINGS;POKGAME_DEBUG;POKGAME_TEST;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <CompileAs>CompileAsC</CompileAs>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>C:\Users\Roger\Code\pokgame\pokgame\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>dstructs.lib;png.lib;OpenGL32.lib;Ws2_32.lib;Shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <SubSystem>Console</SubSystem>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\character-context.c" />
     <ClCompile Include="src\character.c" />
@@ -75,17 +139,20 @@
     <ClCompile Include="src\default.c" />
     <ClCompile Include="src\effect.c" />
     <ClCompile Include="src\error.c" />
+    <ClCompile Include="src\gamelock.c" />
     <ClCompile Include="src\graphics-win32.c" />
     <ClCompile Include="src\graphics.c" />
     <ClCompile Include="src\image.c" />
     <ClCompile Include="src\io-proc.c" />
     <ClCompile Include="src\map-context.c" />
     <ClCompile Include="src\map.c" />
+    <ClCompile Include="src\menu.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\netobj.c" />
     <ClCompile Include="src\parser.c" />
     <ClCompile Include="src\pok-util.c" />
     <ClCompile Include="src\pokgame.c" />
+    <ClCompile Include="src\primatives.c" />
     <ClCompile Include="src\spriteman.c" />
     <ClCompile Include="src\standard1.c" />
     <ClCompile Include="src\tile.c" />
@@ -93,26 +160,47 @@
     <ClCompile Include="src\types.c" />
     <ClCompile Include="src\update-proc.c" />
     <ClCompile Include="src\user.c" />
+    <ClCompile Include="test\graphicstest1.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="test\main.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="test\maintest.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="test\nettest.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\character-render.h" />
+    <ClInclude Include="src\character-context.h" />
     <ClInclude Include="src\character.h" />
     <ClInclude Include="src\config.h" />
     <ClInclude Include="src\default.h" />
     <ClInclude Include="src\effect.h" />
     <ClInclude Include="src\error.h" />
+    <ClInclude Include="src\gamelock.h" />
     <ClInclude Include="src\graphics-impl.h" />
     <ClInclude Include="src\graphics.h" />
     <ClInclude Include="src\image.h" />
-    <ClInclude Include="src\map-render.h" />
+    <ClInclude Include="src\map-context.h" />
     <ClInclude Include="src\map.h" />
+    <ClInclude Include="src\menu.h" />
     <ClInclude Include="src\net.h" />
     <ClInclude Include="src\netobj.h" />
     <ClInclude Include="src\parser.h" />
+    <ClInclude Include="src\pok-stdenum.h" />
     <ClInclude Include="src\pok.h" />
     <ClInclude Include="src\pokgame.h" />
+    <ClInclude Include="src\primatives.h" />
     <ClInclude Include="src\protocol.h" />
     <ClInclude Include="src\spriteman.h" />
+    <ClInclude Include="src\standard1.h" />
     <ClInclude Include="src\tile.h" />
     <ClInclude Include="src\tileman.h" />
     <ClInclude Include="src\types.h" />

@@ -40,7 +40,7 @@ int main(int argc,const char* argv[])
     }
 
     /* find home directory */
-    if ((HOME = getenv("HOME")) == NULL) {
+    if ((HOME = getenv("HOME")) == NULL && (HOME = getenv("USERPROFILE")) == NULL) {
         fprintf(stderr,"%s: couldn't find home directory\n",argv[0]);
         exit(EXIT_FAILURE);
     }

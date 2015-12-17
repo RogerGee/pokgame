@@ -3,12 +3,12 @@
 #include "tileman.h"
 #include "map-context.h"
 #include "menu.h"
+#include "gamelock.h"
 #include "error.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include <unistd.h>
 
 extern const char* POKGAME_NAME;
 extern const char* HOME;
@@ -156,6 +156,7 @@ int graphics_main_test1()
             }
         }
         else if (strcmp(tok,"keylisten") == 0) {
+            static struct pok_timeout_interval inv = { 1000, 0, 0, { 0, 0 } };
             puts("listening for keys");
             for (i = 0;i < 10;++i) {
                 if (pok_graphics_subsystem_keyboard_query(sys,pok_input_key_ENTER,TRUE))
@@ -167,7 +168,7 @@ int graphics_main_test1()
                 if (pok_graphics_subsystem_keyboard_query(sys,pok_input_key_DOWN,FALSE))
                     puts("DOWN");
                 puts("---");
-                sleep(1);
+                pok_timeout_no_elapsed(&inv);
             }
         }
         else if (strcmp(tok,"offset") == 0) {

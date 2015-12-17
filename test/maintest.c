@@ -33,7 +33,7 @@ static void load_characters();
 static void aux_graphics_load();
 static void aux_graphics_unload();
 static int play_game();
-static int game_io();
+static int game_io(void*);
 
 /* entry point */
 int main_test()

@@ -2,6 +2,7 @@
 #ifndef POKGAME_PRIMATIVES_H
 #define POKGAME_PRIMATIVES_H
 #include "opengl.h"
+#include "types.h"
 
 void pok_primative_setup_modelview(int32_t x,int32_t y,int32_t width,int32_t height);
 

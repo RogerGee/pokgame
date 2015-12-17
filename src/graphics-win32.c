@@ -193,6 +193,10 @@ void pok_graphics_subsystem_unlock(struct pok_graphics_subsystem* sys)
 {
     ReleaseMutex(sys->impl->mutex);
 }
+void pok_graphics_subsystem_render_loop(struct pok_graphics_subsystem* sys)
+{
+    RenderLoop(sys);
+}
 
 DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
 {
@@ -207,7 +211,7 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
     gl_init(sys->wwidth, sys->wheight);
 
     /* if specified, game load routine */
-    if (sys-loadRoutine != NULL)
+    if (sys->loadRoutine != NULL)
         sys->loadRoutine();
 
     while (sys->impl->rendering) {
