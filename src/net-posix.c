@@ -636,6 +636,7 @@ struct pok_thread
     int retval;                  /* the thread's return value */
     void* param;                 /* optional parameter for the thread's entry point */
     pthread_t threadID;          /* POSIX thread-id */
+    bool_t hasTerm;              /* flag whether the thread has terminated */
     pok_thread_entry entryPoint; /* thread entry point */
 };
 
@@ -657,25 +658,31 @@ struct pok_thread* pok_thread_new(pok_thread_entry entryPoint,void* parameter)
     thread->retval = -1;
     thread->param = parameter;
     thread->threadID = (pthread_t)-1;
+    thread->hasTerm = TRUE;
     thread->entryPoint = entryPoint;
     return thread;
 }
 void pok_thread_free(struct pok_thread* thread)
 {
     /* make sure we have joined back with the thread */
-    if (thread->threadID != (pthread_t)-1)
+    if (!thread->hasTerm)
         pok_thread_join(thread);
     free(thread);
 }
 void pok_thread_start(struct pok_thread* thread)
 {
+    /* start the thread process; mark hasTerm FALSE - this is safer
+       than relying on some value for threadID */
+    thread->hasTerm = FALSE;
     if (pthread_create(&thread->threadID,NULL,(void*(*)(void*))thread_proc,thread) != 0)
         pok_error(pok_error_fatal,"fail pok_thread_start()");
 }
 int pok_thread_join(struct pok_thread* thread)
 {
+    /* join back up with the thread; this blocks until the thread has
+       terminated */
     if (pthread_join(thread->threadID,NULL) != 0)
         pok_error(pok_error_fatal,"fail pok_thread_join()");
-    thread->threadID = (pthread_t)-1;
+    thread->hasTerm = TRUE; /* flag that the thread has terminated */
     return thread->retval;
 }
