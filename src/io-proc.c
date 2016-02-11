@@ -160,8 +160,13 @@ enum pok_io_result run_game(struct pok_game_info* game)
 
     }
 
-    /* reset the window's title bar text back to its title for the default version */
-    pok_graphics_subsystem_assign_title(game->sys,"default");
+    /* reset the window's title bar text back to its title for the default version
+       as well as default parameters if we modified them */
+    if (!info.usingDefault)
+        /* this sets the title bar to 'default' as well */
+        pok_graphics_subsystem_default(game->sys);
+    else
+        pok_graphics_subsystem_assign_title(game->sys,"default");
 
     pok_netobj_readinfo_delete(&info.readInfo);
     pok_string_delete(&info.string);

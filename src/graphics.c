@@ -122,6 +122,10 @@ bool_t pok_graphics_subsystem_default(struct pok_graphics_subsystem* sys)
     sys->playerOffsetY = DEFAULT_PLAYER_OFFSET_Y;
     pok_graphics_subsystem_after_assign(sys);
     pok_graphics_subsystem_assign_title(sys,"default");
+    if (sys->blacktile != NULL) {
+        pok_image_free(sys->blacktile);
+        sys->blacktile = NULL;
+    }
     if ((sys->blacktile = pok_image_new_rgb_fillref(sys->dimension,sys->dimension,BLACK_PIXEL)) == NULL)
         return FALSE;
     return TRUE;

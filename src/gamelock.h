@@ -12,9 +12,10 @@ struct pok_timeout_interval
     /* timeout duration */
     uint32_t mseconds;
     uint32_t useconds;
+    uint32_t nseconds;
 
     /* how many ticks actually elapsed since the last timeout;
-    a tick is defined as a single millisecond */
+       a tick is defined as a single millisecond */
     uint32_t elapsed;
     uint64_t _before[2];
 };

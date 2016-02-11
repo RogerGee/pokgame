@@ -30,6 +30,7 @@ void pok_timeout_interval_reset(struct pok_timeout_interval* t,uint32_t mseconds
 {
     t->mseconds = mseconds;
     t->useconds = mseconds * 1000;
+    t->nseconds = mseconds * 1000000;
     t->elapsed = 0;
 }
 

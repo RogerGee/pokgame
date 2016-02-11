@@ -1,5 +1,6 @@
 /* pokgame-posix.c - pokgame */
 #include <pthread.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifdef POKGAME_OSX
@@ -147,9 +148,12 @@ int gamelock_compar(const struct gamelock* left,const struct gamelock* right)
 /* implement 'pok_timeout' from 'pokgame.h' */
 void pok_timeout(struct pok_timeout_interval* interval)
 {
+    struct timespec ts;
     struct timespec before, after;
     clock_gettime(CLOCK_MONOTONIC,&before);
-    usleep(interval->useconds);
+    ts.tv_sec = 0;
+    ts.tv_nsec = interval->nseconds;
+    nanosleep(&ts,NULL);
     clock_gettime(CLOCK_MONOTONIC,&after);
     interval->elapsed = ((uint64_t)1000000000 * (after.tv_sec - before.tv_sec) + (after.tv_nsec - before.tv_nsec)) / 1000000;
 }
@@ -157,5 +161,8 @@ void pok_timeout(struct pok_timeout_interval* interval)
 void pok_timeout_no_elapsed(struct pok_timeout_interval* interval)
 {
     /* this variant just does the sleep; it does not compute and set the elapsed time */
-    usleep(interval->useconds);
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = interval->nseconds;
+    nanosleep(&ts,NULL);
 }
