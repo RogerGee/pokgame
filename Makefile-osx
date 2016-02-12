@@ -13,9 +13,9 @@ endif
 endif
 
 # output files
-PROGRAM_NAME = pokgame.bin
-PROGRAM_NAME_DEBUG = pokgame-debug.bin
-PROGRAM_NAME_TEST = pokgame-test.bin
+PROGRAM_NAME = pokgame
+PROGRAM_NAME_DEBUG = pokgame-debug
+PROGRAM_NAME_TEST = pokgame-test
 LIBRARY_REALNAME = libpokgame.dylib.0.0.0
 LIBRARY_SONAME = libpokgame.dylib.0
 LIBRARY_LINKNAME = libpokgame.dylib
