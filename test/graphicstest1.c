@@ -156,7 +156,7 @@ int graphics_main_test1()
             }
         }
         else if (strcmp(tok,"keylisten") == 0) {
-            static struct pok_timeout_interval inv = { 1000, 0, 0, { 0, 0 } };
+            static struct pok_timeout_interval inv = { 1000, 1000*1000, 1000*1000000, 0, { 0, 0 } };
             puts("listening for keys");
             for (i = 0;i < 10;++i) {
                 if (pok_graphics_subsystem_keyboard_query(sys,pok_input_key_ENTER,TRUE))

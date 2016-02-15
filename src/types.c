@@ -158,8 +158,41 @@ void pok_string_reset(struct pok_string* str)
     pok_string_realloc(str,16);
 }
 
+/* pok_location */
+int pok_location_compar(const struct pok_location* left,const struct pok_location* right)
+{
+    /* similar to pok_point_compar() */
+    if (left->column < right->column)
+        return -1;
+    if (left->column > right->column)
+        return 1;
+    if (left->row < right->row)
+        return -1;
+    if (left->row > right->row)
+        return 1;
+    return 0;
+}
+
 /* pok_point */
-int pok_point_compar(struct pok_point* left,struct pok_point* right)
+struct pok_point* pok_point_new(int32_t X,int32_t Y)
+{
+    struct pok_point* pnt = malloc(sizeof(struct pok_point));
+    if (pnt != NULL) {
+        pnt->X = X;
+        pnt->Y = Y;
+    }
+    return pnt;
+}
+struct pok_point* pok_point_new_copy(const struct pok_point* point)
+{
+    struct pok_point* pnt = malloc(sizeof(struct pok_point));
+    if (pnt != NULL) {
+        pnt->X = point->X;
+        pnt->Y = point->Y;
+    }
+    return pnt;
+}
+int pok_point_compar(const struct pok_point* left,const struct pok_point* right)
 {
     /* compare points by X-coordinates; break ties with Y-coordinates */
     if (left->X < right->X)
@@ -191,4 +224,44 @@ int pok_direction_cycle_distance(enum pok_direction start,enum pok_direction end
             c += (times - c/4) * 4;
     }
     return c;
+}
+void pok_direction_add_to_point(enum pok_direction dir,struct pok_point* point)
+{
+    switch (dir) {
+    case pok_direction_up:
+        point->Y -= 1;
+        break;
+    case pok_direction_down:
+        point->Y += 1;
+        break;
+    case pok_direction_left:
+        point->X -= 1;
+        break;
+    case pok_direction_right:
+        point->X += 1;
+        break;
+    default:
+        break;
+    }
+}
+void pok_direction_add_to_location(enum pok_direction dir,struct pok_location* loc)
+{
+    /* the caller should be careful with this function (since 'column' and 'row'
+       are unsigned integers) */
+    switch (dir) {
+    case pok_direction_up:
+        loc->row -= 1;
+        break;
+    case pok_direction_down:
+        loc->row += 1;
+        break;
+    case pok_direction_left:
+        loc->column -= 1;
+        break;
+    case pok_direction_right:
+        loc->column += 1;
+        break;
+    default:
+        break;
+    }
 }

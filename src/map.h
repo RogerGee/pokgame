@@ -61,7 +61,7 @@ void pok_map_free(struct pok_map* map);
 void pok_map_init(struct pok_map* map);
 void pok_map_delete(struct pok_map* map);
 bool_t pok_map_configure(struct pok_map* map,const struct pok_size* chunkSize,const uint16_t firstChunk[],uint32_t length);
-bool_t pok_map_add_chunk(struct pok_map* map,
+struct pok_map_chunk* pok_map_add_chunk(struct pok_map* map,
     const struct pok_point* adjacency,
     enum pok_direction direction,
     const uint16_t chunkTiles[],

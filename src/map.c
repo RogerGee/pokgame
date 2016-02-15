@@ -388,14 +388,15 @@ bool_t pok_map_configure(struct pok_map* map,const struct pok_size* chunkSize,co
     pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
-bool_t pok_map_add_chunk(struct pok_map* map,
+struct pok_map_chunk* pok_map_add_chunk(struct pok_map* map,
     const struct pok_point* adjacency,
     enum pok_direction direction,
     const uint16_t chunkTiles[],
     uint32_t length)
 {
-    /* add a new chunk to the map that is adjacent to the chunk at position 'adjacency' 
-       in the specified 'direction'; assign the specified */
+    /* add a new chunk to the map that is adjacent to the chunk at position
+       'adjacency' in the specified 'direction'; assign the specified tile
+       information to the new chunk */
     if (map->origin != NULL) {
         uint16_t i, j;
         uint32_t k = 0;
@@ -403,35 +404,20 @@ bool_t pok_map_add_chunk(struct pok_map* map,
         struct pok_map_chunk* chunk;
         /* compute the position for the new chunk */
         pos = *adjacency;
-        switch (direction) {
-        case pok_direction_up:
-            --pos.Y;
-            break;
-        case pok_direction_down:
-            ++pos.Y;
-            break;
-        case pok_direction_left:
-            --pos.X;
-            break;
-        case pok_direction_right:
-            ++pos.X;
-            break;
-        default:
-            break;
-        }
+        pok_direction_add_to_point(direction,&pos);
         /* create the new chunk; this adds it to the map */
         chunk = pok_map_chunk_new(map,&pos);
-        if (chunk == NULL)
-            return FALSE;
-        /* assign chunk data; the tile data may repeat */
-        if (length > 0)
-            for (i = 0;i < map->chunkSize.rows;++i)
-                for (j = 0;j < map->chunkSize.columns;++j)
-                    map->origin->data[i][j].data.tileid = chunkTiles[k++ % length];
-        return TRUE;
+        if (chunk != NULL) {
+            /* assign chunk data; the tile data may repeat */
+            if (length > 0)
+                for (i = 0;i < map->chunkSize.rows;++i)
+                    for (j = 0;j < map->chunkSize.columns;++j)
+                        chunk->data[i][j].data.tileid = chunkTiles[k++ % length];
+        }
+        return chunk;
     }
     pok_exception_new_ex(pok_ex_map,pok_ex_map_not_loaded);
-    return FALSE;
+    return NULL;
 }
 bool_t pok_map_save(struct pok_map* map,struct pok_data_source* dsrc,bool_t complex)
 {

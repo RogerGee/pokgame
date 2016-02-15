@@ -440,8 +440,9 @@ uint16_t* DEFAULT_TILEMAN_TERRAIN_INFO[] = {
 
 const struct pok_location DEFAULT_MAP_START_LOCATION = { 7, 7 };
 const struct pok_location DEFAULT_MAP_WARP_LOCATION = { 5, 6 };
+const struct pok_location DEFAULT_MAP_CONSOLE_LOCATION = { 11, 3 };
 const struct pok_location DEFAULT_MAP_DOOR_LOCATIONS[] = {
-    { 7, 2 },  /* up */
+    { 7, 1 },  /* up */
     { 7, 15 }, /* down */
     { 0, 8 },  /* left */
     { 14, 8 }  /* right*/
@@ -465,3 +466,5 @@ const uint16_t DEFAULT_MAP_CHUNK[] = {
      686, 1355, 1356,  334, 1355, 1356,  334, 1755, 1355, 1356,  334, 1355, 1356,  334,  686, 1755,
      688,  674,  675,  675,  675,  675,  675,  687,  675,  675,  675,  675,  675,  676,  688, 1755
 };
+const uint16_t DEFAULT_MAP_PASSABLE_TILE = 1755;
+const uint16_t DEFAULT_MAP_DOOR_TILE = 687;

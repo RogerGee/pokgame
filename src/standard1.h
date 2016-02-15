@@ -26,8 +26,11 @@ extern uint16_t* DEFAULT_TILEMAN_TERRAIN_INFO[];
    or to run/connect to a version; the default map chunk is designed to be tiled */
 extern const struct pok_location DEFAULT_MAP_START_LOCATION;
 extern const struct pok_location DEFAULT_MAP_WARP_LOCATION;
+extern const struct pok_location DEFAULT_MAP_CONSOLE_LOCATION;
 extern const struct pok_location DEFAULT_MAP_DOOR_LOCATIONS[];
 extern const struct pok_size DEFAULT_MAP_CHUNK_SIZE;
 extern const uint16_t DEFAULT_MAP_CHUNK[];
+extern const uint16_t DEFAULT_MAP_PASSABLE_TILE;
+extern const uint16_t DEFAULT_MAP_DOOR_TILE;
 
 #endif

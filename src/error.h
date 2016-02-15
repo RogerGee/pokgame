@@ -15,6 +15,11 @@ enum pok_errorkind
 void pok_error(enum pok_errorkind kind,const char* message, ...);
 void pok_error_fromstack(enum pok_errorkind kind);
 #define pok_message(s, ...) pok_error(pok_error_message, s, __VA_ARGS__) /* note: variadic macro is C99 */
+#ifdef POKGAME_DEBUG
+#define pok_assert(expr) if (!(expr)) pok_error(pok_error_fatal,"assertion failed: %s",#expr)
+#else
+#define pok_assert(expr) (void) (0) /* do a noop */
+#endif
 
 /* exception categories are enumerated by the modules that generate them */
 enum pok_ex_kind

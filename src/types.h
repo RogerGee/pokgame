@@ -53,6 +53,7 @@ struct pok_location
     uint16_t column; /* x */
     uint16_t row; /* y */
 };
+int pok_location_compar(const struct pok_location* left,const struct pok_location* right);
 
 #define pok_unsigned_diff(a,b) (a>b ? a-b : b-a)
 
@@ -61,7 +62,9 @@ struct pok_point
     int32_t X;
     int32_t Y;
 };
-int pok_point_compar(struct pok_point* left,struct pok_point* right);
+struct pok_point* pok_point_new(int32_t X,int32_t Y);
+struct pok_point* pok_point_new_copy(const struct pok_point* point);
+int pok_point_compar(const struct pok_point* left,const struct pok_point* right);
 
 extern const struct pok_point ORIGIN;
 
@@ -88,6 +91,8 @@ enum pok_direction
         (dir==pok_direction_left ? pok_direction_down : (dir==pok_direction_down ? pok_direction_right : \
             (dir==pok_direction_right ? pok_direction_up : pok_direction_none))))
 int pok_direction_cycle_distance(enum pok_direction start,enum pok_direction end,int times,bool_t clockwise);
+void pok_direction_add_to_point(enum pok_direction dir,struct pok_point* point);
+void pok_direction_add_to_location(enum pok_direction dir,struct pok_location* loc);
 
 /* callback types */
 typedef void (*pok_error_callback)(int id,int kind);
