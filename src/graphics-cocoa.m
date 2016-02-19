@@ -211,11 +211,8 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
 {
     /* determine if the key is a 'pok_input_key'; if so, then flag its state
        in the key table; the keyUp functionality will reset the state later */
-    
+
     sys->impl->keytable[CocoaKeyCodeToKeyFlag([event keyCode])] = 1;
-    
-    /* handle keyboard string input */
-    
 }
 
 -(void)keyUp:(NSEvent*)event
@@ -223,8 +220,24 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
     /* we mark the key as being released; this allows the implementation to query
        against the key table at any point between the keyDown and keyUp to retrieve
        the key state */
+    NSString* ascii;
+    enum pok_input_key key;
     
-    sys->impl->keytable[CocoaKeyCodeToKeyFlag([event keyCode])] = 0;
+    key = CocoaKeyCodeToKeyFlag([event keyCode]);
+    ascii = [event characters];
+    sys->impl->keytable[key] = 0;
+
+    /* handle keyboard string input */
+    if (key != pok_input_key_unknown) {
+        for (int i = 0;i < sys->keyupHook.top;++i)
+            if (sys->keyupHook.routines[i] != NULL)
+                sys->keyupHook.routines[i](key,sys->keyupHook.contexts[i]);
+    }
+    if ([ascii length] > 0) {
+        for (int i = 0;i < sys->textentryHook.top;++i)
+            if (sys->textentryHook.routines[i])
+                sys->textentryHook.routines[i]([ascii characterAtIndex:0],sys->textentryHook.contexts[i]);
+    }
 }
 @end
 

@@ -90,7 +90,7 @@ void gamelock_free(struct gamelock* lock)
 {
     free(lock);
 }
-inline void gamelock_aquire(struct gamelock* lock)
+void gamelock_aquire(struct gamelock* lock)
 {
     /* aquire writer's lock */
     CHECK_SUCCESS( sem_wait(&lock->modify) );
