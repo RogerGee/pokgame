@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 extern const char* POKGAME_NAME;
 
@@ -89,40 +90,53 @@ static char const* const* POK_ERROR_MESSAGES[] = {
 
 /* target-independent code */
 
+static void get_time_string(char* buf,size_t sz)
+{
+    time_t t;
+    struct tm info;
+    time(&t);
+    localtime_r(&t,&info);
+    strftime(buf,sz,"%a %b %d %Y %I:%M:%S %p",&info);
+}
+
 void pok_error(enum pok_errorkind kind,const char* message, ...)
 {
     va_list args;
+    char tbuf[128];
     char finalMessage[4096];
     va_start(args,message);
     vsnprintf(finalMessage,sizeof(finalMessage),message,args);
     va_end(args);
+    get_time_string(tbuf,sizeof(tbuf));
     if (kind == pok_error_message)
-        fprintf(stderr,"%s: %s\n",POKGAME_NAME,finalMessage);
+        fprintf(stderr,"%s: [%s]: %s\n",POKGAME_NAME,tbuf,finalMessage);
     else if (kind == pok_error_warning)
-        fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,finalMessage);
+        fprintf(stderr,"%s: [%s]: warning: %s\n",POKGAME_NAME,tbuf,finalMessage);
     else if (kind == pok_error_unimplemented)
-        fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,finalMessage);
+        fprintf(stderr,"%s: [%s]: unimplemented: %s\n",POKGAME_NAME,tbuf,finalMessage);
     else if (kind == pok_error_fatal) {
-        fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,finalMessage);
+        fprintf(stderr,"%s: [%s]: fatal error: %s\n",POKGAME_NAME,tbuf,finalMessage);
         exit(EXIT_FAILURE);
     }
 }
 void pok_error_fromstack(enum pok_errorkind kind)
 {
+    char buf[128];
     const struct pok_exception* ex;
     ex = pok_exception_pop();
+    get_time_string(buf,sizeof(buf));
     if (ex != NULL) {
         if (kind == pok_error_message)
-            fprintf(stderr,"%s: %s\n",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: [%s]: %s\n",POKGAME_NAME,buf,ex->message);
         else if (kind == pok_error_warning)
-            fprintf(stderr,"%s: warning: %s\n",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: [%s]: warning: %s\n",POKGAME_NAME,buf,ex->message);
         else if (kind == pok_error_unimplemented)
-            fprintf(stderr,"%s: unimplemented: %s\n",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: [%s]: unimplemented: %s\n",POKGAME_NAME,buf,ex->message);
         else if (kind == pok_error_fatal)
-            fprintf(stderr,"%s: fatal error: %s\n",POKGAME_NAME,ex->message);
+            fprintf(stderr,"%s: [%s]: fatal error: %s\n",POKGAME_NAME,buf,ex->message);
     }
     else
-        fprintf(stderr,"%s: error stack was empty when error was requested!\n",POKGAME_NAME);
+        fprintf(stderr,"%s: [%s]: error stack was empty when error was requested!\n",POKGAME_NAME,buf);
     if (kind == pok_error_fatal)
         exit(EXIT_FAILURE);
 }
@@ -392,4 +406,15 @@ const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id)
     ex = list != NULL && !list->popped && list->ex->kind == kind && list->ex->id == id ? list->ex : NULL;
     pok_unlock_error_module();
     return ex;
+}
+void pok_exception_append_message(struct pok_exception* except,const char* message, ...)
+{
+    va_list args;
+    size_t length;
+    size_t remain;
+    length = strlen(except->message);
+    remain = sizeof(except->message) - length;
+    va_start(args,message);
+    vsnprintf(except->message+length,remain,message,args);
+    va_end(args);
 }

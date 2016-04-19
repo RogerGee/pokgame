@@ -28,6 +28,7 @@ static struct pok_character_context* friend2;
 
 /* functions */
 static void init();
+static void fail_from_stack();
 static void load_maps();
 static void load_characters();
 static void aux_graphics_load();
@@ -63,7 +64,7 @@ void init()
     fputs("doing init...",stdout);
     fflush(stdout);
     if ( !pok_tile_manager_fromfile_tiles(game->tman,"test/img/sts0.data") )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     game->tman->impassibility = 32;
     game->tman->terrain[pok_tile_terrain_ice].length = 1;
     game->tman->terrain[pok_tile_terrain_ice].list = malloc(sizeof(uint16_t));
@@ -75,7 +76,7 @@ void init()
     game->tman->terrain[pok_tile_terrain_ledge_down].list[0] = 1;
     assert( pok_tile_manager_load_ani(game->tman,42,ANIDATA,TRUE) );
     if ( !pok_sprite_manager_fromfile(game->sman,"test/img/sss0.data",pok_sprite_manager_updown_alt) )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     load_maps();
     load_characters();
     assert( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&START_LOCATION) );
@@ -86,38 +87,44 @@ void init()
     puts("done");
 }
 
+void fail_from_stack()
+{
+    puts("failed");
+    pok_error_fromstack(pok_error_fatal);
+}
+
 void load_maps()
 {
     /* load start map and focus on it */
     struct pok_map* map;
     map = pok_map_new();
     if (map == NULL)
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     map->mapNo = 1;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapA.csv") )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     pok_world_add_map(game->world,map);
     pok_map_render_context_set_map(game->mapRC,map);
     /* load map B */
     map = pok_map_new();
     if (map == NULL)
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     map->mapNo = 2;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapB.csv") )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     pok_world_add_map(game->world,map);
     /* load map C */
     map = pok_map_new();
     if (map == NULL)
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     map->mapNo = 3;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapC.csv") )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
     pok_world_add_map(game->world,map);
 
     /* load warps for all maps */
     if ( !pok_world_fromfile_warps(game->world,"test/maps/warps") )
-        pok_error_fromstack(pok_error_fatal);
+        fail_from_stack();
 }
 
 void load_characters()

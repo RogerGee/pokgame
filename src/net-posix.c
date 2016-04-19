@@ -154,18 +154,20 @@ struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_f
         flags |= O_RDWR;
     dsrc->fd[0] = open(filename,flags,perms);
     if (dsrc->fd[0] == -1) {
+        struct pok_exception* ex;
         if (errno == EACCES)
-            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_permission_denied);
+            ex = pok_exception_new_ex(pok_ex_net,pok_ex_net_file_permission_denied);
         else if (errno == EEXIST)
-            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_already_exist);
+            ex = pok_exception_new_ex(pok_ex_net,pok_ex_net_file_already_exist);
         else if (errno == EINTR)
-            pok_exception_new_ex(pok_ex_net,pok_ex_net_interrupt);
+            ex = pok_exception_new_ex(pok_ex_net,pok_ex_net_interrupt);
         else if (errno==ENAMETOOLONG || errno==ENOTDIR || errno==EISDIR)
-            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_bad_path);
+            ex = pok_exception_new_ex(pok_ex_net,pok_ex_net_file_bad_path);
         else if (errno == ENOENT)
-            pok_exception_new_ex(pok_ex_net,pok_ex_net_file_does_not_exist);
+            ex = pok_exception_new_ex(pok_ex_net,pok_ex_net_file_does_not_exist);
         else
-            pok_exception_new_ex(pok_ex_default,pok_ex_default_undocumented);
+            ex = pok_exception_new_ex(pok_ex_default,pok_ex_default_undocumented);
+        pok_exception_append_message(ex,": '%s'",filename);
         free(dsrc);
         return NULL;
     }

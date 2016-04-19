@@ -143,15 +143,17 @@ struct pok_data_source* pok_data_source_new_file(const char* filename, enum pok_
         FILE_ATTRIBUTE_NORMAL,
         NULL);
     if (*hpFile == INVALID_HANDLE_VALUE) {
+        struct pok_exception* ex;
         DWORD err = GetLastError();
         if (err == ERROR_ACCESS_DENIED)
-            pok_exception_new_ex(pok_ex_net, pok_ex_net_file_permission_denied);
+            ex = pok_exception_new_ex(pok_ex_net, pok_ex_net_file_permission_denied);
         else if (err == ERROR_FILE_EXISTS)
-            pok_exception_new_ex(pok_ex_net, pok_ex_net_file_already_exist);
+            ex = pok_exception_new_ex(pok_ex_net, pok_ex_net_file_already_exist);
         else if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
-            pok_exception_new_ex(pok_ex_net, pok_ex_net_file_does_not_exist);
+            ex = pok_exception_new_ex(pok_ex_net, pok_ex_net_file_does_not_exist);
         else
-            pok_exception_new_ex(pok_ex_default, pok_ex_default_undocumented);
+            ex = pok_exception_new_ex(pok_ex_default, pok_ex_default_undocumented);
+        pok_exception_append_message(ex,": '%s'",filename);
         free(dsrc);
         return NULL;
     }
