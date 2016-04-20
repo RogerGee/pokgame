@@ -288,8 +288,9 @@ bool_t pok_graphics_subsystem_create_textures(struct pok_graphics_subsystem* sys
             info[i].images = va_arg(list,struct pok_image**);
             info[i].count = va_arg(list,int);
         }
-        /* give the implementation a chance to optimize raster graphics operations using textures; it
-           may do nothing or may create the textures and free the image pixel data */
+        /* give the implementation a chance to optimize raster graphics operations using textures;
+           it may do nothing or may create the textures and free the image pixel data; the buffer of
+           texture_info structures is deleted by the implementation */
         impl_load_textures(sys,info,count);
     }
     return TRUE;
@@ -311,7 +312,8 @@ bool_t pok_graphics_subsystem_delete_textures(struct pok_graphics_subsystem* sys
             info[i].count = va_arg(list,int);
         }
         /* let the implementation delete the specified textures; since pokgame may load other
-           artwork if a version sends it we need to be frugal with the video card memory space */
+           artwork if a version sends it we need to be frugal with the video card memory space; the
+           buffer of texture_info structures is deleted by the implementation */
         impl_delete_textures(sys,info,count);
     }
     return TRUE;
@@ -445,6 +447,7 @@ void gl_delete_textures(struct gl_texture_info* existing,struct texture_info* in
        will be passed to 'glDeleteTextures'; replace texture names with 0 in the existing list so the space;
        can be used again; according to the documentation, a texture name of 0 is silently ignored */
     int i, j;
+    pok_message("stuff: %d %d",count,2);
     for (i = 0;i < count;++i) {
         size_t index = 0;
         GLsizei cnt = 0;

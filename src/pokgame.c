@@ -56,7 +56,7 @@ int main(int argc,const char* argv[])
     }
     else
         /* begin the IO procedure; this is the entry point into the game */
-        io_proc(sys);
+        io_proc(sys,NULL);
 
     /* close graphics subsystem: if the graphics subsystem was working on another
        thread this will wait to join back up with said thread; otherwise the graphics

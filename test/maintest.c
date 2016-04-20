@@ -155,16 +155,18 @@ void aux_graphics_unload()
 
 int play_game()
 {
+    int testver = 0;
     int retval = 0;
     struct pok_thread* upthread;
     /* create a new thread on which to run the update thread */
     upthread = pok_thread_new((pok_thread_entry)update_proc,game);
     pok_thread_start(upthread);
     /* run the test io procedure */
-    if (game->sys->background)
+    if (game->sys->background) {
         /* rendering is done on background thread, so we can use
            this thread for the test io procedure */
-        game_io(game);
+        testver = game_io(game);
+    }
     else {
         /* the graphics subsystem requires that the rendering is done
            on this main thread; so create a new thread for the IO proc */
@@ -172,11 +174,17 @@ int play_game()
         gameThread = pok_thread_new(game_io,game);
         pok_thread_start(gameThread);
         pok_graphics_subsystem_render_loop(game->sys);
-        pok_thread_join(gameThread);
+        testver = pok_thread_join(gameThread);
         pok_thread_free(gameThread);
     }
     retval = pok_thread_join(upthread);
     pok_thread_free(upthread);
+
+    if (testver) {
+        /* begin testing version */
+        io_proc(game->sys,NULL);
+    }
+
     return retval;
 }
 
@@ -226,6 +234,7 @@ static inline bool_t next_to_character(struct pok_character* character,enum pok_
 int game_io(void* p)
 {
     static int context = 0;
+    int ret = 0;
     enum pok_direction dir;
     struct pok_location loc;
     struct pok_string stringbuilder;
@@ -314,8 +323,9 @@ int game_io(void* p)
         pok_game_modify_exit(&game->updateInterMsg);
 
         /* test spin animation */
+        struct pok_location* pos = &game->playerContext->character->tilePos;
         static bool_t spinAttempt = FALSE;
-        if (game->playerContext->character->tilePos.column == 5 && game->playerContext->character->tilePos.row == 3) {
+        if (pok_location_test(pos,5,3)) {
             if (!spinAttempt && !game->playerContext->update) {
                 pok_game_modify_enter(game->playerContext);
                 pok_character_context_set_update(
@@ -332,8 +342,18 @@ int game_io(void* p)
             spinAttempt = FALSE;
         }
 
+        /* test simple version connection */
+        if (pok_location_test(pos,0,0)) {
+            game->control = FALSE; /* let the update procedure end normally */
+            pok_graphics_subsystem_game_render_state(game->sys,FALSE);
+            pok_game_unregister(game);
+            pok_game_delete_textures(game);
+            ret = 1;
+            break;
+        }
+
         pok_timeout_no_elapsed(&game->ioTimeout);
     }
     pok_string_delete(&stringbuilder);
-    return 0;
+    return ret;
 }

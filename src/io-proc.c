@@ -52,23 +52,26 @@ static bool_t seq_sprite_manager(struct pok_game_info* game,struct pok_io_info* 
 static bool_t seq_player_character(struct pok_game_info* game,struct pok_io_info* info);
 static bool_t seq_first_map(struct pok_game_info* game,struct pok_io_info* info);
 
-int io_proc(struct pok_graphics_subsystem* sys)
+int io_proc(struct pok_graphics_subsystem* sys,struct pok_game_info* game)
 {
-    struct pok_game_info* game, *save = NULL;
+    bool_t madeDefault = game == NULL;
+    struct pok_game_info* save = NULL;
 
     /* don't try to render game until we have something set up */
     pok_graphics_subsystem_game_render_state(sys,FALSE);
 
-    /* create a default game; it will have an external version procedure */
-    game = pok_make_default_game(sys);
-    if (game == NULL)
-        return 1;
-
-    /* load the default game's textures */
-    pok_game_load_textures(game);
+    /* create a default game (if none specified); it will have an external
+       version procedure */
+    if (madeDefault) {
+        game = pok_make_default_game(sys);
+        if (game == NULL)
+            return 1;
+        /* load the default game's textures */
+        pok_game_load_textures(game);
+    }
 
     /* run versions in a loop; a version ends when either the version callback
-       or the 'run_game' function returns  */
+       or the 'run_game' function returns */
     do {
         if (game->versionCBack != NULL) {
             /* this game will be run by an external procedure; if it returns a pointer
@@ -80,7 +83,7 @@ int io_proc(struct pok_graphics_subsystem* sys)
             pok_graphics_subsystem_game_render_state(sys,TRUE); /* let render process begin rendering */
             pok_thread_start(game->updateThread); /* start up update process */
             ver = (*game->versionCBack)(game);    /* execute version callback */
-            game->control = FALSE;                /* inform IO procedure that we are finished */
+            game->control = FALSE;                /* inform update procedure that we are finished */
             pok_thread_join(game->updateThread);  /* wait for update thread to end */
             pok_graphics_subsystem_game_render_state(sys,FALSE); /* turn off rendering */
             pok_game_unregister(game);            /* unregister rendering routines */
@@ -103,7 +106,7 @@ int io_proc(struct pok_graphics_subsystem* sys)
             pok_graphics_subsystem_game_render_state(sys,TRUE); /* let render process begin rendering */
             pok_thread_start(game->updateThread); /* start up update process */
             result = run_game(game);              /* run the game, engaging the pokgame protocol with a peer */
-            game->control = FALSE;                /* inform IO procedure that we are finished */
+            game->control = FALSE;                /* inform update procedure that we are finished */
             pok_thread_join(game->updateThread);  /* wait for update thread to end */
             pok_graphics_subsystem_game_render_state(sys,FALSE); /* turn off rendering */
             pok_game_unregister(game);            /* unregister rendering routines */
@@ -120,7 +123,12 @@ int io_proc(struct pok_graphics_subsystem* sys)
         }
     } while ( pok_graphics_subsystem_has_window(game->sys) );
 
-    pok_game_free(game);
+    /* if we created a default version to play, then free its textures and then
+       the game info structure */
+    if (madeDefault) {
+        pok_game_delete_textures(game);
+        pok_game_free(game);
+    }
     return 0;
 }
 

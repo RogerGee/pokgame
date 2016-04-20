@@ -34,12 +34,13 @@ struct _pok_graphics_subsystem_impl
     pthread_mutex_t mutex;             /* this locks the renderer; used for synchronizing updating and rendering */
     struct gl_texture_info gltexinfo;  /* OpenGL texture information */
  
-    /* shared variable flags */
+    /* shared variable flags: we can set a flag and have an operation performed on the rendering thread */
     volatile bool_t rendering;     /* is the system rendering the window frame? */
     volatile bool_t gameRendering; /* is the system invoking game rendering? */
     volatile bool_t editFrame;     /* request to reinitialize frame */
     volatile bool_t doMap;         /* request that the window frame be mapped to screen */
     volatile bool_t doUnmap;       /* request that the window frame be unmapped from screen */
+    volatile bool_t texinfoLoad;   /* texture information is for loading if TRUE, deleting otherwise */
     volatile int texinfoCount;     /* texture information; if set then the rendering thread loads new textures */
     volatile struct texture_info* texinfo;
 };
@@ -64,6 +65,7 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
         return FALSE;
     }
     sys->impl->window = None;
+    sys->impl->texinfoLoad = TRUE;
     sys->impl->gltexinfo.textureAlloc = 32;
     sys->impl->gltexinfo.textureCount = 0;
     sys->impl->gltexinfo.textureNames = malloc(sizeof(GLuint) * sys->impl->gltexinfo.textureAlloc);
@@ -100,6 +102,8 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl->rendering = FALSE;
     if (pthread_join(sys->impl->tid,NULL) != 0)
         pok_error(pok_error_fatal,"fail pthread_join()");
+    if (sys->impl->texinfo != NULL)
+        free((struct texture_info*)sys->impl->texinfo);
     free(sys->impl->gltexinfo.textureNames);
     free(sys->impl);
     sys->impl = NULL;
@@ -126,6 +130,7 @@ void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* 
             continue;
         }
     } while (FALSE);
+    sys->impl->texinfoLoad = TRUE;
     sys->impl->texinfo = info;
     sys->impl->texinfoCount = count;
     pthread_mutex_unlock(&sys->impl->mutex);
@@ -136,8 +141,17 @@ void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info
     check_impl(sys);
 #endif
 
-    pthread_mutex_lock(&sys->impl->mutex);
-    gl_delete_textures(&sys->impl->gltexinfo,info,count);
+    do {
+        pthread_mutex_lock(&sys->impl->mutex);
+        /* make sure a request is not already being processed */
+        if (sys->impl->texinfo != NULL) {
+            pthread_mutex_unlock(&sys->impl->mutex);
+            continue;
+        }
+    } while (FALSE);
+    sys->impl->texinfoLoad = FALSE;
+    sys->impl->texinfo = info;
+    sys->impl->texinfoCount = count;
     pthread_mutex_unlock(&sys->impl->mutex);
 }
 inline void impl_map_window(struct pok_graphics_subsystem* sys)
@@ -502,8 +516,12 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
             pthread_mutex_unlock(&sys->impl->mutex);
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
+            /* load textures */
             pthread_mutex_lock(&sys->impl->mutex);
-            gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
+            if (sys->impl->texinfoLoad)
+                gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
+            else
+                gl_delete_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;
@@ -547,6 +565,7 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 done:
     sys->impl->gameRendering = FALSE;
     sys->impl->rendering = FALSE;
+    /* free any textures that remain for our context */
     if (sys->impl->gltexinfo.textureCount > 0) {
         glDeleteTextures(sys->impl->gltexinfo.textureCount,sys->impl->gltexinfo.textureNames);
         sys->impl->gltexinfo.textureCount = 0;

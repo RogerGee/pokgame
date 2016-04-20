@@ -31,6 +31,7 @@ struct _pok_graphics_subsystem_impl
     volatile BOOLEAN editFrame;     /* request to reinitialize frame */
     volatile BOOLEAN doShow;        /* request that the window frame be shown to screen */
     volatile BOOLEAN doHide;        /* request that the window frame be closed */
+    volatile BOOLEAN texinfoLoad;   /* is the texture information for loading or deleting? */
     volatile int texinfoCount;      /* texture information; if set then the rendering thread loads new textures */
     volatile struct texture_info* texinfo;
 };
@@ -61,6 +62,7 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
     sys->impl->editFrame = FALSE;
     sys->impl->doShow = FALSE;
     sys->impl->doHide = FALSE;
+    sys->impl->texinfoLoad = TRUE;
     sys->impl->texinfo = NULL;
     sys->impl->texinfoCount = 0;
     /* spawn render loop thread; set 'sys->background' to TRUE to mean that we run
@@ -84,6 +86,8 @@ void impl_free(struct pok_graphics_subsystem* sys)
     sys->impl->rendering = FALSE;
     WaitForSingleObject(sys->impl->hThread, INFINITE);
     CloseHandle(sys->impl->hThread);
+    if (sys->impl->texinfo != NULL)
+        free((struct texture_info*)sys->impl->texinfo);
     free(sys->impl->gltexinfo.textureNames);
     free(sys->impl);
     sys->impl = NULL;
@@ -102,14 +106,24 @@ void impl_load_textures(struct pok_graphics_subsystem* sys, struct texture_info*
             continue;
         }
     } while (FALSE);
+    sys->impl->texinfoLoad = TRUE;
     sys->impl->texinfo = info;
     sys->impl->texinfoCount = count;
     ReleaseMutex(sys->impl->mutex);
 }
 void impl_delete_textures(struct pok_graphics_subsystem* sys,struct texture_info* info,int count)
 {
-    WaitForSingleObject(sys->impl->mutex,INFINITE);
-    gl_delete_textures(&sys->impl->gltexinfo,info,count);
+    do {
+        WaitForSingleObject(sys->impl->mutex,INFINITE);
+        /* make sure a request is not already being processed */
+        if (sys->impl->texinfo != NULL) {
+            ReleaseMutex(sys->impl->mutex);
+            continue;
+        }
+    } while (FALSE);
+    sys->impl->texinfoLoad = FALSE;
+    sys->impl->texinfo = info;
+    sys->impl->texinfoCount = count;
     ReleaseMutex(sys->impl->mutex);
 }
 void impl_set_game_state(struct pok_graphics_subsystem* sys, bool_t state)
@@ -255,7 +269,10 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
             WaitForSingleObject(sys->impl->mutex, INFINITE);
-            gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
+            if (sys->impl->texinfoLoad)
+                gl_create_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
+            else
+                gl_delete_textures(&sys->impl->gltexinfo,(struct texture_info*)sys->impl->texinfo,sys->impl->texinfoCount);
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;

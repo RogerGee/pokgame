@@ -102,7 +102,8 @@ struct pok_game_info
     enum pok_game_context gameContext; /* flag what the game is currently doing */
     bool_t pausePlayerMap; /* if non-zero, then stop updating player and map */
 
-    /* graphics: we do not own this object; it is managed by another context */
+    /* graphics: we do not own this object; it is managed by another context; it
+       is stored here for convenience only */
     struct pok_graphics_subsystem* sys;
 
     /* effects */
@@ -137,7 +138,7 @@ struct pok_game_info
 };
 
 /* main pokgame procedures (the other procedure is graphics which is handled by the graphics subsystem) */
-int io_proc(struct pok_graphics_subsystem* sys);
+int io_proc(struct pok_graphics_subsystem* sys,struct pok_game_info* game);
 int update_proc(struct pok_game_info* info);
 
 /* game initialization/closing */

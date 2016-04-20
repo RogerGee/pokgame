@@ -54,6 +54,7 @@ struct pok_location
     uint16_t row; /* y */
 };
 int pok_location_compar(const struct pok_location* left,const struct pok_location* right);
+bool_t pok_location_test(const struct pok_location* left,uint16_t column,uint16_t row);
 
 #define pok_unsigned_diff(a,b) (a>b ? a-b : b-a)
 
@@ -65,6 +66,7 @@ struct pok_point
 struct pok_point* pok_point_new(int32_t X,int32_t Y);
 struct pok_point* pok_point_new_copy(const struct pok_point* point);
 int pok_point_compar(const struct pok_point* left,const struct pok_point* right);
+bool_t pok_point_test(const struct pok_point* point,int x,int y);
 
 extern const struct pok_point ORIGIN;
 

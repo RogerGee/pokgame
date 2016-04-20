@@ -172,6 +172,10 @@ int pok_location_compar(const struct pok_location* left,const struct pok_locatio
         return 1;
     return 0;
 }
+bool_t pok_location_test(const struct pok_location* pos,uint16_t column,uint16_t row)
+{
+    return pos->column == column && pos->row == row;
+}
 
 /* pok_point */
 struct pok_point* pok_point_new(int32_t X,int32_t Y)
@@ -204,6 +208,10 @@ int pok_point_compar(const struct pok_point* left,const struct pok_point* right)
     if (left->Y > right->Y)
         return 1;
     return 0;
+}
+bool_t pok_point_test(const struct pok_point* point,int x,int y)
+{
+    return point->X == x && point->Y == y;
 }
 
 /* pok_direction_operations */

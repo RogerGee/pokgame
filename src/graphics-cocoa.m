@@ -25,6 +25,7 @@ struct _pok_graphics_subsystem_impl
                     editWindow,
                     showWindow,
                     hideWindow;
+    volatile bool_t texinfoLoad;
     volatile int texinfoCount;
     volatile struct texture_info* texinfo;
 };
@@ -66,6 +67,8 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
 
 void impl_free(struct pok_graphics_subsystem* sys)
 {
+    if (sys->impl->texinfo != NULL)
+        free((struct texture_info*)sys->impl->texinfo);
     free(sys->impl->gltexinfo.textureNames);
     free(sys->impl);
     sys->impl = NULL;
@@ -85,6 +88,7 @@ void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* 
             continue;
         }
     } while (FALSE);
+    sys->impl->texinfoLoad = TRUE;
     sys->impl->texinfo = info;
     sys->impl->texinfoCount = count;
     pthread_mutex_unlock(&sys->impl->graphicsLock);
@@ -92,8 +96,16 @@ void impl_load_textures(struct pok_graphics_subsystem* sys,struct texture_info* 
 
 void impl_delete_textures(struct pok_graphics_subsystem* sys,struct  texture_info* info,int count)
 {
-    pthread_mutex_lock(&sys->impl->graphicsLock);
-    gl_delete_textures(&sys->impl->gltexinfo,info,count);
+    do {
+        pthread_mutex_lock(&sys->impl->graphicsLock);
+        if (sys->impl->texinfo != NULL) {
+            pthread_mutex_unlock(&sys->impl->graphicsLock);
+            continue;
+        }
+    } while (FALSE);
+    sys->impl->texinfoLoad = FALSE;
+    sys->impl->texinfo = info;
+    sys->impl->texinfoCount = count;
     pthread_mutex_unlock(&sys->impl->graphicsLock);
 }
 
@@ -513,10 +525,18 @@ void pok_graphics_subsystem_render_loop(struct pok_graphics_subsystem* sys)
         }
         if (sys->impl->texinfo != NULL && sys->impl->texinfoCount > 0) {
             pthread_mutex_lock(&sys->impl->graphicsLock);
-            gl_create_textures(
-                &sys->impl->gltexinfo,
-                (struct texture_info*)sys->impl->texinfo,
-                sys->impl->texinfoCount );
+            if (sys->impl->texinfoLoad) {
+                gl_create_textures(
+                    &sys->impl->gltexinfo,
+                    (struct texture_info*)sys->impl->texinfo,
+                    sys->impl->texinfoCount );
+            }
+            else {
+                gl_delete_textures(
+                    &sys->impl->gltexinfo,
+                    (struct texture_info*)sys->impl->texinfo,
+                    sys->impl->texinfoCount );
+            }
             free((struct texture_info*)sys->impl->texinfo);
             sys->impl->texinfo = NULL;
             sys->impl->texinfoCount = 0;
