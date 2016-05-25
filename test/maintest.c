@@ -4,6 +4,7 @@
    basic functionality to test certain features) */
 #include "pokgame.h"
 #include "error.h"
+#include "user.h"
 #include "pok.h"
 #include <stdio.h>
 #include <assert.h>
@@ -35,6 +36,7 @@ static void aux_graphics_load();
 static void aux_graphics_unload();
 static int play_game();
 static int game_io(void*);
+static void conn_version();
 
 /* entry point */
 int main_test()
@@ -49,6 +51,7 @@ int main_test()
     game = pok_game_new(sys,NULL);
     init();
     printf("finished: %d\n",play_game());
+    pok_game_delete_textures(game);
     pok_character_free(friend1->character);
     pok_character_free(friend2->character);
     pok_game_free(game);
@@ -95,8 +98,10 @@ void fail_from_stack()
 
 void load_maps()
 {
-    /* load start map and focus on it */
     struct pok_map* map;
+    struct pok_data_source* fstream;
+
+    /* load start map and focus on it */
     map = pok_map_new();
     if (map == NULL)
         fail_from_stack();
@@ -105,6 +110,7 @@ void load_maps()
         fail_from_stack();
     pok_world_add_map(game->world,map);
     pok_map_render_context_set_map(game->mapRC,map);
+
     /* load map B */
     map = pok_map_new();
     if (map == NULL)
@@ -113,6 +119,7 @@ void load_maps()
     if ( !pok_map_fromfile_csv(map,"test/maps/mapB.csv") )
         fail_from_stack();
     pok_world_add_map(game->world,map);
+
     /* load map C */
     map = pok_map_new();
     if (map == NULL)
@@ -120,6 +127,19 @@ void load_maps()
     map->mapNo = 3;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapC.csv") )
         fail_from_stack();
+    pok_world_add_map(game->world,map);
+
+    /* load map D */
+    map = pok_map_new();
+    if (map == NULL)
+        fail_from_stack();
+    fstream = pok_data_source_new_file("test/maps/testmap1",pok_filemode_open_existing,pok_iomode_read);
+    if (fstream == NULL)
+        fail_from_stack();
+    if ( !pok_map_open(map,fstream) )
+        fail_from_stack();
+    map->mapNo = 4; /* need to set afterwards */
+    pok_data_source_free(fstream);
     pok_world_add_map(game->world,map);
 
     /* load warps for all maps */
@@ -182,7 +202,7 @@ int play_game()
 
     if (testver) {
         /* begin testing version */
-        io_proc(game->sys,NULL);
+        conn_version();
     }
 
     return retval;
@@ -323,7 +343,8 @@ int game_io(void* p)
         pok_game_modify_exit(&game->updateInterMsg);
 
         /* test spin animation */
-        struct pok_location* pos = &game->playerContext->character->tilePos;
+        uint32_t mapNo = game->player->mapNo;
+        struct pok_location* pos = &game->player->tilePos;
         static bool_t spinAttempt = FALSE;
         if (pok_location_test(pos,5,3)) {
             if (!spinAttempt && !game->playerContext->update) {
@@ -343,11 +364,10 @@ int game_io(void* p)
         }
 
         /* test simple version connection */
-        if (pok_location_test(pos,0,0)) {
+        if (mapNo == 1 && pok_location_test(pos,0,0)) {
             game->control = FALSE; /* let the update procedure end normally */
             pok_graphics_subsystem_game_render_state(game->sys,FALSE);
             pok_game_unregister(game);
-            pok_game_delete_textures(game);
             ret = 1;
             break;
         }
@@ -356,4 +376,28 @@ int game_io(void* p)
     }
     pok_string_delete(&stringbuilder);
     return ret;
+}
+
+void conn_version()
+{
+    struct pok_process* version;
+    struct pok_game_info* newgame;
+    const struct pok_exception* ex;
+
+    newgame = pok_game_new(game->sys,game);
+    version = pok_process_new("test/v1","a\0b\0\0",NULL);
+    newgame->versionProc = version;
+    newgame->versionChannel = pok_process_stdio(version);
+
+    /* the io_proc will play the version specified by the process */
+    pok_user_load_module();
+    pok_netobj_load_module();
+    if (io_proc(newgame->sys,newgame) != 0) {
+        pok_error_fromstack(pok_error_fatal);
+    }
+    pok_netobj_unload_module();
+    pok_user_unload_module();
+
+    pok_process_shutdown(version,PROCESS_TIMEOUT_INFINITE);
+    pok_game_free(newgame);
 }

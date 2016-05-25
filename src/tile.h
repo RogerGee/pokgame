@@ -34,7 +34,10 @@ void pok_tile_init(struct pok_tile* tile,uint16_t tileid);
 void pok_tile_init_ex(struct pok_tile* tile,const struct pok_tile_data* tiledata);
 bool_t pok_tile_save(struct pok_tile* tile,struct pok_data_source* dsrc);
 bool_t pok_tile_open(struct pok_tile* tile,struct pok_data_source* dsrc);
-enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
+enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info);
+enum pok_network_result pok_tile_netwrite(struct pok_tile* tile,struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* info);
 
 extern const struct pok_tile DEFAULT_TILE;
 

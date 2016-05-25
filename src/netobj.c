@@ -54,7 +54,7 @@ bool_t pok_netobj_register(struct pok_netobj* netobj,uint32_t id)
     /* give the network object the specified id and register it in the database */
 #ifdef POKGAME_DEBUG
     /* assert that the object is not assigned a network id */
-    if (netobj->id == UNUSED_NETOBJ_ID)
+    if (netobj->id != UNUSED_NETOBJ_ID)
         pok_error(pok_error_fatal,"pok_netobj_register(): network object already assigned id");
 #endif
 

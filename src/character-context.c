@@ -35,9 +35,11 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
 static void pok_character_context_render(struct pok_character_context* context,const struct pok_map_render_context* mapRC,
     const struct pok_sprite_manager* sman,const struct pok_graphics_subsystem* sys)
 {
-    /* check to see if the character is within the viewing area defined by the map render context */
+    /* check to see if the character is within the viewing area defined by the
+       map render context; if the render context has no loaded maps, then do
+       nothing */
     struct pok_character* ch = context->character;
-    if (ch->mapNo == mapRC->map->mapNo) { /* same map */
+    if (mapRC->map != NULL && ch->mapNo == mapRC->map->mapNo) { /* same map */
         int i;
         for (i = 0;i < 4;++i) {
             if (mapRC->info[i].chunk != NULL && mapRC->info[i].chunkPos.X == ch->chunkPos.X

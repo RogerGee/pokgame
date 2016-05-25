@@ -31,6 +31,12 @@ struct chunk_adj_info
     struct pok_map_chunk* c[POK_MAX_INITIAL_CHUNKS];
 };
 
+static void chunk_adj_info_init(struct chunk_adj_info* info)
+{
+    for (int i = 0;i < POK_MAX_INITIAL_CHUNKS;++i)
+        info->c[i] = NULL;
+}
+
 struct chunk_recursive_info
 {
     struct pok_data_source* dsrc;
@@ -303,6 +309,14 @@ static enum pok_network_result pok_map_chunk_netread(struct pok_map_chunk* chunk
         ++info->fieldProg;
     }
     return result;
+}
+static enum pok_network_result pok_map_chunk_netwrite(struct pok_map_chunk* chunk,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* winfo)
+{
+    enum pok_network_result result = pok_net_completed;
+
+    return result;    
 }
 enum pok_network_result pok_map_chunk_netmethod_send(struct pok_map_chunk* chunk,
     struct pok_data_source* dsrc,
@@ -732,8 +746,7 @@ static bool_t pok_map_configure_adj(struct pok_map* map,struct chunk_adj_info* i
                 }
                 /* assign the adjacency; also assign the adjacency in the reverse direction */
                 info->c[i]->adjacent[k] = chunk;
-                chunk->adjacent[op] = info->c[i];
-                
+                chunk->adjacent[op] = info->c[i];                
             }
         }
     }
@@ -749,8 +762,8 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
         [2 bytes] chunk size height
         [4 bytes] origin chunk position X
         [4 bytes] origin chunk position Y
-        [1 byte] number of chunks
-        [n bytes] chunk adjacency list (bitmask of 'enum pok_direction'+1 flags)
+        [2 bytes] number of chunks
+        [n bytes] chunk adjacency list (bitmask where each bit index corresponds to pok_direction flag)
         [n chunks]
           [...] netread chunk
 
@@ -805,7 +818,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
             break;
     case 7:
         /* number of chunks */
-        if (info->aux == NULL) {
+        if (adj == NULL) {
             /* we need to store chunk information in a separate substructure; this will
                be automatically deallocated by 'info' upon delete */
             adj = malloc(sizeof(struct chunk_adj_info));
@@ -813,6 +826,7 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
                 pok_exception_flag_memory_error();
                 return pok_net_failed_internal;
             }
+            chunk_adj_info_init(adj);
             info->aux = adj;
         }
         pok_data_stream_read_uint16(dsrc,&adj->n);
@@ -820,6 +834,10 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
             break;
         if (adj->n == 0) { /* zero chunks specified */
             pok_exception_new_ex(pok_ex_map,pok_ex_map_zero_chunks);
+            return pok_net_failed_protocol;
+        }
+        if (adj->n > POK_MAX_INITIAL_CHUNKS) {
+            pok_exception_new_ex(pok_ex_map,pok_ex_map_too_many_chunks);
             return pok_net_failed_protocol;
         }
         info->depth[0] = 0;
@@ -835,12 +853,19 @@ static enum pok_network_result pok_map_netread(struct pok_map* map,struct pok_da
     case 9:
         /* read chunks */
         while (info->depth[0] < adj->n) {
-            if (adj->c[info->depth[0]]==NULL && (adj->c[info->depth[0]] = pok_map_chunk_new(map,NULL)) == NULL)
+            int i = info->depth[0];
+            if (adj->c[i] == NULL
+                && (adj->c[i] = pok_map_chunk_new(map,NULL)) == NULL)
+            {
                 return pok_net_failed_internal;
+            }
             if (!pok_netobj_readinfo_alloc_next(info))
                 return pok_net_failed_internal;
-            if ((result = pok_map_chunk_netread(adj->c[info->depth[0]],dsrc,info->next,&map->chunkSize)) != pok_net_completed)
+            if ((result = pok_map_chunk_netread(adj->c[i],dsrc,info->next,&map->chunkSize))
+                != pok_net_completed)
+            {
                 return result;
+            }
             ++info->depth[0];
         }
         /* all chunks successfully read here; setup map chunks according to adjacencies */
@@ -975,12 +1000,66 @@ enum pok_network_result pok_world_netmethod_send(struct pok_world* world,
 
     return result;
 }
+static enum pok_network_result world_netmethod_add_map(struct pok_world* world,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_readinfo* info)
+{
+    /* this method is very simple: we try to netread a new map object and
+       register it; then we add it to the world */
+    enum pok_network_result result;
+    struct pok_map* map;
+
+    /* create a map object for use by the operation */
+    if (info->aux == NULL) {
+        map = pok_map_new();
+        if (map == NULL)
+            return pok_net_failed_internal;
+        /* save for future calls (in case we have to return early) */
+        info->aux = map;
+    }
+    else {
+        /* recall the map object from a previous call */
+        map = (struct pok_map*)info->aux;
+    }
+
+    /* allocate another readinfo for the operation; we do this so we can store
+       both 'map' and another aux structure in case the transfer is incomplete */
+    if (!pok_netobj_readinfo_alloc_next(info))
+        return pok_net_failed_internal;
+
+    /* attempt to netread the map */
+    result = pok_map_netread(map,dsrc,info->next);
+    if (result == pok_net_completed) {
+        /* remove this reference so it is not freed */
+        info->aux = NULL;
+
+        /* add the new map to the world object */
+        if (!pok_world_add_map(world,map)) {
+            pok_exception_new_format("could not add map '%u' to world",map->mapNo);
+            return pok_net_failed_protocol;
+        }
+    }
+    else if (result != pok_net_incomplete) {
+        /* the operation failed: destroy the map object properly */
+        info->aux = NULL;
+        pok_map_free(map);
+    }
+    return result;
+}
 enum pok_network_result pok_world_netmethod_recv(struct pok_world* world,
     struct pok_data_source* dsrc,
     struct pok_netobj_readinfo* info,
     enum pok_world_method method)
 {
-    enum pok_network_result result = pok_net_completed;
+    enum pok_network_result result = pok_net_failed_protocol;
+
+    /* delegate control to the appropriate function to handle the method kind */
+    switch (method) {
+    case pok_world_method_add_map:
+        return world_netmethod_add_map(world,dsrc,info);
+    default: /* error: bad method kind */
+        pok_exception_new_format("bad method to world object: %d",method);
+    }
 
     return result;
 }

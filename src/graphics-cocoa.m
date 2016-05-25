@@ -381,6 +381,9 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
     [glContext setView:view];
     [glContext makeCurrentContext];
 
+    /* initialize OpenGL */
+    gl_init(sys->wwidth,sys->wheight);
+
     return self;
 }
 
@@ -431,6 +434,9 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
 
     /* update title bar text */
     [window setTitle:[NSString stringWithCString:sys->title.buf encoding:NSASCIIStringEncoding]];
+
+    /* initialize OpenGL */
+    gl_init(sys->wwidth,sys->wheight);
 }
 - (void)callRenderRoutines
 {
@@ -489,9 +495,6 @@ void pok_graphics_subsystem_render_loop(struct pok_graphics_subsystem* sys)
     /* initialize Cocoa (if we are first to do so) and then create main app window */
     [PokCocoaSubsystem initApp];
     cocoa = [[PokCocoaSubsystem alloc] initWithSys:sys];
-
-    /* initialize OpenGL */
-    gl_init(sys->wwidth,sys->wheight);
 
     /* call load routine */
     if (sys->loadRoutine != NULL)

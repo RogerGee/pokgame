@@ -63,6 +63,13 @@ void pok_netobj_delete(struct pok_netobj* netobj);
 bool_t pok_netobj_register(struct pok_netobj* netobj,uint32_t id);
 enum pok_network_result pok_netobj_netread(struct pok_netobj* netobj,struct pok_data_source* dsrc,struct pok_netobj_readinfo* info);
 enum pok_network_result pok_netobj_netwrite(struct pok_netobj* netobj,struct pok_data_source* dsrc,struct pok_netobj_writeinfo* info);
+#define POK_NETOBJ(obj) ((struct pok_netobj*)obj)
+
+/* define generic typedefs for netobj functions (e.g. netread/netwrite) */
+typedef enum pok_network_result (*netread_func_t)(struct pok_netobj*,
+    struct pok_data_source*,struct pok_netobj_readinfo*);
+typedef enum pok_network_result (*netwrite_func_t)(struct pok_netobj*,
+    struct pok_data_source*,struct pok_netobj_writeinfo*);
 
 /* network object functionality: we need to track changes to dynamic network objects, so they are
    stored in a database by their unique id numbers; the database is global and not thread-safe */
@@ -85,7 +92,7 @@ struct pok_netobj_readinfo
     /* auxilary data object; will be freed automatically if set */
     void* aux;
 
-    /* if non-zero then an incomplete transfer send at least some bytes but not all */
+    /* if non-zero then an incomplete transfer sent at least some bytes but not all */
     bool_t pending;
 };
 struct pok_netobj_readinfo* pok_netobj_readinfo_new();
@@ -106,7 +113,7 @@ struct pok_netobj_writeinfo
     uint16_t fieldProg; /* field progress counter */
     uint16_t depth[2];  /* multidimensional depth counter */
 
-    /* if non-zero then an incomplete transfer send at least some bytes but not all */
+    /* if non-zero then an incomplete transfer sent at least some bytes but not all */
     bool_t pending;
 };
 struct pok_netobj_writeinfo* pok_netobj_writeinfo_new();

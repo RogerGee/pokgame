@@ -64,6 +64,7 @@ struct pok_data_source* pok_data_source_new_local_anon();
 struct pok_data_source* pok_data_source_new_network(struct pok_network_address* address);
 struct pok_data_source* pok_data_source_new_file(const char* filename,enum pok_filemode mode,enum pok_iomode access);
 byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,size_t* bytesRead);
+byte_t* pok_data_source_read_any(struct pok_data_source* dsrc,size_t maxBytes,size_t* bytesRead);
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead);
 char pok_data_source_peek(struct pok_data_source* dsrc); /* these return (char) -1 on failure so use them for plain text */
 char pok_data_source_peek_ex(struct pok_data_source* dsrc,size_t lookahead);
@@ -106,9 +107,18 @@ bool_t pok_data_stream_write_string_ex(struct pok_data_source* dsrc,const char* 
 bool_t pok_data_stream_write_string_obj(struct pok_data_source* dsrc,const struct pok_string* src);
 
 /* pok_process: an abstraction around starting a process; its implementation is platform specific */
+#define PROCESS_TIMEOUT_INFINITE -1
+enum pok_process_state
+{
+    pok_process_state_running,   /* the process is still running */
+    pok_process_state_killed,    /* the process terminated abnormally */
+    pok_process_state_terminated /* the process terminated normally */
+};
+
 struct pok_process;
 struct pok_process* pok_process_new(const char* cmdline,const char* environment,pok_error_callback errorCallback);
 void pok_process_free(struct pok_process* proc);
+enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout);
 struct pok_data_source* pok_process_stdio(struct pok_process* proc);
 bool_t pok_process_has_terminated(struct pok_process* proc);
 

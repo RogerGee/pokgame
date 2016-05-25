@@ -270,9 +270,9 @@ void pok_game_free(struct pok_game_info* game)
     pok_world_free(game->world);
     pok_map_render_context_free(game->mapRC);
     if (game->staticOwnerMask & 0x01)
-        pok_sprite_manager_free(game->sman);
-    if (game->staticOwnerMask & 0x02)
         pok_tile_manager_free(game->tman);
+    if (game->staticOwnerMask & 0x02)
+        pok_sprite_manager_free(game->sman);
     pok_thread_free(game->updateThread);
     pok_string_delete(&game->versionLabel);
     if (game->versionProc != NULL)
@@ -292,6 +292,7 @@ void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind
         else
             game->staticOwnerMask |= 0x01;
         game->tman = obj;
+        game->mapRC->tman = obj;
         break;
     case pok_static_obj_sprite_manager:
         if (game->staticOwnerMask & 0x02)
@@ -299,6 +300,7 @@ void pok_game_static_replace(struct pok_game_info* game,enum pok_static_obj_kind
         else
             game->staticOwnerMask |= 0x02;
         game->sman = obj;
+        game->charRC->sman = obj;
         break;
     default:
 #ifdef POKGAME_DEBUG

@@ -65,6 +65,7 @@ const struct pok_exception* pok_exception_pop();
 const struct pok_exception* pok_exception_pop_ex(enum pok_ex_kind kind,int id);
 const struct pok_exception* pok_exception_peek();
 const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id);
+void pok_exception_load_message(struct pok_exception* except);
 void pok_exception_append_message(struct pok_exception* except,const char* message, ...);
 
 #endif

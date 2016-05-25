@@ -106,6 +106,7 @@ void pok_user_save()
     }
     pok_data_source_write(fout,(byte_t*)userInfo.guid.buf,GUID_LENGTH,&sz);
     pok_data_stream_write_string(fout,userInfo.name.buf);
+    pok_data_stream_write_byte(fout,0); /* null-terminator */
     pok_data_stream_write_uint16(fout,userInfo.sprite);
     pok_data_stream_write_byte(fout,userInfo.gender);
     pok_data_source_free(fout);

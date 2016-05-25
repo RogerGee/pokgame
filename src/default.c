@@ -72,8 +72,7 @@ struct pok_game_info* pok_make_default_game(struct pok_graphics_subsystem* sys)
     B( pok_world_add_map(game->world,defmap) );
 
     /* prepare rendering contexts for initial scene */
-    pok_map_render_context_set_map(game->mapRC,defmap);
-    B( pok_map_render_context_center_on(game->mapRC,&ORIGIN,&DEFAULT_MAP_START_LOCATION) );
+    B( pok_map_render_context_set_position(game->mapRC,defmap,&ORIGIN,&DEFAULT_MAP_START_LOCATION) );
     pok_character_context_set_player(game->playerContext,game->mapRC); /* align the player context with map context */
 
     return game;

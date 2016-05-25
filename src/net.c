@@ -273,7 +273,7 @@ bool_t pok_data_stream_read_string_ex(struct pok_data_source* dsrc,struct pok_st
     size_t iter;
     byte_t* data;
     size_t bytesIn;
-    data = pok_data_source_read(dsrc,ATTEMPT_SIZE,&bytesIn);
+    data = pok_data_source_read_any(dsrc,ATTEMPT_SIZE,&bytesIn);
     if (data == NULL)
         /* exception is inherited from above function call */
         return FALSE;
@@ -283,7 +283,9 @@ bool_t pok_data_stream_read_string_ex(struct pok_data_source* dsrc,struct pok_st
             break;
     pok_string_concat_ex(dst,(const char*)data,iter);
     if (iter < bytesIn) {
-        pok_data_source_unread(dsrc,bytesIn - iter);
+        /* unread the difference; subtract 1 to avoid unreading the
+           null-terminating byte */
+        pok_data_source_unread(dsrc,bytesIn - iter - 1);
         return TRUE;
     }
     if ( pok_data_source_endofcomms(dsrc) )

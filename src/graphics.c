@@ -447,7 +447,6 @@ void gl_delete_textures(struct gl_texture_info* existing,struct texture_info* in
        will be passed to 'glDeleteTextures'; replace texture names with 0 in the existing list so the space;
        can be used again; according to the documentation, a texture name of 0 is silently ignored */
     int i, j;
-    pok_message("stuff: %d %d",count,2);
     for (i = 0;i < count;++i) {
         size_t index = 0;
         GLsizei cnt = 0;

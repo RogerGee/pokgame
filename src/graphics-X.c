@@ -92,11 +92,19 @@ bool_t impl_new(struct pok_graphics_subsystem* sys)
 }
 inline void impl_set_game_state(struct pok_graphics_subsystem* sys,bool_t state)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     /* this allows the subsystem to effectively pause/resume the game rendering */
     sys->impl->gameRendering = state;
 }
 void impl_free(struct pok_graphics_subsystem* sys)
 {
+#ifdef POKGAME_DEBUG
+    check_impl(sys);
+#endif
+
     /* flag that rendering should stop and join the render thread
        back with this thread */
     sys->impl->rendering = FALSE;
@@ -406,6 +414,11 @@ void make_frame(struct pok_graphics_subsystem* sys)
     sys->impl->context = glXCreateContext(display,visual,None,True);
     if (sys->impl->context == NULL)
         pok_error(pok_error_fatal,"cannot create OpenGL context");
+    /* make the context current on this thread and attach it to the window */
+    if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
+        pok_error(pok_error_fatal,"fail glXMakeCurrent()");
+    /* call function to setup OpenGL */
+    gl_init(sys->wwidth,sys->wheight);
 }
 void edit_frame(struct pok_graphics_subsystem* sys)
 {
@@ -423,6 +436,8 @@ void edit_frame(struct pok_graphics_subsystem* sys)
         sys->wwidth,
         sys->wheight);
     XStoreName(display,sys->impl->window,sys->title.buf);
+    /* call function to setup OpenGL */
+    gl_init(sys->wwidth,sys->wheight);
 }
 void close_frame(struct pok_graphics_subsystem* sys)
 {
@@ -444,13 +459,6 @@ void* graphics_loop(struct pok_graphics_subsystem* sys)
 
     /* make the frame */
     make_frame(sys);
-
-    /* make the context current on this thread and attach it to the window */
-    if ( !glXMakeCurrent(display,sys->impl->window,sys->impl->context) )
-        pok_error(pok_error_fatal,"fail glXMakeCurrent()");
-
-    /* call function to setup OpenGL */
-    gl_init(sys->wwidth,sys->wheight);
 
     /* call load routine on graphics subsystem (if specified) */
     if (sys->loadRoutine != NULL)

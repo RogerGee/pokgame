@@ -75,7 +75,8 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
         [4 bytes] warp chunk X
         [4 bytes] warp chunk Y
         [2 bytes] warp column
-        [2 bytes] warp row */
+        [2 bytes] warp row
+    */
     enum pok_network_result result = pok_net_already;
     switch (info->fieldProg) {
     case 0:
@@ -123,5 +124,12 @@ enum pok_network_result pok_tile_netread(struct pok_tile* tile,struct pok_data_s
         if ((result = pok_netobj_readinfo_process(info)) != pok_net_completed)
             break;
     }
+    return result;
+}
+enum pok_network_result pok_tile_netwrite(struct pok_tile* tile,struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* info)
+{
+    enum pok_network_result result = pok_net_completed;
+
     return result;
 }

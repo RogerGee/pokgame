@@ -217,12 +217,8 @@ DWORD WINAPI RenderLoop(struct pok_graphics_subsystem* sys)
     int framerate = 0;
     DWORD sleepamt = 0;
 
-    /* make window and OpenGL context; bind the context to this thread */
+    /* make window; this creates and binds an OpenGL context */
     CreateMainWindow(sys);
-    wglMakeCurrent(sys->impl->hDC, sys->impl->hOpenGLContext);
-
-    /* call function to setup OpenGL */
-    gl_init(sys->wwidth, sys->wheight);
 
     /* if specified, game load routine */
     if (sys->loadRoutine != NULL)
@@ -394,10 +390,14 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
     if (!SetPixelFormat(sys->impl->hDC, pixelFormat, &pfd))
         pok_error(pok_error_fatal, "fail SetPixelFormat()");
 
-    /* create OpenGL rendering context */
+    /* create OpenGL rendering context and bind it to the thread */
     sys->impl->hOpenGLContext = wglCreateContext(sys->impl->hDC);
     if (!sys->impl->hOpenGLContext)
         pok_error(pok_error_fatal, "fail wglCreateContext()");
+    wglMakeCurrent(sys->impl->hDC, sys->impl->hOpenGLContext);
+
+    /* call function to setup OpenGL */
+    gl_init(sys->wwidth, sys->wheight);
 }
 
 VOID EditMainWindow(struct pok_graphics_subsystem* sys)
@@ -408,6 +408,8 @@ VOID EditMainWindow(struct pok_graphics_subsystem* sys)
     SetWindowPos(sys->impl->hWnd, NULL, 0, 0, sys->wwidth, sys->wheight, SWP_NOZORDER | SWP_NOMOVE);
     /* reset window text */
     SetWindowText(sys->impl->hWnd, sys->title.buf);
+    /* call function to setup OpenGL */
+    gl_init(sys->wwidth, sys->wheight);
 }
 
 VOID DestroyMainWindow(struct pok_graphics_subsystem* sys)

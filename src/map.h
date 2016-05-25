@@ -11,6 +11,7 @@ enum pok_ex_map
 {
     pok_ex_map_bad_chunk_size, /* chunk size was outside an acceptable range */
     pok_ex_map_zero_chunks, /* peer specified a zero amount of chunks */
+    pok_ex_map_too_many_chunks, /* peer specified too many chunks at initial load time */
     pok_ex_map_already, /* map object was already loaded */
     pok_ex_map_not_loaded, /* map object was not loaded so the operation could not complete */
     pok_ex_map_bad_format, /* map information was not formatted correctly */

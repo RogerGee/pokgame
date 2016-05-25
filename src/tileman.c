@@ -463,15 +463,17 @@ enum pok_network_result pok_tile_manager_netread(struct pok_tile_manager* tman,s
                     (uint32_t)(tman->tilecnt-1)*tman->sys->dimension,
                     dsrc,
                     info->next)) != pok_net_completed)
+        {
             break;
-            /* divide the tile sheet image into individual tile images; this takes up minimal memory since
-               the individual images just refer to image data in the source sheet image; subtract 1 from
-               tilecnt since we incremented it earlier to account for the black tile */
-            if ( !pok_tile_manager_from_data(tman,tman->tilecnt-1,tman->_sheet->pixels.data,TRUE) )
-                return pok_net_failed_internal;
-            /* reset info next */
-            if ( !pok_netobj_readinfo_alloc_next(info) )
-                return pok_net_failed_internal;
+        }
+        /* divide the tile sheet image into individual tile images; this takes up minimal memory since
+           the individual images just refer to image data in the source sheet image; subtract 1 from
+           tilecnt since we incremented it earlier to account for the black tile */
+        if ( !pok_tile_manager_from_data(tman,tman->tilecnt-1,tman->_sheet->pixels.data,TRUE) )
+            return pok_net_failed_internal;
+        /* reset info next */
+        if ( !pok_netobj_readinfo_alloc_next(info) )
+            return pok_net_failed_internal;
     case 3:
         /* animation data */
         if ((result = pok_tile_manager_netread_ani(tman,dsrc,info->next)) != pok_net_completed)

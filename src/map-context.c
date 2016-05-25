@@ -1,6 +1,7 @@
 /* map-context.c - pokgame */
 #include "map-context.h"
 #include "protocol.h"
+#include "error.h"
 #include <stdlib.h>
 
 /* this function computes chunk render information for the map rendering routine; this is 'extern' for debugging */
@@ -47,7 +48,7 @@ void pok_map_render_context_set_map(struct pok_map_render_context* context,struc
 {
     /* set map and reset the other information */
     int i, j;
-    context->focus[0] = context->focus[1] = 0;
+    context->focus[0] = context->focus[1] = 1;
     context->offset[0] = context->offset[1] = 0;
     for (i = 0;i < 3;++i)
         for (j = 0;j < 3;++j)
@@ -57,7 +58,7 @@ void pok_map_render_context_set_map(struct pok_map_render_context* context,struc
     context->chunkpos.Y = map->originPos.Y;
     context->chunk = map->origin;
     context->map = map;
-    context->changed = TRUE;
+    pok_map_render_context_align(context);
 }
 void pok_map_render_context_align(struct pok_map_render_context* context)
 {
@@ -98,14 +99,15 @@ bool_t pok_map_render_context_set_position(struct pok_map_render_context* contex
     const struct pok_location* relpos)
 {
     struct pok_map* oldMap;
-    /* perform 'set_map' then 'center_on'; if 'center_on' fails, restore the previous configuration */
+    /* perform 'set_map' then 'center_on'; if 'center_on' fails, restore the
+      previous configuration; alignment only occurs once */
     oldMap = context->map;
     context->map = map;
     if ( !pok_map_render_context_center_on(context,chunkpos,relpos) ) {
         context->map = oldMap;
         return FALSE;
     }
-    /* 'context->changed' was flagged in the previous function call */
+    /* 'context->changed' was flagged in a previous function call */
     return TRUE;
 }
 static bool_t is_impassable(const struct pok_tile_manager* tman,struct pok_map_chunk* chunk,uint16_t column,uint16_t row)
@@ -495,7 +497,7 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
     int i;
     if (context->changed) {
         /* compute dimensions of draw spaces (only if the context was changed; this flag helps
-           provide thread safety as well; anothe thread may change the map or position, then flag
+           provide thread safety as well; another thread may change the map or position, then flag
            'context->changed' to make the changes go into effect) */
         compute_chunk_render_info(context,sys);
         context->changed = FALSE;
@@ -508,7 +510,7 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
             for (h = 0;h < context->info[i].down;++h,++row,y+=sys->dimension) {
                 uint16_t w, col = context->info[i].loc.column;
                 uint32_t x = context->info[i].px + context->offset[0];
-                for (w = 0;w < context->info[i].across;++w,++col,x+=sys->dimension)
+                for (w = 0;w < context->info[i].across;++w,++col,x+=sys->dimension) {
                     pok_image_render(
                         pok_tile_manager_get_tile(
                             context->tman,
@@ -516,6 +518,7 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
                             context->tileAniTicks ),
                         x,
                         y );
+                }
             }
         }
     }

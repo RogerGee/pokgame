@@ -81,6 +81,7 @@ static char const* const* POK_ERROR_MESSAGES[] = {
     (const char* []) { /* pok_ex_map */
         "the specified chunk size was incorrect", /* pok_ex_map_bad_chunk_size */
         "a zero amount of chunks was specified", /* pok_ex_map_zero_chunks */
+        "too many chunks were specified", /* pok_ex_map_too_many_chunks */
         "the operation could not complete because the map was already loaded", /* pok_ex_map_already */
         "the operation could not complete because the map was not loaded", /* pok_ex_map_not_loaded */
         "map information was incorrect", /* pok_ex_map_bad_format */
@@ -234,7 +235,7 @@ struct pok_exception* pok_exception_new()
         pok_error(pok_error_fatal,"module 'exception' was unloaded");
 #endif
     ex = malloc(sizeof(struct pok_exception));
-    ex->id = -1;
+    ex->id = 0;
     ex->kind = pok_ex_default;
     ex->message[0] = 0;
     add_exception(ex);
@@ -406,6 +407,14 @@ const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id)
     ex = list != NULL && !list->popped && list->ex->kind == kind && list->ex->id == id ? list->ex : NULL;
     pok_unlock_error_module();
     return ex;
+}
+void pok_exception_load_message(struct pok_exception* except)
+{
+    if (except->id >= 0) {
+        strncpy(except->message,
+            POK_ERROR_MESSAGES[except->kind][except->id],
+            sizeof(except->message));
+    }
 }
 void pok_exception_append_message(struct pok_exception* except,const char* message, ...)
 {

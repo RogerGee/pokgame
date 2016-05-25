@@ -45,3 +45,11 @@ void pok_character_free(struct pok_character* character)
 {
     free(character);
 }
+enum pok_network_result pok_character_netwrite(struct pok_character* character,
+    struct pok_data_source* dsrc,
+    struct pok_netobj_writeinfo* info)
+{
+    enum pok_network_result result = pok_net_completed;
+
+    return result;
+}

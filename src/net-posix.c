@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <signal.h>
+#include <wait.h>
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
@@ -234,6 +236,59 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc,size_t bytesRequested,
     dsrc->szRead -= *bytesRead;
     return dsrc->bufferRead + it;
 }
+byte_t* pok_data_source_read_any(struct pok_data_source* dsrc,size_t maxBytes,size_t* bytesRead)
+{
+    /* this function attempts to read any available bytes from the data source;
+       if bytes are buffered, they are returned instantly; otherwise a read call
+       is issued; in other words, if any bytes are available, they are returned */
+    size_t it;
+    ssize_t br;
+    struct pok_exception* ex;
+    /* check end of file on fd[0] */
+    if (dsrc->mode & DS_MODE_REACH_EOF) {
+        *bytesRead = 0;
+        return dsrc->bufferRead;
+    }
+
+    /* if some bytes already exist in the buffer, return them (no matter how
+       many there are) */
+    if (dsrc->szRead > 0) {
+        br = ( dsrc->szRead > maxBytes ) ? maxBytes : dsrc->szRead;
+        it = dsrc->itRead;
+        dsrc->itRead += br;
+        dsrc->szRead -= br;
+        *bytesRead = br;
+        return dsrc->bufferRead + it;
+    }
+
+    /* issue a read for more bytes; the entire buffer is available */
+    br = read(dsrc->fd[0],dsrc->bufferRead,sizeof(dsrc->bufferRead));
+    if (br == -1) {
+        /* read error */
+        ex = pok_exception_new();
+        ex->kind = pok_ex_net;
+        if (errno==EAGAIN || errno==EWOULDBLOCK)
+            ex->id = pok_ex_net_wouldblock;
+        else if (errno == EINTR)
+            ex->id = pok_ex_net_interrupt;
+        else
+            ex->id = pok_ex_net_unspec;
+        *bytesRead = 0;
+        return NULL;
+    }
+    if (br == 0)
+        /* set EOF mode bit */
+        dsrc->mode |= DS_MODE_REACH_EOF;
+    dsrc->szRead += br;
+
+    /* return a pointer to the specified memory */
+    br = dsrc->szRead > maxBytes ? maxBytes : dsrc->szRead;
+    it = dsrc->itRead;
+    dsrc->itRead += br;
+    dsrc->szRead -= br;
+    *bytesRead = br;
+    return dsrc->bufferRead + it;
+}
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc,void* buffer,size_t bytesRequested,size_t* bytesRead)
 {
     /* perform a simpler read into a user-provided buffer */
@@ -330,8 +385,11 @@ static bool_t pok_data_source_write_primative(int fd,const byte_t* buffer,size_t
                 ex->id = pok_ex_net_interrupt;
             else if (errno == EPIPE)
                 ex->id = pok_ex_net_brokenpipe;
-            else
-                ex->id = pok_ex_net_unspec;
+            else {
+                ex->id = -1;
+                pok_exception_append_message(ex,"%s %d",strerror(errno));
+            }
+            pok_exception_load_message(ex);
         }
         *bytesWritten = 0;
         return FALSE;
@@ -482,10 +540,11 @@ inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc)
 /* pok_process */
 struct pok_process
 {
-    int fd_read[2];
-    int fd_write[2];
+    int fdrd;
+    int fdwr;
 
     pid_t pid;
+    bool_t term;
 };
 
 static bool_t pok_process_prepare_environment(const char* environment,const char*** envp)
@@ -522,6 +581,7 @@ static bool_t pok_process_prepare_environment(const char* environment,const char
 struct pok_process* pok_process_new(const char* cmdline,const char* environment,pok_error_callback errorCallback)
 {
     int i;
+    int fd_read[2], fd_write[2];
     struct pok_process* proc;
     struct pok_string argbuf;
     const char** argv = NULL;
@@ -532,17 +592,18 @@ struct pok_process* pok_process_new(const char* cmdline,const char* environment,
         pok_exception_flag_memory_error();
         return NULL;
     }
+    proc->term = FALSE;
 
     /* create IO devices */
-    if (pipe(proc->fd_read) == -1) {
+    if (pipe(fd_read) == -1) {
         pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_local);
         free(proc);
         return NULL;
     }
-    if (pipe(proc->fd_write) == -1) {
+    if (pipe(fd_write) == -1) {
         pok_exception_new_ex(pok_ex_net,pok_ex_net_could_not_create_local);
         for (i = 0;i < 2;++i)
-            close(proc->fd_read[i]);
+            close(fd_read[i]);
         free(proc);
     }
 
@@ -557,7 +618,7 @@ struct pok_process* pok_process_new(const char* cmdline,const char* environment,
     }
 
     /* set up environment specified by the user */
-    if ( !pok_process_prepare_environment(cmdline,&envp) )
+    if ( !pok_process_prepare_environment(environment,&envp) )
         goto fail;
 
     /* create process */
@@ -569,6 +630,20 @@ struct pok_process* pok_process_new(const char* cmdline,const char* environment,
 
     /* handle child */
     if (proc->pid == 0) {
+        /* setup standard input and output; let standard error be inherited */
+        if (dup2(fd_write[0],STDIN_FILENO) != STDIN_FILENO) {
+            (*errorCallback)(pok_ex_net,pok_ex_net_could_not_create_local);
+            _exit(1);
+        }
+        if (dup2(fd_read[1],STDOUT_FILENO) != STDOUT_FILENO) {
+            if (errorCallback != NULL)
+                (*errorCallback)(pok_ex_net,pok_ex_net_could_not_create_local);
+            _exit(1);
+        }
+        for (i = 3;i < 10000;++i) {
+            close(i);
+        }
+
         /* attempt to execute program */
         if (execve(argv[0],(char**)argv,(char**)envp) == -1) {
             int id = pok_ex_net, kind;
@@ -591,27 +666,32 @@ struct pok_process* pok_process_new(const char* cmdline,const char* environment,
                 kind = pok_ex_default_undocumented;
                 break;
             }
-            /* call the error callback so that the caller can handle
-               the error before we terminate */
-            (*errorCallback)(id,kind);
+            if (errorCallback != NULL) {
+                /* call the error callback so that the caller can handle
+                   the error before we terminate */
+                (*errorCallback)(id,kind);
+            }
             _exit(1);
         }
         /* control no longer in this program */
     }
 
-    /* PARENT: close necessary file descriptors and free resources */
-    close(proc->fd_read[1]);
-    proc->fd_read[1] = -1;
-    close(proc->fd_write[0]);
-    proc->fd_write[0] = -1;
+    /* PARENT: keep/close necessary file descriptors and free resources */
+    proc->fdrd = fd_read[0];
+    proc->fdwr = fd_write[1];
+    close(fd_read[1]);
+    fd_read[1] = -1;
+    close(fd_write[0]);
+    fd_write[0] = -1;
     free(argv);
     free(envp);
+    pok_string_delete(&argbuf);
     return proc;
 
 fail:
     for (i = 0;i < 2;++i) {
-        close(proc->fd_read[i]);
-        close(proc->fd_write[i]);
+        close(fd_read[i]);
+        close(fd_write[i]);
     }
     if (argv != NULL)
         free(argv);
@@ -622,10 +702,70 @@ fail:
 }
 void pok_process_free(struct pok_process* proc)
 {
+    if (proc->fdrd != -1)
+        close(proc->fdrd);
+    if (proc->fdwr != -1)
+        close(proc->fdwr);
+    if (!proc->term) {
+        /* if the process hasn't terminated, send the sure kill signal;
+           therefore it is up to the user to call 'pok_process_scan' to probe if
+           a process is still alive to terminate normally */
+        kill(proc->pid,SIGKILL);
+        pok_process_shutdown(proc,PROCESS_TIMEOUT_INFINITE); /* reap */
+    }
+    free(proc);
+}
+enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout)
+{
+    /* shutdown descriptors first to prevent deadlocking with the child */
+    if (proc->fdrd != -1) {
+        close(proc->fdrd);
+        proc->fdrd = -1;
+    }
+    if (proc->fdwr != -1) {
+        close(proc->fdwr);
+        proc->fdwr = -1;
+    }
+
+    /* now attempt to reap the child process */
+    do {
+        int status;
+        pid_t r = waitpid(proc->pid,&status,timeout > 0 ? WNOHANG : 0);
+        if (r == -1) {
+            pok_error(pok_error_warning,"failed waitpid with pid=%d",proc->pid);
+            proc->term = TRUE;
+            return pok_process_state_killed; /* assume the process was killed somehow */
+        }
+        if (r == proc->pid) {
+            if (WIFEXITED(r)) {
+                proc->term = TRUE;
+                return pok_process_state_terminated;
+            }
+            if (WIFSIGNALED(r)) {
+                proc->term = TRUE;
+                return pok_process_state_killed;
+            }
+            /* otherwise the process may have been stopped; in which case we
+               will wait for it some more; for sake of clarity, we will consider
+               a stopped process to be running since it can be resumed again */
+        }
+        sleep(1);
+        timeout -= 1;
+    } while (timeout > 0);
+    return pok_process_state_running;
 }
 struct pok_data_source* pok_process_stdio(struct pok_process* proc)
 {
-    return NULL;
+    struct pok_data_source* dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+    dsrc->fd[0] = proc->fdrd;
+    dsrc->fd[1] = proc->fdwr;
+    dsrc->mode = DS_MODE_FD_BOTH;
+    pok_data_source_init(dsrc,pok_iomode_full_duplex);
+    return dsrc;
 }
 bool_t pok_process_has_terminated(struct pok_process* proc)
 {
