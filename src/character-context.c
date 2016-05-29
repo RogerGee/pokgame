@@ -300,12 +300,11 @@ static bool_t pok_character_context_spin_update(struct pok_character_context* co
         if (t > 0) {
             /* for good configuration, t should be close to 1; we apply the correct number to imitate (as best we
                can) the desired spin rate */
-            for (uint16_t i = 0;i < t;++i) {
+            for (uint16_t i = 0;i < t && context->update;++i,--context->update) {
                 /* change the animation frame by one counter-clockwise rotation */
                 context->character->direction = pok_direction_counterclockwise_next(context->character->direction);
                 context->frame = pok_to_frame_direction(context->character->direction);
             }
-            --context->update;
         }
 
         return FALSE;

@@ -1,5 +1,7 @@
 #include <rlibrary/rstdio.h>
 #include <cstdlib>
+#include <algorithm>
+#include <vector>
 #include <ctime>
 #include <map>
 using namespace std;
@@ -15,8 +17,9 @@ static void create_handles();
 static void send_tiles();
 static void send_first_map();
 
-int main()
+int main(int,const char* argv[])
 {
+    errConsole << argv[0] << ": test version program started" << endline;
     srand(time(NULL));
 
     // create handles for network objects
@@ -28,9 +31,9 @@ int main()
            << "85hd72jdmx91jswq";
 
     // send static network objects
-    binstdout << byte(0003) << ushort(32) << ushort(10)
-           << ushort(5) << ushort(1) << ushort(2)
-           << ushort(0) << ushort(0);
+    binstdout << byte(0003) << ushort(32) << ushort(11)
+              << ushort(6) << ushort(1) << ushort(2)
+              << ushort(0) << ushort(0);
     send_tiles();
 
     // write netobj id for player character
@@ -46,10 +49,10 @@ int main()
     while (true) {
         device.read(trash);
         if (device.get_last_operation_status() == no_input) {
-            errConsole << "Received end of file; shutting down" << endline;
+            errConsole << argv[0] << ": Received end of file; shutting down" << endline;
             break;
         }
-        errConsole << "Read " << trash.size() << " bytes" << endline;
+        errConsole << argv[0] << ": Read " << trash.size() << " bytes" << endline;
     }
 }
 
@@ -79,6 +82,35 @@ void send_tiles()
         binstdout << ushort(0); // no terrain info
 }
 
+static void gen_maze_map(vector<vector<int> >& tiles,const pair<int,int>& pos)
+{
+    static const pair<int,int> OFFSETS[] = {make_pair(0,-1),make_pair(-1,0),make_pair(1,0),make_pair(0,1)};
+    vector<pair<int,int> > positions;
+
+    // mark unvisited adjacencies as impassable
+    for (int i = 0;i < 4;++i) {
+        int px, py;
+        px = OFFSETS[i].first + pos.first;
+        py = OFFSETS[i].second + pos.second;
+        if (px < 0 || px >= 20 || py < 0 || py >= 20)
+            continue;
+        if (tiles[px][py] == -1) {
+            positions.push_back( make_pair(px,py) );
+            tiles[px][py] = 0;
+        }
+    }
+
+    // randomly shuffle the positions and recursively compute paths to make the
+    // maze
+    if (positions.size() > 0) {
+        tiles[pos.first][pos.second] = 1; // mark current position as passable
+        random_shuffle(positions.begin(),positions.end());
+        for (auto& p : positions) {
+            gen_maze_map(tiles,p);
+        }
+    }
+}
+
 void send_first_map()
 {
     // send map header
@@ -93,10 +125,12 @@ void send_first_map()
               << byte(0); // adjacency bitmask
 
     // send map chunk
+    vector<vector<int> > tiles(20,vector<int>(20,-1));
+    gen_maze_map(tiles,make_pair(0,0));
     binstdout << netobjs["mapA.1"]; // netobj id
     for (int i = 0;i < 20;++i) {
         for (int j = 0;j < 20;++j) {
-            binstdout << ushort(rand() % 2) // tile id
+            binstdout << ushort(tiles[i][j]) // tile id
                       << byte(0); // pok_tile_warp_none
         }
     }

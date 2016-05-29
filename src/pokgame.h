@@ -24,6 +24,9 @@ enum pok_game_context
     pok_game_warp_latent_fadeout_door_context, /* the game is handling a latent door exit warp */
     pok_game_warp_latent_fadeout_cave_context, /* the game is handling a latent cave exit warp */
     pok_game_warp_fadein_context, /* the game is handling a warp fadein */
+    pok_game_warp_spin_context, /* the game is handling the initial spin warp sequence */
+    pok_game_warp_spinup_context, /* the game is handling a spin warp (player moving up) */
+    pok_game_warp_spindown_context, /* the game is handling a spin warp (player moving down) */
     pok_game_sliding_context, /* the player is sliding along ice tiles */
     pok_game_intermsg_context, /* the game is waiting for an intermsg reply */
     pok_game_menu_context /* the player is engaged in a menu activity */
@@ -100,6 +103,8 @@ struct pok_game_info
 
     /* game control flags */
     enum pok_game_context gameContext; /* flag what the game is currently doing */
+    enum pok_game_context contextStk[5]; /* previous contexts (not always required) */
+    int contextStkTop;
     bool_t pausePlayerMap; /* if non-zero, then stop updating player and map */
 
     /* graphics: we do not own this object; it is managed by another context; it
@@ -149,6 +154,8 @@ void pok_game_register(struct pok_game_info* game);
 void pok_game_unregister(struct pok_game_info* game);
 void pok_game_load_textures(struct pok_game_info* game);
 void pok_game_delete_textures(struct pok_game_info* game);
+void pok_game_context_push(struct pok_game_info* game);
+void pok_game_context_pop(struct pok_game_info* game);
 
 /* misc game operations */
 void pok_game_activate_menu(struct pok_game_info* game,enum pok_menu_kind menuKind,struct pok_string* assignText);

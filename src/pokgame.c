@@ -204,6 +204,7 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     game->staticOwnerMask = template == NULL ? (2 << _pok_static_obj_top) - 1 : 0x00;
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;
+    game->contextStkTop = 0;
     game->pausePlayerMap = FALSE;
     game->versionProc = NULL;
     game->versionCBack = NULL;
@@ -339,6 +340,20 @@ void pok_game_delete_textures(struct pok_game_info* game)
         2,
         game->tman->tileset, game->tman->tilecnt,
         game->sman->spritesets, game->sman->imagecnt );
+}
+void pok_game_context_push(struct pok_game_info* game)
+{
+#ifdef POKGAME_DEBUG
+    pok_assert(game->contextStkTop < (int)(sizeof(game->contextStk)/sizeof(enum pok_game_context)));
+#endif
+    game->contextStk[game->contextStkTop++] = game->gameContext;
+}
+void pok_game_context_pop(struct pok_game_info* game)
+{
+#ifdef POKGAME_DEBUG
+    pok_assert(game->contextStkTop > 0);
+#endif
+    game->gameContext = game->contextStk[--game->contextStkTop];
 }
 void pok_game_activate_menu(struct pok_game_info* game,enum pok_menu_kind menuKind,struct pok_string* assignText)
 {

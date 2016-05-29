@@ -149,4 +149,21 @@ enum pok_menu_color
     pok_menu_color_TOP = 9
 };
 
+/* other kinds of flags */
+
+enum pok_daycycle_flag
+{
+    pok_daycycle_time_morning,
+    pok_daycycle_time_day,
+    pok_daycycle_time_night
+};
+
+enum pok_outdoor_effect_flag
+{
+    pok_outdoor_effect_rain,
+    pok_outdoor_effect_storm,
+    pok_outdoor_effect_snow,
+    pok_outdoor_effect_fog
+};
+
 #endif
