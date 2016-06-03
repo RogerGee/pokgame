@@ -40,4 +40,25 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
 bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t ticks);
 void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct pok_fadeout_effect* effect);
 
+/* pok_daycycle_effect: does day/night effect for day cycle functionality */
+struct pok_daycycle_effect
+{
+    struct pok_effect _base;
+};
+
+/* pok_outdoor_effect: outdoor effects (e.g. rain, snow, ETC.) */
+struct pok_outdoor_effect
+{
+    struct pok_effect _base;
+
+    /* which effect is turned on (enum pok_outdoor_effect_flag);
+     * only one effect may be on at a time */
+    uint8_t kind;
+};
+void pok_outdoor_effect_init(struct pok_fadeout_effect* effect);
+void pok_outdoor_effect_set_update(struct pok_fadeout_effect* effect,
+    const struct pok_graphics_subsystem* sys,
+    uint32_t time, /* 0 is unlimited */
+    uint8_t kind);
+
 #endif

@@ -10,9 +10,13 @@
 
 /* constant update parameters */
 
-#define MAP_GRANULARITY          8   /* granularity of map scroll update and player move update */
+#define MAP_GRANULARITY            8 /* granularity of map scroll update and player move update */
+#define MAP_GRANULARITY_FAST       4 /* granularity of map scroll update/player update when fast */
 #define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
-#define MAP_SCROLL_TIME_FAST     160 /* number of ticks for complete fast map scroll update */
+#define MAP_SCROLL_TIME_FAST     120 /* number of ticks for complete fast map scroll update */
+
+#define MAP_TICKS_NORMAL MAP_SCROLL_TIME / MAP_GRANULARITY
+#define MAP_TICKS_FAST  MAP_SCROLL_TIME_FAST / MAP_GRANULARITY_FAST
 
 #define INITIAL_FADEIN_DELAY     350 /* "initial fadein" happens before we show the game */
 #define INITIAL_FADEIN_TIME     2000
@@ -22,18 +26,9 @@
 
 #define INTERMSG_DELAY          2400 /* number of ticks for intermsg response before canceling */
 
-#define SPIN_WARP_RATE            12 /* spin rate for main warp effect */
-
-/* globals */
-static struct
-{
-    uint32_t mapTicksNormal; /* ticks for normal map scroll */
-    uint32_t mapTicksFast;   /* ticks for fast map scroll */
-} globals;
+#define SPIN_WARP_RATE            60 /* spin rate for main warp effect */
 
 /* functions */
-static void set_defaults(struct pok_game_info* info);
-static void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t);
 static void update_key_input(struct pok_game_info* info);
 static void menu_keyup_hook(enum pok_input_key key,struct pok_game_info* info);
 static void menu_textentry_hook(char c,struct pok_game_info* info);
@@ -61,9 +56,11 @@ int update_proc(struct pok_game_info* info)
     uint32_t tileAniTicks = 0;
     uint64_t gameTime = 0;
 
-    /* setup parameters */
-    set_defaults(info);
-    set_tick_amounts(info,&info->updateTimeout);
+    /* setup default settings */
+    info->mapRC->scrollTicksAmt = MAP_TICKS_NORMAL;
+    info->playerContext->aniTicksAmt = MAP_TICKS_NORMAL;
+    info->mapRC->granularity = MAP_GRANULARITY;
+    info->playerContext->granularity = MAP_GRANULARITY;
     info->pausePlayerMap = FALSE;
 
     /* setup graphics subsystem hooks */
@@ -128,30 +125,6 @@ int update_proc(struct pok_game_info* info)
     return r;
 }
 
-void set_defaults(struct pok_game_info* info)
-{
-    info->mapRC->granularity = MAP_GRANULARITY;
-    info->playerContext->granularity = MAP_GRANULARITY;
-
-}
-
-void set_tick_amounts(struct pok_game_info* info,struct pok_timeout_interval* t)
-{
-    /* compute tick amounts; note: map scroll and character animation need to be synced */
-    globals.mapTicksNormal = MAP_SCROLL_TIME / info->mapRC->granularity;
-    globals.mapTicksFast = MAP_SCROLL_TIME_FAST / info->mapRC->granularity;
-
-    /* these need to be valid denominators */
-    if (globals.mapTicksNormal == 0)
-        globals.mapTicksNormal = 1;
-    if (globals.mapTicksFast == 0)
-        globals.mapTicksFast = 1;
-
-    /* set default tick amounts for game contexts */
-    info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
-    info->playerContext->aniTicksAmt = globals.mapTicksNormal;
-}
-
 void update_key_input(struct pok_game_info* info)
 {
     static bool_t running = FALSE;
@@ -192,17 +165,23 @@ void update_key_input(struct pok_game_info* info)
                     direction = pok_direction_right;
 
                 /* check B key for fast scrolling (player running) */
-                if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_BBUTTON,FALSE) ) {
-                    if (!running) {
-                        running = TRUE;
-                        info->mapRC->scrollTicksAmt = globals.mapTicksFast;
-                        info->playerContext->aniTicksAmt = globals.mapTicksFast;
+                if (!info->playerContext->update) {
+                    if ( pok_graphics_subsystem_keyboard_query(info->sys,pok_input_key_BBUTTON,FALSE) ) {
+                        if (!running) {
+                            running = TRUE;
+                            info->mapRC->scrollTicksAmt = MAP_TICKS_FAST;
+                            info->playerContext->aniTicksAmt = MAP_TICKS_FAST;
+                            info->mapRC->granularity = MAP_GRANULARITY_FAST;
+                            info->playerContext->granularity = MAP_GRANULARITY_FAST;
+                        }
                     }
-                }
-                else if (running) {
-                    running = FALSE;
-                    info->mapRC->scrollTicksAmt = globals.mapTicksNormal;
-                    info->playerContext->aniTicksAmt = globals.mapTicksNormal;
+                    else if (running) {
+                        running = FALSE;
+                        info->mapRC->scrollTicksAmt = MAP_TICKS_NORMAL;
+                        info->playerContext->aniTicksAmt = MAP_TICKS_NORMAL;
+                        info->mapRC->granularity = MAP_GRANULARITY;
+                        info->playerContext->granularity = MAP_GRANULARITY;
+                    }
                 }
 
                 player_move_logic(info,direction);
@@ -386,7 +365,7 @@ void player_move_logic(struct pok_game_info* info,enum pok_direction direction)
                         direction,
                         effect,
                         info->playerContext->slowDown ? 0 : info->sys->dimension,
-                        !groove );
+                        TRUE );
                     pok_game_modify_exit(info->playerContext);
                 }
                 pok_game_modify_exit(info->mapRC);
@@ -418,12 +397,22 @@ void fadeout_logic(struct pok_game_info* info)
             /* we just finished a fadeout for a warp; now finish the transition by setting a fadein effect; set the fadein
                effect first so that we avoid a race condition */
             info->fadeout.delay = WARP_FADEIN_DELAY;
-            pok_fadeout_effect_set_update(
-                &info->fadeout,
-                info->sys,
-                WARP_FADEIN_TIME,
-                info->gameContext == pok_game_warp_fadeout_context ? pok_fadeout_black_screen : pok_fadeout_to_center,
-                TRUE /* this causes the effect to fade-in */);
+            if (info->gameContext == pok_game_warp_fadeout_context) {
+                pok_fadeout_effect_set_update(
+                    &info->fadeout,
+                    info->sys,
+                    WARP_FADEIN_TIME,
+                    pok_fadeout_black_screen,
+                    TRUE /* this causes the effect to fade-in */);
+            }
+            else {
+                pok_fadeout_effect_set_update(
+                    &info->fadeout,
+                    info->sys,
+                    WARP_FADEIN_TIME/2,
+                    pok_fadeout_to_center,
+                    TRUE /* this causes the effect to fade-in */);
+            }
             /* complete the map warp */
             if (info->mapTrans != NULL) {
                 pok_game_lock(info->world);
@@ -451,12 +440,22 @@ void fadeout_logic(struct pok_game_info* info)
             /* we just finished a fadeout for a latent warp; now finish the transition by setting a fadein effect; set
                the fadein effect first to avoid a race condition */
             info->fadeout.delay = WARP_FADEIN_DELAY;
-            pok_fadeout_effect_set_update(
-                &info->fadeout,
-                info->sys,
-                WARP_FADEIN_TIME,
-                info->gameContext == pok_game_warp_latent_fadeout_cave_context ? pok_fadeout_to_center : pok_fadeout_black_screen,
-                TRUE);
+            if (info->gameContext == pok_game_warp_latent_fadeout_cave_context) {
+                pok_fadeout_effect_set_update(
+                    &info->fadeout,
+                    info->sys,
+                    WARP_FADEIN_TIME/2,
+                    pok_fadeout_to_center,
+                    TRUE);
+            }
+            else {
+                pok_fadeout_effect_set_update(
+                    &info->fadeout,
+                    info->sys,
+                    WARP_FADEIN_TIME,
+                    pok_fadeout_black_screen,
+                    TRUE);
+            }
             /* complete the map warp */
             if (info->mapTrans != NULL) {
                 /* update the map and player contexts; if the warp information is incorrect then silently fail */
@@ -532,17 +531,27 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
         || ((kind == pok_tile_warp_latent_right || kind == pok_tile_warp_latent_cave_right || kind == pok_tile_warp_latent_door_right)
             && direction == pok_direction_right)) && direction == info->player->direction) {
         /* set warp effect (latent warps always fadeout) */
-        pok_fadeout_effect_set_update(
-            &info->fadeout,
-            info->sys,
-            WARP_FADEOUT_TIME,
-            kind >= pok_tile_warp_latent_cave_up ? pok_fadeout_to_center : pok_fadeout_black_screen,
-            FALSE );
+        if (kind >= pok_tile_warp_latent_cave_up) {
+            pok_fadeout_effect_set_update(
+                &info->fadeout,
+                info->sys,
+                WARP_FADEOUT_TIME/2,
+                pok_fadeout_to_center,
+                FALSE );
+        }
+        else {
+            pok_fadeout_effect_set_update(
+                &info->fadeout,
+                info->sys,
+                WARP_FADEOUT_TIME,
+                pok_fadeout_black_screen,
+                FALSE );
+        }
         /* save current game context and set new game context; test to see if
            this is a cave warp or not to control the fade operation */
         pok_game_context_push(info);
         info->gameContext = kind >= pok_tile_warp_latent_cave_up
-            ? pok_game_warp_latent_fadeout_cave_context : (kind >= pok_tile_warp_latent_door_up 
+            ? pok_game_warp_latent_fadeout_cave_context : (kind >= pok_tile_warp_latent_door_up
                 ? pok_game_warp_latent_fadeout_door_context : pok_game_warp_latent_fadeout_context);
         /* cache a reference to the tile data; it will be used to change the map render context
            after the transition has finished */
@@ -578,7 +587,7 @@ bool_t warp_logic(struct pok_game_info* info)
             pok_character_context_set_update(info->playerContext,
                 pok_direction_down,
                 pok_character_spin_effect,
-                info->playerContext->aniTicksAmt * 2,
+                MAP_SCROLL_TIME,
                 FALSE );
             info->gameContext = pok_game_warp_spin_context;
         }
@@ -670,9 +679,10 @@ static void warp_spin_logic(struct pok_game_info* info)
     struct pok_character_context* context = info->playerContext;
 
     if (!context->update) {
-        /* update the spin rate; taking 8 ticks off seems to do the
-           job */
-        int tu = context->spinRate - 8;
+        /* update the spin rate; use the inverse function (scaled by the initial
+           timeout) to determine the difference to the next timeout amount */
+        int tu;
+        tu = context->spinRate - 25.0 * MAP_SCROLL_TIME / context->spinRate;
         if (tu <= SPIN_WARP_RATE) {
             info->gameContext = pok_game_warp_spinup_context;
             return;
@@ -714,7 +724,7 @@ static void warp_spinup_logic(struct pok_game_info* info)
     if (t <= sys->playerLocation.row) {
         /* update offset; 't' is the positive tile offset from the
          player location; we use this to "accelerate" the sprite */
-        context->offset[1] -= 1+t;
+        context->offset[1] -= (int)(info->updateTimeout.elapsed/10.0 * (1+t));
     }
     else {
         info->gameContext = pok_game_warp_spindown_context;
@@ -747,7 +757,7 @@ static void warp_spindown_logic(struct pok_game_info* info)
     if (context->offset[1] < 0) {
         /* update offset; 't' is the positive tile offset from the
          player location; we use this to "de-accelerate" the sprite */
-        context->offset[1] += 1+t;
+        context->offset[1] += (int)(info->updateTimeout.elapsed/10.0 * (1+t));
     }
     else {
         context->offset[1] = 0;

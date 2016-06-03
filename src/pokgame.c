@@ -8,6 +8,14 @@
 #include <stdio.h>
 #include <time.h>
 
+/* constants */
+#define POKGAME_IO_TIMEOUT   100
+#ifdef POKGAME_WIN32
+#define POKGAME_UP_TIMEOUT    30 /* less-fine on Win32 */
+#else
+#define POKGAME_UP_TIMEOUT    10
+#endif
+
 #ifndef POKGAME_TEST
 
 /* functions */
@@ -199,8 +207,8 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     if (game == NULL)
         pok_error(pok_error_fatal,"failed memory allocation in pok_game_new()");
     /* initialize general parameters */
-    pok_timeout_interval_reset(&game->ioTimeout,100);
-    pok_timeout_interval_reset(&game->updateTimeout,10); /* needs to be pretty high-resolution for good performance */
+    pok_timeout_interval_reset(&game->ioTimeout,POKGAME_IO_TIMEOUT);
+    pok_timeout_interval_reset(&game->updateTimeout,POKGAME_UP_TIMEOUT);
     game->staticOwnerMask = template == NULL ? (2 << _pok_static_obj_top) - 1 : 0x00;
     game->control = TRUE;
     game->gameContext = pok_game_intro_context;

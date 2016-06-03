@@ -35,7 +35,7 @@ void pok_map_render_context_init(struct pok_map_render_context* context,const st
     context->tman = tman;
     for (i = 0;i < 4;++i)
         context->info[i].chunk = NULL;
-    context->granularity = 1;
+    context->granularity = 4;
     context->tileAniTicks = 0;
     context->scrollTicks = 0;
     context->grooveTicks = 0;
@@ -251,10 +251,9 @@ void pok_map_render_context_set_update(struct pok_map_render_context* context,en
     default:
         break;
     }
-    /* if the groove has expired, then reset the ticks; otherwise keep any leftover
-       ticks to maintain accurate game time */
-    if (!context->groove)
-        context->scrollTicks = 0;
+    /* reset ticks to maintain smooth rendering when a new animation sequence is
+       requested; we may lose some game time but it will be more consistent */
+    context->scrollTicks = 0;
     context->groove = FALSE;
     context->update = TRUE;
 }

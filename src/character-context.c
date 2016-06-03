@@ -24,7 +24,7 @@ static struct pok_character_context* pok_character_context_new(struct pok_charac
     context->resolveFrame = 0;
     context->spinRate = 0;
     context->spinTicks = 0;
-    context->granularity = 8;
+    context->granularity = 4;
     context->slowDown = FALSE;
     context->aniTicks = 0;
     context->aniTicksAmt = 30;
@@ -172,6 +172,7 @@ void pok_character_context_set_update(struct pok_character_context* context,
 
         /* 'context->update' will hold the number of iterations for the update */
         context->update = t;
+        context->spinTicks = 0;
         if (context->update == 0)
             context->update = 1;
     }
@@ -307,7 +308,8 @@ static bool_t pok_character_context_spin_update(struct pok_character_context* co
             }
         }
 
-        return FALSE;
+        if (context->update)
+            return FALSE;
     }
     context->character->direction = pok_from_frame_direction(context->resolveFrame);
     context->frame = context->resolveFrame;
@@ -317,6 +319,11 @@ static bool_t pok_character_context_spin_update(struct pok_character_context* co
 bool_t pok_character_context_update(struct pok_character_context* context,uint16_t dimension,uint32_t ticks)
 {
     if (context->update) {
+        /* spin updates don't need a computed increment amount and require
+           directly the elapsed game time */
+        if (context->eff == pok_character_spin_effect)
+            return pok_character_context_spin_update(context,ticks);
+
         /* make sure enough elapsed time has occurred before performing the update operation */
         int inc;
         int times;
@@ -340,8 +347,6 @@ bool_t pok_character_context_update(struct pok_character_context* context,uint16
                 return pok_character_context_slide_update(context,inc);
             else if (context->eff == pok_character_jump_effect)
                 return pok_character_context_jump_update(context,inc);
-            else if (context->eff == pok_character_spin_effect)
-                return pok_character_context_spin_update(context,ticks);
         }
     }
     return FALSE;

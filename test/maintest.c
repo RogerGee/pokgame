@@ -353,7 +353,7 @@ int game_io(void* p)
                     game->playerContext,
                     pok_direction_down,
                     pok_character_spin_effect,
-                    game->playerContext->aniTicksAmt,
+                    game->playerContext->aniTicksAmt * 4,
                     FALSE );
                 pok_game_modify_exit(game->playerContext);
                 spinAttempt = TRUE;
