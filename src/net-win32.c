@@ -179,17 +179,23 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc, size_t bytesRequested
             dsrc->InputBufferIterator = 0;
         }
         if (remain > 0) {
-            if (!ReadFile(
-                dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
-                dsrc->InputBuffer + dsrc->InputBufferSize + dsrc->InputBufferIterator,
-                remain,
-                &r,
-                NULL)) {
+            if (!ReadFile(dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
+                            dsrc->InputBuffer + dsrc->InputBufferSize + dsrc->InputBufferIterator,
+                            remain,
+                            &r,
+                            NULL))
+            {
                 struct pok_exception* ex;
+                *bytesRead = 0;
+                if (GetLastError() == ERROR_BROKEN_PIPE) {
+                    /* reading from a broken pipe doesn't generate a normal end of file on
+                       Win32; we must check for the error code denoting the end of file */
+                    dsrc->bAtEOF = TRUE;
+                    return dsrc->InputBuffer;
+                }
                 ex = pok_exception_new();
                 ex->kind = pok_ex_net;
                 ex->id = pok_ex_net_unspec;
-                *bytesRead = 0;
                 return NULL;
             }
             if (r == 0)
@@ -222,15 +228,21 @@ byte_t* pok_data_source_read_any(struct pok_data_source* dsrc, size_t maxBytes, 
         return dsrc->InputBuffer + it;
     }
     b = ReadFile(dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
-        dsrc->InputBuffer,
-        sizeof(dsrc->InputBuffer),
-        &br,
-        FALSE);
+                    dsrc->InputBuffer,
+                    sizeof(dsrc->InputBuffer),
+                    &br,
+                    FALSE);
     if (!b) {
+        *bytesRead = 0;
+        if (GetLastError() == ERROR_BROKEN_PIPE) {
+            /* reading from a broken pipe doesn't generate a normal end of file on
+               Win32; we must check for the error code denoting the end of file */
+            dsrc->bAtEOF = TRUE;
+            return dsrc->InputBuffer;
+        }
         ex = pok_exception_new();
         ex->kind = pok_ex_net;
         ex->id = pok_ex_net_unspec;
-        *bytesRead = 0;
         return NULL;
     }
     if (br == 0)
@@ -264,16 +276,22 @@ bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc, void* buffer
         *bytesRead = 0;
     if (bytesRequested == 0)
         return TRUE;
-    if (!ReadFile(
-        dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
-        buffer, bytesRequested,
-        &r,
-        NULL)) {
+    if (!ReadFile(dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
+                    buffer, bytesRequested,
+                    &r,
+                    NULL))
+    {
         struct pok_exception* ex;
+        *bytesRead = 0;
+        if (GetLastError() == ERROR_BROKEN_PIPE) {
+            /* reading from a broken pipe doesn't generate a normal end of file on
+               Win32; we must check for the error code denoting the end of file */
+            dsrc->bAtEOF = TRUE;
+            return TRUE;
+        }
         ex = pok_exception_new();
         ex->kind = pok_ex_net;
         ex->id = pok_ex_net_unspec;
-        *bytesRead = 0;
         return FALSE;
     }
     if (r == 0)
@@ -576,7 +594,7 @@ void pok_process_free(struct pok_process* proc)
     CloseHandle(proc->info.hThread);
     free(proc);
 }
-enum pok_process_state pok_process_shutdown(struct pok_process* proc, int timeout)
+enum pok_process_state pok_process_shutdown(struct pok_process* proc, int timeout, struct pok_data_source* procstdio)
 {
     DWORD dwResponse;
 
@@ -588,6 +606,10 @@ enum pok_process_state pok_process_shutdown(struct pok_process* proc, int timeou
     if (proc->hPipeWrite[1] != INVALID_HANDLE_VALUE) {
         CloseHandle(proc->hPipeWrite[1]);
         proc->hPipeWrite[1] = INVALID_HANDLE_VALUE;
+    }
+    if (procstdio != NULL) {
+        procstdio->hInput = INVALID_HANDLE_VALUE;
+        procstdio->hOutput = INVALID_HANDLE_VALUE;
     }
 
     /* poll the child for the selected timeout */

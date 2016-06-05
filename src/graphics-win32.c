@@ -402,10 +402,19 @@ VOID CreateMainWindow(struct pok_graphics_subsystem* sys)
 
 VOID EditMainWindow(struct pok_graphics_subsystem* sys)
 {
+    LONG style;
+    RECT winrect;
     sys->wwidth = sys->windowSize.columns * sys->dimension;
-    sys->wheight = sys->windowSize.columns * sys->dimension;
+    sys->wheight = sys->windowSize.rows * sys->dimension;
+    winrect.left = 0;
+    winrect.right = sys->wwidth;
+    winrect.top = 0;
+    winrect.bottom = sys->wheight;
+    style = GetWindowLong(sys->impl->hWnd, GWL_STYLE | GWL_EXSTYLE);
+    AdjustWindowRectEx(&winrect, style, FALSE, WS_EX_CLIENTEDGE);
     /* resize window */
-    SetWindowPos(sys->impl->hWnd, NULL, 0, 0, sys->wwidth, sys->wheight, SWP_NOZORDER | SWP_NOMOVE);
+    SetWindowPos(sys->impl->hWnd, NULL, 0, 0, winrect.right - winrect.left,
+        winrect.bottom - winrect.top, SWP_NOZORDER | SWP_NOMOVE);
     /* reset window text */
     SetWindowText(sys->impl->hWnd, sys->title.buf);
     /* call function to setup OpenGL */

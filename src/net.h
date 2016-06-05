@@ -118,7 +118,7 @@ enum pok_process_state
 struct pok_process;
 struct pok_process* pok_process_new(const char* cmdline,const char* environment,pok_error_callback errorCallback);
 void pok_process_free(struct pok_process* proc);
-enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout);
+enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout,struct pok_data_source* procstdio);
 struct pok_data_source* pok_process_stdio(struct pok_process* proc);
 bool_t pok_process_has_terminated(struct pok_process* proc);
 

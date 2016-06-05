@@ -715,7 +715,7 @@ void pok_process_free(struct pok_process* proc)
     }
     free(proc);
 }
-enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout)
+enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout,struct pok_data_source* procstdio)
 {
     if (proc->term)
         return pok_process_state_terminated;
@@ -728,6 +728,10 @@ enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout
     if (proc->fdwr != -1) {
         close(proc->fdwr);
         proc->fdwr = -1;
+    }
+    if (procstdio != NULL) {
+        procstdio->fd[0] = -1;
+        procstdio->fd[1] = -1;
     }
 
     /* now attempt to reap the child process */

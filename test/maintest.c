@@ -394,14 +394,15 @@ void conn_version()
     /* the io_proc will play the version specified by the process */
     pok_user_load_module();
     pok_netobj_load_module();
+
     if (io_proc(newgame->sys,newgame) != 0) {
-        pok_process_shutdown(version, 5);
+        pok_process_shutdown(version,5,newgame->versionChannel);
         pok_process_free(version);
         pok_error_fromstack(pok_error_fatal);
     }
+    pok_process_shutdown(version,PROCESS_TIMEOUT_INFINITE,newgame->versionChannel);
+    pok_game_free(newgame);
+
     pok_netobj_unload_module();
     pok_user_unload_module();
-
-    pok_process_shutdown(version,PROCESS_TIMEOUT_INFINITE);
-    pok_game_free(newgame);
 }

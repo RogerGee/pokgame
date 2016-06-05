@@ -59,18 +59,18 @@ void pok_user_load_module()
         /* read settings from file*/
         userInfo.new = FALSE;
         pok_data_source_read_to_buffer(fin,userInfo.guid.buf,GUID_LENGTH,&sz);
-        if (sz != GUID_LENGTH)
-            goto fail;
-        if (!pok_data_stream_read_string_ex(fin,&userInfo.name)
-            || !pok_data_stream_read_uint16(fin,&userInfo.sprite)
-            || !pok_data_stream_read_byte(fin,&userInfo.gender))
-            goto fail;
+        if (sz != GUID_LENGTH) {
+            pok_error(pok_error_fatal,"user save file is corrupted: invalid GUID length");
+        }
+        if (!pok_data_stream_read_string_ex(fin, &userInfo.name)
+            || !pok_data_stream_read_uint16(fin, &userInfo.sprite)
+            || !pok_data_stream_read_byte(fin, &userInfo.gender))
+        {
+            pok_exception_append_message(pok_exception_peek(),": user save file is corrupted");
+            pok_error_fromstack(pok_error_fatal);
+        }
         pok_data_source_free(fin);
     }
-    loaded = TRUE;
-    return;
-fail:
-    load_default_settings();
     loaded = TRUE;
 }
 void pok_user_unload_module()

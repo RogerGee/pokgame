@@ -52,6 +52,10 @@ int main(int,const char* argv[])
             errConsole << argv[0] << ": Received end of file; shutting down" << endline;
             break;
         }
+        if (device.get_last_operation_status() != success_read) {
+            errConsole << argv[0] << ": Could not read any more from peer" << endline;
+            break;
+        }
         errConsole << argv[0] << ": Read " << trash.size() << " bytes" << endline;
     }
 }
