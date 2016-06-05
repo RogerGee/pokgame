@@ -535,7 +535,7 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
             pok_fadeout_effect_set_update(
                 &info->fadeout,
                 info->sys,
-                WARP_FADEOUT_TIME/2,
+                WARP_FADEOUT_TIME,
                 pok_fadeout_to_center,
                 FALSE );
         }
@@ -572,10 +572,15 @@ bool_t warp_logic(struct pok_game_info* info)
             || tdata->warpKind > pok_tile_warp_latent_cave_right)) {
         /* set warp effect and change game context depending on warp kind; the old game context
            must be saved so that we can restore it after the warp fade in */
-        if (tdata->warpKind == pok_tile_warp_instant || tdata->warpKind == pok_tile_warp_cave_exit) {
+        if (tdata->warpKind == pok_tile_warp_instant) {
             pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_black_screen,FALSE);
             pok_game_context_push(info);
             info->gameContext = pok_game_warp_fadeout_context;
+        }
+        else if (tdata->warpKind == pok_tile_warp_cave_exit) {
+            pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_black_screen,FALSE);
+            pok_game_context_push(info);
+            info->gameContext = pok_game_warp_fadeout_cave_context;
         }
         else if (tdata->warpKind == pok_tile_warp_cave_enter) {
             pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_to_center,FALSE);

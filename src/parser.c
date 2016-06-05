@@ -780,6 +780,10 @@ static pstatus_t map_warps_warp_elem(struct pok_parser_info* info)
                                 if ( pok_parser_info_check_bytes(info) ) {
                                     if (strcmp(label->buf,"WARP_INSTANT") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_instant;
+                                    else if (strcmp(label->buf,"WARP_CAVE_ENTER") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_cave_enter;
+                                    else if (strcmp(label->buf,"WARP_CAVE_EXIT") == 0)
+                                        info->bytes[info->bytes_c[0]] = pok_tile_warp_cave_exit;
                                     else if (strcmp(label->buf,"WARP_LATENT_UP") == 0)
                                         info->bytes[info->bytes_c[0]] = pok_tile_warp_latent_up;
                                     else if (strcmp(label->buf,"WARP_LATENT_DOWN") == 0)

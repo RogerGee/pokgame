@@ -2,6 +2,7 @@
 #include "effect.h"
 #include "error.h"
 #include "opengl.h"
+#include "primatives.h"
 
 /* constant parameters for effects; time is in milliseconds */
 #define MAX_ALPHA                    1.0
@@ -68,8 +69,8 @@ void pok_fadeout_effect_set_update(struct pok_fadeout_effect* effect,
             effect->hs[3] = (float)sys->wwidth;
         }
         /* distance deltas */
-        effect->d[0] = (float) (sys->wwidth / 2.0 / time); /* left and right */
-        effect->d[1] = (float) (sys->wheight / 2.0 / time); /* top and bottom */
+        effect->d[0] = (float) (sys->wwidth / 2.0 / FADEOUT_EFFECT_GRANULARITY); /* left and right */
+        effect->d[1] = (float) (sys->wheight / 2.0 / FADEOUT_EFFECT_GRANULARITY); /* top and bottom */
         if (reverse) {
             effect->d[0] *= -1;
             effect->d[1] *= -1;
@@ -88,7 +89,7 @@ bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t tick
         if (effect->reverse) {
             /* apply the delay if we are going in the reverse direction; this
                will add time to the sequence */
-            effect->delay = ticks > effect->delay ? 0 : effect->delay - ticks;
+            effect->delay = ticks > effect->delay ? 0 : (effect->delay - ticks);
             if (effect->delay > 0)
                 return FALSE;
         }
@@ -121,8 +122,9 @@ bool_t pok_fadeout_effect_update(struct pok_fadeout_effect* effect,uint32_t tick
                 }
                 break;
             }
-        case pok_fadeout_to_center: { 
+        case pok_fadeout_to_center: {
                 float ds[] = {effect->d[0] * times, effect->d[1] * times};
+                /* apply distance deltas to current bounding quad heights */
                 effect->hs[0] += ds[1];
                 effect->hs[1] -= ds[1];
                 effect->hs[2] += ds[0];
@@ -152,15 +154,11 @@ void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct p
     if (effect->_base.update) {
         if (effect->kind == pok_fadeout_black_screen) {
             /* set color to black; include alpha */
+            pok_primative_setup_modelview(sys->wwidth/2,sys->wheight/2,sys->wwidth,sys->wheight);
+            glVertexPointer(2,GL_FLOAT,0,POK_BOX);
             glColor4f(BLACK_PIXEL_FLOAT[0],BLACK_PIXEL_FLOAT[1],BLACK_PIXEL_FLOAT[2],effect->alpha);
-            glBegin(GL_QUADS);
-            {
-                glVertex2i(0,0);
-                glVertex2i(sys->wwidth,0);
-                glVertex2i(sys->wwidth,sys->wheight);
-                glVertex2i(0,sys->wheight);
-            }
-            glEnd();
+            glDrawArrays(GL_POLYGON,0,POK_BOX_VERTEX_COUNT);
+            glLoadIdentity();
         }
         else if (effect->kind == pok_fadeout_to_center) {
             /* draw 4 quadrilaterals */
@@ -183,14 +181,10 @@ void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct p
     }
     else if (effect->keep) {
         /* keep the screen faded out */
+        pok_primative_setup_modelview(sys->wwidth/2,sys->wheight/2,sys->wwidth,sys->wheight);
+        glVertexPointer(2,GL_FLOAT,0,POK_BOX);
         glColor3b(BLACK_PIXEL.r,BLACK_PIXEL.g,BLACK_PIXEL.b);
-        glBegin(GL_QUADS);
-        {
-            glVertex2i(0,0);
-            glVertex2i(sys->wwidth,0);
-            glVertex2i(sys->wwidth,sys->wheight);
-            glVertex2i(0,sys->wheight);
-        }
-        glEnd();
+        glDrawArrays(GL_POLYGON,0,POK_BOX_VERTEX_COUNT);
+        glLoadIdentity();
     }
 }

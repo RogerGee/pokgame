@@ -44,21 +44,30 @@ void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct p
 struct pok_daycycle_effect
 {
     struct pok_effect _base;
+
+    enum pok_daycycle_flag kind;     /* flag time of day */
+    bool_t fromClock;                /* if non-zero, configure from system
+                                      * clock automatically */
 };
+void pok_daycycle_effect_init(struct pok_daycycle_effect* effect);
+void pok_daycycle_effect_set_update(struct pok_daycycle_effect* effect);
+void pok_daycycle_effect_update(struct pok_daycycle_effect* effect,uint32_t ticks);
+void pok_daycycle_effect_render(struct pok_graphics_subsystem* sys,const struct pok_daycycle_effect* effect);
 
 /* pok_outdoor_effect: outdoor effects (e.g. rain, snow, ETC.) */
 struct pok_outdoor_effect
 {
     struct pok_effect _base;
 
-    /* which effect is turned on (enum pok_outdoor_effect_flag);
-     * only one effect may be on at a time */
-    uint8_t kind;
+    /* flag which effect is turned on; only one effect may be on at a time */
+    enum pok_outdoor_effect_flag kind;
 };
-void pok_outdoor_effect_init(struct pok_fadeout_effect* effect);
-void pok_outdoor_effect_set_update(struct pok_fadeout_effect* effect,
+void pok_outdoor_effect_init(struct pok_outdoor_effect* effect);
+void pok_outdoor_effect_set_update(struct pok_outdoor_effect* effect,
     const struct pok_graphics_subsystem* sys,
     uint32_t time, /* 0 is unlimited */
     uint8_t kind);
+void pok_outdoor_effect_update(struct pok_outdoor_effect* effect,uint32_t ticks);
+void pok_outdoor_effect_render(struct pok_graphics_subsystem* sys,const struct pok_outdoor_effect* effect);
 
 #endif
