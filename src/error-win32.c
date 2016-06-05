@@ -1,5 +1,7 @@
 #include <Windows.h>
 
+#define localtime_r(a,b) localtime_s(b,a)
+
 inline int pok_get_thread_id()
 {
     return (int) GetCurrentThreadId();

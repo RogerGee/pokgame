@@ -717,6 +717,9 @@ void pok_process_free(struct pok_process* proc)
 }
 enum pok_process_state pok_process_shutdown(struct pok_process* proc,int timeout)
 {
+    if (proc->term)
+        return pok_process_state_terminated;
+
     /* shutdown descriptors first to prevent deadlocking with the child */
     if (proc->fdrd != -1) {
         close(proc->fdrd);

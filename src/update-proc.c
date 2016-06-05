@@ -682,7 +682,7 @@ static void warp_spin_logic(struct pok_game_info* info)
         /* update the spin rate; use the inverse function (scaled by the initial
            timeout) to determine the difference to the next timeout amount */
         int tu;
-        tu = context->spinRate - 25.0 * MAP_SCROLL_TIME / context->spinRate;
+        tu = context->spinRate - (int)(25.0 * MAP_SCROLL_TIME / context->spinRate);
         if (tu <= SPIN_WARP_RATE) {
             info->gameContext = pok_game_warp_spinup_context;
             return;

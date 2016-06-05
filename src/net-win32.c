@@ -4,7 +4,7 @@
 
 /* Note: this file mirrors net-posix.c and as such it is not fully documented; see
    net-posix.c to find documented explainations of the functions defined in
-   this sub-module; the function names will be similar but identifiers, 
+   this sub-module; the function names will be similar but identifiers,
    typenames, ETC. will be different (and of course the implementation will
    vary slightly) */
 
@@ -153,7 +153,7 @@ struct pok_data_source* pok_data_source_new_file(const char* filename, enum pok_
             ex = pok_exception_new_ex(pok_ex_net, pok_ex_net_file_does_not_exist);
         else
             ex = pok_exception_new_ex(pok_ex_default, pok_ex_default_undocumented);
-        pok_exception_append_message(ex,": '%s'",filename);
+        pok_exception_append_message(ex, ": '%s'", filename);
         free(dsrc);
         return NULL;
     }
@@ -172,7 +172,7 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc, size_t bytesRequested
         DWORD r;
         DWORD remain;
         remain = sizeof(dsrc->InputBuffer) - dsrc->InputBufferSize - dsrc->InputBufferIterator;
-        if (dsrc->InputBufferIterator>0 && bytesRequested>remain) {
+        if (dsrc->InputBufferIterator > 0 && bytesRequested > remain) {
             remain += dsrc->InputBufferSize;
             if (dsrc->InputBufferSize > 0)
                 memcpy(dsrc->InputBuffer, dsrc->InputBuffer + dsrc->InputBufferIterator, dsrc->InputBufferSize);
@@ -180,11 +180,11 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc, size_t bytesRequested
         }
         if (remain > 0) {
             if (!ReadFile(
-                    dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
-                    dsrc->InputBuffer + dsrc->InputBufferSize + dsrc->InputBufferIterator,
-                    remain,
-                    &r,
-                    NULL)) {
+                dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
+                dsrc->InputBuffer + dsrc->InputBufferSize + dsrc->InputBufferIterator,
+                remain,
+                &r,
+                NULL)) {
                 struct pok_exception* ex;
                 ex = pok_exception_new();
                 ex->kind = pok_ex_net;
@@ -201,6 +201,46 @@ byte_t* pok_data_source_read(struct pok_data_source* dsrc, size_t bytesRequested
     it = dsrc->InputBufferIterator;
     dsrc->InputBufferIterator += *bytesRead;
     dsrc->InputBufferSize -= *bytesRead;
+    return dsrc->InputBuffer + it;
+}
+byte_t* pok_data_source_read_any(struct pok_data_source* dsrc, size_t maxBytes, size_t* bytesRead)
+{
+    DWORD it;
+    DWORD br;
+    BOOLEAN b;
+    struct pok_exception* ex;
+    if (dsrc->bAtEOF) {
+        *bytesRead = 0;
+        return dsrc->InputBuffer;
+    }
+    if (dsrc->InputBufferSize > 0) {
+        br = (dsrc->InputBufferSize > maxBytes) ? maxBytes : dsrc->InputBufferSize;
+        it = dsrc->InputBufferIterator;
+        dsrc->InputBufferIterator += br;
+        dsrc->InputBufferSize -= br;
+        *bytesRead = br;
+        return dsrc->InputBuffer + it;
+    }
+    b = ReadFile(dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
+        dsrc->InputBuffer,
+        sizeof(dsrc->InputBuffer),
+        &br,
+        FALSE);
+    if (!b) {
+        ex = pok_exception_new();
+        ex->kind = pok_ex_net;
+        ex->id = pok_ex_net_unspec;
+        *bytesRead = 0;
+        return NULL;
+    }
+    if (br == 0)
+        dsrc->bAtEOF = TRUE;
+    dsrc->InputBufferSize += br;
+    br = dsrc->InputBufferSize > maxBytes ? maxBytes : dsrc->InputBufferSize;
+    it = dsrc->InputBufferIterator;
+    dsrc->InputBufferIterator += br;
+    dsrc->InputBufferSize -= br;
+    *bytesRead = br;
     return dsrc->InputBuffer + it;
 }
 bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc, void* buffer, size_t bytesRequested, size_t* bytesRead)
@@ -225,10 +265,10 @@ bool_t pok_data_source_read_to_buffer(struct pok_data_source* dsrc, void* buffer
     if (bytesRequested == 0)
         return TRUE;
     if (!ReadFile(
-            dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
-            buffer,bytesRequested,
-            &r,
-            NULL)) {
+        dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hInput,
+        buffer, bytesRequested,
+        &r,
+        NULL)) {
         struct pok_exception* ex;
         ex = pok_exception_new();
         ex->kind = pok_ex_net;
@@ -250,14 +290,14 @@ char pok_data_source_peek(struct pok_data_source* dsrc)
         return dsrc->InputBuffer[--dsrc->InputBufferIterator];
     return (char)-1;
 }
-char pok_data_source_peek_ex(struct pok_data_source* dsrc,size_t lookahead)
+char pok_data_source_peek_ex(struct pok_data_source* dsrc, size_t lookahead)
 {
     size_t bytesRead;
     if (dsrc->InputBufferSize > lookahead)
         return dsrc->InputBuffer[dsrc->InputBufferIterator + lookahead];
     if (pok_data_source_read(dsrc, lookahead - dsrc->InputBufferSize, &bytesRead) && bytesRead >= lookahead)
         return dsrc->InputBuffer[dsrc->InputBufferIterator -= bytesRead];
-    return (char) -1;
+    return (char)-1;
 }
 char pok_data_source_pop(struct pok_data_source* dsrc)
 {
@@ -278,11 +318,11 @@ static bool_t pok_data_source_write_primative(HANDLE hFile, const byte_t* buffer
         return TRUE;
     }
     if (!WriteFile(
-            hFile,
-            buffer,
-            size,
-            &r,
-            NULL)) {
+        hFile,
+        buffer,
+        size,
+        &r,
+        NULL)) {
         /* write error */
         if (flagError) {
             struct pok_exception* ex;
@@ -348,11 +388,11 @@ bool_t pok_data_source_flush(struct pok_data_source* dsrc)
     bool_t result;
     size_t bytesOut;
     result = pok_data_source_write_primative(
-                dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hOutput,
-                dsrc->OutputBuffer + dsrc->OutputBufferIterator,
-                dsrc->OutputBufferSize,
-                &bytesOut,
-                TRUE);
+        dsrc->hBoth != INVALID_HANDLE_VALUE ? dsrc->hBoth : dsrc->hOutput,
+        dsrc->OutputBuffer + dsrc->OutputBufferIterator,
+        dsrc->OutputBufferSize,
+        &bytesOut,
+        TRUE);
     if (result) {
         dsrc->OutputBufferIterator += bytesOut;
         dsrc->OutputBufferSize -= bytesOut;
@@ -432,23 +472,156 @@ inline bool_t pok_data_source_endofcomms(struct pok_data_source* dsrc)
 /* pok_process */
 struct pok_process
 {
-    HANDLE hProcess;
+    PROCESS_INFORMATION info;
+    HANDLE hPipeRead[2];
+    HANDLE hPipeWrite[2];
 };
+
+static void ConvertEnviromentString(const char* env, struct pok_string* dest)
+{
+    if (env) {
+        while (*env) {
+            size_t t = strlen(env);
+            pok_string_concat_ex(dest, env, t);
+            pok_string_concat_char(dest, '=');
+            t = strlen(env += t);
+            pok_string_concat_ex(dest, env, t);
+            pok_string_concat_char(dest, 0);
+            env += t + 1;
+        }
+    }
+}
 
 struct pok_process* pok_process_new(const char* cmdline, const char* environment, pok_error_callback errorCallback)
 {
+    int i;
+    BOOL bResult;
+    struct pok_string argbuf;
+    struct pok_string envbuf;
+    STARTUPINFO startInfo;
+    struct pok_process* proc = malloc(sizeof(struct pok_process));
+    if (proc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+
+    /* create pipes for IPC with process */
+    if (!CreatePipe(proc->hPipeRead, proc->hPipeRead + 1, NULL, 0)
+        || !CreatePipe(proc->hPipeWrite, proc->hPipeWrite + 1, NULL, 0))
+    {
+        pok_exception_new_ex(pok_ex_net, pok_ex_net_could_not_create_local);
+        goto FailPoint;
+    }
+
+    /* prepare startup info for new process */
+    ZeroMemory(&startInfo, sizeof(STARTUPINFO));
+    startInfo.dwFlags = STARTF_USESTDHANDLES;
+    startInfo.hStdInput = proc->hPipeWrite[0];
+    startInfo.hStdOutput = proc->hPipeRead[1];
+    startInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+    /* set handles to inherit as inheritable */
+    SetHandleInformation(startInfo.hStdInput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    SetHandleInformation(startInfo.hStdOutput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+
+    /* create the process; the OS will parse the command-line for us */
+    i = strlen(cmdline);
+    pok_string_init_ex(&argbuf, i + 1);
+    pok_string_assign_ex(&argbuf, cmdline, i);
+    pok_string_init(&envbuf);
+    ConvertEnviromentString(environment, &envbuf);
+    bResult = CreateProcess(NULL, argbuf.buf, NULL, NULL, TRUE, 0,
+        (LPVOID)envbuf.buf, NULL, &startInfo, &proc->info);
+    pok_string_delete(&envbuf);
+    pok_string_delete(&argbuf);
+    if (!bResult) {
+        pok_exception_new_ex(pok_ex_net, pok_ex_net_could_not_create_process);
+        goto FailPoint;
+    }
+
+    /* close handles we don't need in this process (parent) */
+    CloseHandle(proc->hPipeWrite[0]);
+    CloseHandle(proc->hPipeRead[1]);
+    proc->hPipeRead[1] = proc->hPipeWrite[0] = INVALID_HANDLE_VALUE;
+
+    return proc;
+
+FailPoint:
+    for (i = 0; i < 2; ++i) {
+        CloseHandle(proc->hPipeRead[i]);
+        CloseHandle(proc->hPipeWrite[i]);
+    }
+    free(proc);
     return NULL;
+    UNREFERENCED_PARAMETER(errorCallback); // not required for this platform
 }
 void pok_process_free(struct pok_process* proc)
 {
+    DWORD dwResponse;
+
+    /* close our ends of the pipes to prevent deadlock */
+    if (proc->hPipeRead[0] != INVALID_HANDLE_VALUE)
+        CloseHandle(proc->hPipeRead[0]);
+    if (proc->hPipeWrite[1] != INVALID_HANDLE_VALUE)
+        CloseHandle(proc->hPipeWrite[1]);
+
+    /* poll the state of the process object; if it is not signaled
+       then kill it */
+    dwResponse = WaitForSingleObject(proc->info.hProcess, 0);
+    if (dwResponse != WAIT_OBJECT_0) {
+        TerminateProcess(proc->info.hProcess, 1);
+    }
+
+    CloseHandle(proc->info.hProcess);
+    CloseHandle(proc->info.hThread);
+    free(proc);
+}
+enum pok_process_state pok_process_shutdown(struct pok_process* proc, int timeout)
+{
+    DWORD dwResponse;
+
+    /* close our ends of the pipes to prevent deadlock */
+    if (proc->hPipeRead[0] != INVALID_HANDLE_VALUE) {
+        CloseHandle(proc->hPipeRead[0]);
+        proc->hPipeRead[0] = INVALID_HANDLE_VALUE;
+    }
+    if (proc->hPipeWrite[1] != INVALID_HANDLE_VALUE) {
+        CloseHandle(proc->hPipeWrite[1]);
+        proc->hPipeWrite[1] = INVALID_HANDLE_VALUE;
+    }
+
+    /* poll the child for the selected timeout */
+    dwResponse = WaitForSingleObject(proc->info.hProcess,
+        timeout > 0 ? (timeout * 1000) : INFINITE);
+
+    if (dwResponse == WAIT_OBJECT_0)
+        return pok_process_state_terminated;
+    if (dwResponse != WAIT_TIMEOUT)
+        return pok_process_state_killed;
+
+    return pok_process_state_running;
 }
 struct pok_data_source* pok_process_stdio(struct pok_process* proc)
 {
-    return NULL;
+    struct pok_data_source* dsrc;
+
+    dsrc = malloc(sizeof(struct pok_data_source));
+    if (dsrc == NULL) {
+        pok_exception_flag_memory_error();
+        return NULL;
+    }
+
+    PokDataSourceInit(dsrc);
+    dsrc->hInput = proc->hPipeRead[0];
+    dsrc->hOutput = proc->hPipeWrite[1];
+
+    return dsrc;
 }
 bool_t pok_process_has_terminated(struct pok_process* proc)
 {
-    return TRUE;
+    DWORD dwResponse;
+    dwResponse = WaitForSingleObject(proc->info.hProcess, 0);
+    return dwResponse == WAIT_TIMEOUT;
 }
 
 /* pok_thread */
@@ -496,13 +669,13 @@ void pok_thread_start(struct pok_thread* thread)
         thread_entry,
         thread,
         0,
-        NULL );
+        NULL);
     if (thread->hThread == NULL)
         pok_error(pok_error_fatal, "fail pok_thread_new()");
 }
 int pok_thread_join(struct pok_thread* thread)
 {
-    if (WaitForSingleObject(thread->hThread,INFINITE) == WAIT_FAILED)
-        pok_error(pok_error_fatal,"fail pok_thread_join()");
+    if (WaitForSingleObject(thread->hThread, INFINITE) == WAIT_FAILED)
+        pok_error(pok_error_fatal, "fail pok_thread_join()");
     return thread->retval;
 }

@@ -382,10 +382,12 @@ void conn_version()
 {
     struct pok_process* version;
     struct pok_game_info* newgame;
-    const struct pok_exception* ex;
 
     newgame = pok_game_new(game->sys,game);
     version = pok_process_new("test/v1","a\0b\0\0",NULL);
+    if (version == NULL) {
+        pok_error_fromstack(pok_error_fatal);
+    }
     newgame->versionProc = version;
     newgame->versionChannel = pok_process_stdio(version);
 
@@ -393,6 +395,8 @@ void conn_version()
     pok_user_load_module();
     pok_netobj_load_module();
     if (io_proc(newgame->sys,newgame) != 0) {
+        pok_process_shutdown(version, 5);
+        pok_process_free(version);
         pok_error_fromstack(pok_error_fatal);
     }
     pok_netobj_unload_module();
