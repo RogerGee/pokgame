@@ -106,6 +106,7 @@ void load_maps()
     if (map == NULL)
         fail_from_stack();
     map->mapNo = 1;
+    map->flags |= pok_map_flag_overworld;
     if ( !pok_map_fromfile_csv(map,"test/maps/mapA.csv") )
         fail_from_stack();
     pok_world_add_map(game->world,map);

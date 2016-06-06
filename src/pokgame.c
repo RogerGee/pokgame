@@ -226,6 +226,8 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     /* initialize effects */
     pok_fadeout_effect_init(&game->fadeout);
     game->fadeout.keep = TRUE;
+    pok_daycycle_effect_init(&game->daycycle);
+    /* initialize static network objects */
     if (template == NULL) {
         /* initialize tile and sprite image managers; we will own these objects */
         game->tman = pok_tile_manager_new(game->sys);
@@ -323,6 +325,7 @@ void pok_game_register(struct pok_game_info* game)
     /* the order of the graphics routines is important */
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_daycycle_effect_render,&game->daycycle);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_game_render_menus,game);
     pok_graphics_subsystem_register(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }
@@ -330,6 +333,7 @@ void pok_game_unregister(struct pok_game_info* game)
 {
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_map_render,game->mapRC);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_character_render,game->charRC);
+    pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_daycycle_effect_render,&game->daycycle);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_game_render_menus,game);
     pok_graphics_subsystem_unregister(game->sys,(graphics_routine_t)pok_fadeout_effect_render,&game->fadeout);
 }

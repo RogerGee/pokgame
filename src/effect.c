@@ -8,6 +8,11 @@
 #define MAX_ALPHA                    1.0
 #define MIN_ALPHA                   -1.0
 #define FADEOUT_EFFECT_GRANULARITY   100
+#define DAYCYCLE_CLOCK_CHECK       60000
+static const float NIGHT_PIXEL_FLOAT[] = {0.07570f,0.07570f,0.4570f};
+#define NIGHT_ALPHA                 0.5f
+static const float MORNING_PIXEL_FLOAT[] = {0.75f,1.0f,0.0f};
+#define MORNING_ALPHA               0.25f
 
 /* pok_effect */
 static void pok_effect_init(struct pok_effect* effect)
@@ -184,6 +189,55 @@ void pok_fadeout_effect_render(struct pok_graphics_subsystem* sys,const struct p
         pok_primative_setup_modelview(sys->wwidth/2,sys->wheight/2,sys->wwidth,sys->wheight);
         glVertexPointer(2,GL_FLOAT,0,POK_BOX);
         glColor3b(BLACK_PIXEL.r,BLACK_PIXEL.g,BLACK_PIXEL.b);
+        glDrawArrays(GL_POLYGON,0,POK_BOX_VERTEX_COUNT);
+        glLoadIdentity();
+    }
+}
+
+/* pok_daycycle_effect */
+void pok_daycycle_effect_init(struct pok_daycycle_effect* effect)
+{
+    /* note: we will not use base::update nor base::ticksAmt */
+    pok_effect_init(&effect->_base);
+    effect->kind = pok_daycycle_time_clock;
+    effect->fromClock = TRUE;
+}
+void pok_daycycle_effect_set_update(struct pok_daycycle_effect* effect,enum pok_daycycle_flag flag)
+{
+    effect->kind = flag;
+    effect->fromClock = (pok_daycycle_time_clock == flag);
+}
+void pok_daycycle_effect_update(struct pok_daycycle_effect* effect,uint32_t ticks)
+{
+    if (effect->fromClock) {
+        bool_t t;
+        effect->_base.ticks += ticks;
+        t = effect->_base.ticks > DAYCYCLE_CLOCK_CHECK;
+        effect->_base.ticks %= DAYCYCLE_CLOCK_CHECK;
+        if (effect->kind == pok_daycycle_time_clock || t) {
+            struct pok_datetime datetime;
+            pok_datetime_init(&datetime);
+            if (datetime.hour >= 4 && datetime.hour < 10)
+                effect->kind = pok_daycycle_time_morning;
+            else if (datetime.hour >= 10 && datetime.hour < 18)
+                effect->kind = pok_daycycle_time_day;
+            else
+                effect->kind = pok_daycycle_time_night;
+        }
+    }
+
+    /* otherwise there is nothing to update */
+}
+void pok_daycycle_effect_render(struct pok_graphics_subsystem* sys,const struct pok_daycycle_effect* effect)
+{
+    /* this function only applies an effect if it is night or morning */
+    if (effect->kind != pok_daycycle_time_day && effect->kind != pok_daycycle_time_clock) {
+        pok_primative_setup_modelview(sys->wwidth/2,sys->wheight/2,sys->wwidth,sys->wheight);
+        glVertexPointer(2,GL_FLOAT,0,POK_BOX);
+        if (effect->kind == pok_daycycle_time_night)
+            glColor4f(NIGHT_PIXEL_FLOAT[0],NIGHT_PIXEL_FLOAT[1],NIGHT_PIXEL_FLOAT[2],NIGHT_ALPHA);
+        else
+            glColor4f(MORNING_PIXEL_FLOAT[0],MORNING_PIXEL_FLOAT[1],MORNING_PIXEL_FLOAT[2],MORNING_ALPHA);
         glDrawArrays(GL_POLYGON,0,POK_BOX_VERTEX_COUNT);
         glLoadIdentity();
     }

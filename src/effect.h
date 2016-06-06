@@ -50,7 +50,7 @@ struct pok_daycycle_effect
                                       * clock automatically */
 };
 void pok_daycycle_effect_init(struct pok_daycycle_effect* effect);
-void pok_daycycle_effect_set_update(struct pok_daycycle_effect* effect);
+void pok_daycycle_effect_set_update(struct pok_daycycle_effect* effect,enum pok_daycycle_flag flag);
 void pok_daycycle_effect_update(struct pok_daycycle_effect* effect,uint32_t ticks);
 void pok_daycycle_effect_render(struct pok_graphics_subsystem* sys,const struct pok_daycycle_effect* effect);
 

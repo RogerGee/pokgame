@@ -36,7 +36,9 @@ static void character_update(struct pok_game_info* info);
 static void menu_update(struct pok_game_info* info);
 static bool_t check_collisions(struct pok_game_info* info);
 static void player_move_logic(struct pok_game_info* info,enum pok_direction direction);
+static bool_t map_warp_change(struct pok_game_info* info);
 static void fadeout_logic(struct pok_game_info* info);
+static void daycycle_logic(struct pok_game_info* info);
 static void map_terrain_logic(struct pok_game_info* info);
 static bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction);
 static bool_t warp_logic(struct pok_game_info* info);
@@ -93,6 +95,7 @@ int update_proc(struct pok_game_info* info)
 
         /* perform game logic operations */
         fadeout_logic(info);
+        daycycle_logic(info);
         map_terrain_logic(info);
         intermsg_logic(info);
         warp_transition_logic(info);
@@ -385,10 +388,36 @@ void player_move_logic(struct pok_game_info* info,enum pok_direction direction)
     }
 }
 
+bool_t map_warp_change(struct pok_game_info* info)
+{
+    struct pok_map* map;
+    bool_t result = FALSE;
+    if (info->mapTrans != NULL) {
+        /* reset daycycle kind so that time is queried */
+        info->daycycle.kind = pok_daycycle_time_clock;
+
+        pok_game_lock(info->world);
+        map = pok_world_get_map(info->world,info->mapTrans->warpMap);
+        pok_game_unlock(info->world);
+        /* if we can't find the map (or subsequently the chunk/position) then silently fail; the
+           player will find that they arrived where they left and be disappointed */
+        if (map != NULL) {
+            pok_game_modify_enter(info->mapRC);
+            result = pok_map_render_context_set_position(info->mapRC,map,&info->mapTrans->warpChunk,&info->mapTrans->warpLocation);
+            pok_game_modify_exit(info->mapRC);
+            if (result) {
+                /* set the player character as well */
+                pok_game_modify_enter(info->playerContext);
+                pok_character_context_set_player(info->playerContext,info->mapRC);
+                pok_game_modify_exit(info->playerContext);
+            }
+        }
+    }
+    return result;
+}
+
 void fadeout_logic(struct pok_game_info* info)
 {
-    bool_t result;
-    struct pok_map* map;
     if ( pok_fadeout_effect_update(&info->fadeout,info->updateTimeout.elapsed) ) {
         if (info->gameContext == pok_game_intro_context)
             /* the intro context is just a fadeout that leads to the world context */
@@ -413,26 +442,10 @@ void fadeout_logic(struct pok_game_info* info)
                     pok_fadeout_to_center,
                     TRUE /* this causes the effect to fade-in */);
             }
-            /* complete the map warp */
-            if (info->mapTrans != NULL) {
-                pok_game_lock(info->world);
-                map = pok_world_get_map(info->world,info->mapTrans->warpMap);
-                pok_game_unlock(info->world);
-                /* if we can't find the map (or subsequently the chunk/position) then silently fail; the
-                   player will find that they arrived where they left and be disappointed */
-                if (map != NULL) {
-                    pok_game_modify_enter(info->mapRC);
-                    result = pok_map_render_context_set_position(info->mapRC,map,&info->mapTrans->warpChunk,&info->mapTrans->warpLocation);
-                    pok_game_modify_exit(info->mapRC);
-                    if (result) {
-                        /* set the player character as well */
-                        pok_game_modify_enter(info->playerContext);
-                        pok_character_context_set_player(info->playerContext,info->mapRC);
-                        pok_game_modify_exit(info->playerContext);
-                    }
-                }
-                info->mapTrans = NULL;
-            }
+            /* complete the map warp: silently fail if the map couldn't be
+               loaded (note: the IO process could display a message) */
+            map_warp_change(info);
+            info->mapTrans = NULL;
             info->gameContext = pok_game_warp_fadein_context;
         }
         else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
@@ -456,48 +469,35 @@ void fadeout_logic(struct pok_game_info* info)
                     pok_fadeout_black_screen,
                     TRUE);
             }
-            /* complete the map warp */
-            if (info->mapTrans != NULL) {
-                /* update the map and player contexts; if the warp information is incorrect then silently fail */
-                pok_game_lock(info->world);
-                map = pok_world_get_map(info->world,info->mapTrans->warpMap);
-                pok_game_unlock(info->world);
-                if (map != NULL) {
+            /* complete the map warp: we fail silently if the map wasn't
+               switched (note: the IO process may display a message) */
+            if (map_warp_change(info)) {
+                /* save exit direction and update player */
+                enum pok_direction direction = (info->mapTrans->warpKind - pok_tile_warp_latent_up) % 4;
+                pok_graphics_subsystem_lock(info->sys);
+                if (info->gameContext != pok_game_warp_latent_fadeout_context) {
+                    /* we do an animation if exiting a building or cave */
+                    pok_game_modify_enter(info->playerContext);
+                    info->playerContext->slowDown = FALSE;
+                    pok_character_context_set_update(
+                        info->playerContext,
+                        direction,
+                        pok_character_normal_effect,
+                        info->sys->dimension,
+                        TRUE );
+                    pok_game_modify_exit(info->playerContext);
                     pok_game_modify_enter(info->mapRC);
-                    result = pok_map_render_context_set_position(info->mapRC,map,&info->mapTrans->warpChunk,&info->mapTrans->warpLocation);
+                    pok_map_render_context_set_update(
+                        info->mapRC,
+                        direction,
+                        info->sys->dimension );
                     pok_game_modify_exit(info->mapRC);
-                    if (result) {
-                        /* save exit direction and update player */
-                        enum pok_direction direction = (info->mapTrans->warpKind - pok_tile_warp_latent_up) % 4;
-                        pok_graphics_subsystem_lock(info->sys);
-                        pok_game_modify_enter(info->playerContext);
-                        pok_character_context_set_player(info->playerContext,info->mapRC);
-                        pok_game_modify_exit(info->playerContext);
-                        if (info->gameContext != pok_game_warp_latent_fadeout_context) {
-                            /* we do an animation if exiting a building or cave */
-                            pok_game_modify_enter(info->playerContext);
-                            info->playerContext->slowDown = FALSE;
-                            pok_character_context_set_update(
-                                info->playerContext,
-                                direction,
-                                pok_character_normal_effect,
-                                info->sys->dimension,
-                                TRUE );
-                            pok_game_modify_exit(info->playerContext);
-                            pok_game_modify_enter(info->mapRC);
-                            pok_map_render_context_set_update(
-                                info->mapRC,
-                                direction,
-                                info->sys->dimension );
-                            pok_game_modify_exit(info->mapRC);
-                        }
-                        pok_graphics_subsystem_unlock(info->sys);
-                        /* pause the map scrolling until the fadein effect completes */
-                        info->pausePlayerMap = TRUE;
-                    }
                 }
-                info->mapTrans = NULL;
+                pok_graphics_subsystem_unlock(info->sys);
+                /* pause the map scrolling until the fadein effect completes */
+                info->pausePlayerMap = TRUE;
             }
+            info->mapTrans = NULL;
             info->gameContext = pok_game_warp_fadein_context;
         }
         else if (info->gameContext == pok_game_warp_fadein_context) {
@@ -505,6 +505,20 @@ void fadeout_logic(struct pok_game_info* info)
             pok_game_context_pop(info);
             info->pausePlayerMap = FALSE;
         }
+    }
+}
+
+void daycycle_logic(struct pok_game_info* info)
+{
+    /* daycycle only effects maps explicitly marked as overworld */
+    if (info->mapRC->map->flags & pok_map_flag_overworld) {
+        /* update the map; this only does anything if the effect is set to
+           update from the system clock */
+        pok_daycycle_effect_update(&info->daycycle,info->updateTimeout.elapsed);
+    }
+    else {
+        /* reset the daycycle to day, which does no filtering */
+        info->daycycle.kind = pok_daycycle_time_day;
     }
 }
 

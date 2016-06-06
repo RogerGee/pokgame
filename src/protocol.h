@@ -153,6 +153,7 @@ enum pok_menu_color
 
 enum pok_daycycle_flag
 {
+    pok_daycycle_time_clock,
     pok_daycycle_time_morning,
     pok_daycycle_time_day,
     pok_daycycle_time_night

@@ -68,4 +68,16 @@ const struct pok_exception* pok_exception_peek_ex(enum pok_ex_kind kind,int id);
 void pok_exception_load_message(struct pok_exception* except);
 void pok_exception_append_message(struct pok_exception* except,const char* message, ...);
 
+struct pok_datetime
+{
+    int second;
+    int minute;
+    int hour;
+    int wday;
+    int mday;
+    int month;
+    int year;
+};
+void pok_datetime_init(struct pok_datetime* datetime);
+
 #endif

@@ -427,3 +427,21 @@ void pok_exception_append_message(struct pok_exception* except,const char* messa
     vsnprintf(except->message+length,remain,message,args);
     va_end(args);
 }
+
+/* pok_datetime */
+void pok_datetime_init(struct pok_datetime* datetime)
+{
+    /* assign the current local time */
+    time_t t;
+    struct tm info;
+    time(&t);
+    localtime_r(&t,&info);
+
+    datetime->second = info.tm_sec;
+    datetime->minute = info.tm_min;
+    datetime->hour = info.tm_hour;
+    datetime->wday = info.tm_wday;
+    datetime->mday = info.tm_mday;
+    datetime->month = info.tm_mon;
+    datetime->year = info.tm_year;
+}

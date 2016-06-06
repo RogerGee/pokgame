@@ -711,7 +711,7 @@ void pok_process_free(struct pok_process* proc)
            therefore it is up to the user to call 'pok_process_scan' to probe if
            a process is still alive to terminate normally */
         kill(proc->pid,SIGKILL);
-        pok_process_shutdown(proc,PROCESS_TIMEOUT_INFINITE); /* reap */
+        pok_process_shutdown(proc,PROCESS_TIMEOUT_INFINITE,NULL); /* reap */
     }
     free(proc);
 }

@@ -113,6 +113,7 @@ struct pok_game_info
 
     /* effects */
     struct pok_fadeout_effect fadeout;
+    struct pok_daycycle_effect daycycle;
 
     /* tile images */
     struct pok_tile_manager* tman;

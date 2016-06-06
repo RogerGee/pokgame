@@ -66,7 +66,8 @@ void pok_user_load_module()
             || !pok_data_stream_read_uint16(fin, &userInfo.sprite)
             || !pok_data_stream_read_byte(fin, &userInfo.gender))
         {
-            pok_exception_append_message(pok_exception_peek(),": user save file is corrupted");
+            pok_exception_append_message((struct pok_exception*)pok_exception_peek(),
+                ": user save file is corrupted");
             pok_error_fromstack(pok_error_fatal);
         }
         pok_data_source_free(fin);
