@@ -8,29 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* structures and types */
-enum portal_state
-{
-    portal_state_default, /* portal will always go to default version map */
-    portal_state_userdef, /* portal is user-defined with url */
-    portal_state_unconfig /* portal has no binding as of yet */
-};
-
-struct portal
-{
-    struct pok_point pos;
-    char url[128];
-    enum portal_state state;
-    bool_t discov;
-};
-
-/* global data */
-struct {
-    struct treemap portals;
-    struct pok_data_source* ds;
-    struct pok_map* portalMap;
-    bool_t portalModif;
-} globals;
+/* macros ***********************************************************************/
 
 /* these macros check an expression for failure; 'N' checks for NULL and 'B'
    checks for Boolean FALSE */
@@ -41,6 +19,46 @@ struct {
     if (!(expr)) \
         pok_error_fromstack(pok_error_fatal)
 
+/********************************************************************************/
+
+/* portal structures and types **************************************************/
+enum portal_state
+{
+    portal_state_default, /* portal will always go to default version map */
+    portal_state_userdef, /* portal is user-defined with url */
+    portal_state_unconfig /* portal has no binding as of yet */
+};
+
+enum portal_flags
+{
+    portal_flag_build_up = 0x01,
+    portal_flag_build_down = 0x02,
+    portal_flag_build_left = 0x04,
+    portal_flag_build_right = 0x08
+};
+
+struct portal
+{
+    struct pok_point pos;
+    char url[128];
+    enum portal_state state;
+
+    /* used by implementation (not saved) */
+    struct pok_map_chunk* chunk;
+    bool_t discov;
+    int flags;
+};
+/********************************************************************************/
+
+/* global data: we try to prevent putting things here, but truly only a single
+   game instance should be using this module at a time */
+struct {
+    struct treemap portals;
+    struct pok_data_source* ds;
+    struct pok_map* portalMap;
+    bool_t portalModif;
+} globals;
+
 /* functions */
 static void setup_tileman(struct pok_tile_manager* tman);
 static void setup_spriteman(struct pok_sprite_manager* sman);
@@ -49,10 +67,12 @@ static struct pok_game_info* default_io_proc(struct pok_game_info* game);
 static void load_portal_entries(struct pok_map* portalMap);
 static void save_portal_entries(struct pok_map* portalMap);
 static void open_portal_doorway(struct pok_map_chunk* A,struct pok_map_chunk* B,enum pok_direction AtoB);
-static int test_player_near_doorway(const struct pok_character* player);
+static int test_player_near_doorway(const struct pok_character* player,const struct pok_map_chunk* chunk);
 static struct pok_game_info* portal_hub(struct pok_game_info* game);
+static void build_new_portal(const struct pok_point* adjpos,enum pok_direction direction);
 
 /* helpers */
+static void* pok_malloc(size_t amt);
 static void intermsg_noop(struct pok_intermsg* intermsg);
 static void intermsg_message_menu(struct pok_intermsg* intermsg,const char* prompt);
 static void intermsg_input_menu(struct pok_intermsg* intermsg,const char* prompt);
@@ -183,7 +203,7 @@ static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_p
         /* if the byte was non-zero, then an entry exists in this position */
         if (b) {
             /* read entry from data source */
-            portal = malloc(sizeof(struct portal));
+            portal = pok_malloc(sizeof(struct portal));
             if (!pok_data_stream_read_byte(globals.ds,&b) ||
                 !pok_data_stream_read_string(globals.ds,portal->url,sizeof(portal->url)))
             {
@@ -194,6 +214,7 @@ static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_p
             }
             portal->state = b;
             portal->discov = FALSE;
+            portal->flags = 0;
 
             /* create new map chunk */
             N( newChunk = pok_map_add_chunk(globals.portalMap,
@@ -207,6 +228,7 @@ static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_p
 
             /* add portal entry to map */
             portal->pos = pos;
+            portal->chunk = newChunk;
             pok_direction_add_to_point(i,&portal->pos);
             treemap_insert(&globals.portals,portal);
 
@@ -223,11 +245,13 @@ void load_portal_entries(struct pok_map* portalMap)
     treemap_init(&globals.portals,(key_comparator)pok_point_compar,free);
 
     /* create portal for default version world */
-    portal = malloc(sizeof(struct portal));
+    portal = pok_malloc(sizeof(struct portal));
     portal->pos = portalMap->originPos;
     memset(portal->url,0,sizeof(portal->url));
     portal->state = portal_state_default;
     portal->discov = TRUE; /* when saving, this entry will be ignored */
+    portal->flags = 0;
+    portal->chunk = portalMap->origin;
     treemap_insert(&globals.portals,portal);
 
     /* load portal entries from file on disk */
@@ -235,7 +259,8 @@ void load_portal_entries(struct pok_map* portalMap)
         pok_filemode_open_existing,
         pok_iomode_read);
     if (input == NULL) {
-        /* no portal file or some other kind of error (which we report) */
+        /* no portal file or some other kind of error (we report the error if it
+           is something besides the file not existing) */
         if (!pok_exception_peek_ex(pok_ex_net,pok_ex_net_file_does_not_exist))
             pok_error_fromstack(pok_error_warning);
     }
@@ -308,16 +333,22 @@ void open_portal_doorway(struct pok_map_chunk* A,struct pok_map_chunk* B,enum po
     B->data[doorB->row][doorB->column].data.tileid = DEFAULT_MAP_PASSABLE_TILE;
 }
 
-int test_player_near_doorway(const struct pok_character* player)
+int test_player_near_doorway(const struct pok_character* player,const struct pok_map_chunk* portalChunk)
 {
-    struct pok_location p;
+    struct pok_location p, q;
+    pok_assert(portalChunk != NULL);
+
     for (enum pok_direction i = 0;i < 4;++i) {
-        p = DEFAULT_MAP_DOOR_LOCATIONS[i];
-        pok_direction_add_to_location(pok_direction_opposite(i),&p);
-        if (pok_location_compar(&player->tilePos,&p) == 0
+        /* see if the player is standing and facing a doorway */
+        p = q = DEFAULT_MAP_DOOR_LOCATIONS[i];
+        pok_direction_add_to_location(pok_direction_opposite(i),&q);
+        if (pok_location_compar(&player->tilePos,&q) == 0
             && player->direction == i)
         {
-            return i;
+            /* make sure the door tile is there (meaning there is an unopened
+               door in the specified direction) */
+            if (portalChunk->data[p.row][p.column].data.tileid == DEFAULT_MAP_DOOR_TILE)
+                return i;
         }
     }
 
@@ -370,15 +401,39 @@ struct pok_game_info* portal_hub(struct pok_game_info* game)
             }
             else {
                 /* handle player interaction with doors */
-                dir = test_player_near_doorway(game->player);
+                dir = test_player_near_doorway(game->player,portal->chunk);
                 if (dir != (enum pok_direction)-1) {
+                    /* set flag for potentially adding a new portal room */
                     game->updateInterMsg.processed = TRUE;
                     intermsg_input_menu(&game->ioInterMsg,"Would you like to create a new portal? (y/n)");
+                    portal->flags |= (1 << dir);
                 }
             }
         }
         else if (game->updateInterMsg.kind == pok_stringinput_intermsg) {
-            
+            /* process responses from the user in the default map; the
+               'portal->flags' member lets us determine the context */
+
+            /* handle building new portals; no more than one of the
+               'portal_build*' flags should be set */
+            for (int i = 0;i <= pok_direction_right;++i) {
+                enum portal_flags f = (i << 1);
+                if (portal->flags & f) {
+                    build_new_portal(&portal->pos,i);
+
+                    /* realign the map render context to account for the
+                       addition; we need to lock it out in case the update
+                       process is using it; however we do not need to perform
+                       mutual exclusion against the render process because of
+                       how the render context is designed */
+                    pok_game_modify_enter(game->mapRC);
+                    pok_map_render_context_align(game->mapRC);
+                    pok_game_modify_exit(game->mapRC);
+
+                    /* unset flag bit */
+                    portal->flags &= ~f;
+                }
+            }
         }
     }
     pok_game_modify_exit(&game->updateInterMsg);
@@ -386,7 +441,47 @@ struct pok_game_info* portal_hub(struct pok_game_info* game)
     return NULL;
 }
 
+void build_new_portal(const struct pok_point* adjpos,enum pok_direction direction)
+{
+    /* this function creates a new portal chunk in the default (a.k.a. portal)
+       map; the position specified is an existing portal adjacent to the new
+       one; the new portal should be created at a position in the specified
+       'direction' from the adjacent position */
+
+    struct portal* portal;
+    struct pok_map_chunk* chunk;
+
+    /* create a new map chunk object for the portal */
+    N( chunk = pok_map_add_chunk(
+        globals.portalMap,
+        adjpos,
+        direction,
+        DEFAULT_MAP_CHUNK,DEFAULT_MAP_CHUNK_SIZE.columns*DEFAULT_MAP_CHUNK_SIZE.rows) );
+
+    /* create the portal entry object */
+    portal = pok_malloc(sizeof(struct portal));
+    portal->pos = *adjpos;
+    portal->url[0] = 0;
+    portal->state = portal_state_unconfig;
+    portal->discov = FALSE;
+    portal->chunk = chunk;
+
+    /* insert the portal into the collection */
+    treemap_insert(&globals.portals,portal);
+}
+
 /* helper function implementations */
+
+void* pok_malloc(size_t amt)
+{
+    /* a 'malloc' wrapper that terminates the program */
+    void* p = malloc(amt);
+    if (p == NULL) {
+        pok_exception_flag_memory_error();
+        pok_error_fromstack(pok_error_fatal);
+    }
+    return p;
+}
 
 void intermsg_noop(struct pok_intermsg* intermsg)
 {

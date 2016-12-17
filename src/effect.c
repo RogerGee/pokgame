@@ -9,7 +9,7 @@
 #define MIN_ALPHA                   -1.0
 #define FADEOUT_EFFECT_GRANULARITY   100
 #define DAYCYCLE_CLOCK_CHECK       60000
-static const float NIGHT_PIXEL_FLOAT[] = {0.07570f,0.07570f,0.4570f};
+static const float NIGHT_PIXEL_FLOAT[] = {0.0f,0.0f,0.4570f};
 #define NIGHT_ALPHA                 0.5f
 static const float MORNING_PIXEL_FLOAT[] = {0.75f,1.0f,0.0f};
 #define MORNING_ALPHA               0.25f
@@ -212,7 +212,7 @@ void pok_daycycle_effect_update(struct pok_daycycle_effect* effect,uint32_t tick
     if (effect->fromClock) {
         bool_t t;
         effect->_base.ticks += ticks;
-        t = effect->_base.ticks > DAYCYCLE_CLOCK_CHECK;
+        t = effect->_base.ticks >= DAYCYCLE_CLOCK_CHECK;
         effect->_base.ticks %= DAYCYCLE_CLOCK_CHECK;
         if (effect->kind == pok_daycycle_time_clock || t) {
             struct pok_datetime datetime;

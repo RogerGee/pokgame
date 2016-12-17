@@ -173,9 +173,9 @@ enum pok_io_result run_game(struct pok_game_info* game)
     /* flush any data buffered in data source output buffer */
     pok_data_source_flush(game->versionChannel);
 
-    /* enter a loop to handle the game IO operations; each iteration we check to see
-       if we can perform a general exchange operation; this code expects asychro-
-       nous IO operations so that it can move on to other things while IO takes place */
+    /* enter a loop to handle the game IO operations; each iteration we check to
+       see if we can perform a general exchange operation; the IO device should
+       be non-blocking so that we can check the window status each iteration */
     while (pok_graphics_subsystem_has_window(game->sys)) {
         /* general exchange operation */
         result = exch_gener(game,&info);
@@ -499,8 +499,12 @@ bool_t seq_first_map(struct pok_game_info* game,struct pok_io_info* info)
     map = pok_world_get_map(game->world,1);
     if (map == NULL)
         pok_exception_new_format("exch_inter: first map did not have mapno=1");
+    pok_game_modify_enter(game->mapRC);
     pok_map_render_context_set_map(game->mapRC,map);
+    pok_game_modify_exit(game->mapRC);
+    pok_game_modify_enter(game->playerContext);
     pok_character_context_set_player(game->playerContext,game->mapRC);
+    pok_game_modify_exit(game->playerContext);
 
     return TRUE;
 }

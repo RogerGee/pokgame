@@ -162,6 +162,25 @@ static void pok_map_chunk_free(struct pok_map_chunk* chunk,uint16_t rows)
     }
     free(chunk);
 }
+/*static*/ void pok_map_chunk_configure_adj(struct pok_map_chunk* chunk,
+    const struct pok_point* loc,const struct pok_map* map)
+{
+    for (int dir = pok_direction_up;dir <= pok_direction_right;++dir) {
+        struct pok_point pos;
+        struct pok_map_chunk* adj;
+        pos = *loc;
+        pok_direction_add_to_point(dir,&pos);
+        adj = pok_map_get_chunk(map,&pos);
+
+        /* set the adjacency; if it exists, mark the connection in the
+           adjacency (so it goes both ways) */
+        chunk->adjacent[dir] = adj;
+        if (adj != NULL) {
+            adj->adjacent[pok_direction_opposite(dir)] = chunk;
+        }
+        dir += 1;
+    }
+}
 static void pok_map_chunk_setstate(struct pok_map_chunk* chunk,bool_t state)
 {
     int i;
@@ -427,6 +446,9 @@ struct pok_map_chunk* pok_map_add_chunk(struct pok_map* map,
                 for (i = 0;i < map->chunkSize.rows;++i)
                     for (j = 0;j < map->chunkSize.columns;++j)
                         chunk->data[i][j].data.tileid = chunkTiles[k++ % length];
+
+            /* configure the chunk's initial adjacencies */
+            pok_map_chunk_configure_adj(chunk,&pos,map);
         }
         return chunk;
     }
@@ -675,10 +697,10 @@ bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename)
     pok_exception_new_ex(pok_ex_map,pok_ex_map_already);
     return FALSE;
 }
-struct pok_map_chunk* pok_map_get_chunk(struct pok_map* map,const struct pok_point* pos)
+struct pok_map_chunk* pok_map_get_chunk(const struct pok_map* map,const struct pok_point* pos)
 {
     struct chunk_key* key;
-    key = treemap_lookup(&map->loadedChunks,pos);
+    key = treemap_lookup((struct treemap*)&map->loadedChunks,pos);
     if (key == NULL)
         return NULL;
     return key->chunk;
@@ -1005,7 +1027,8 @@ static enum pok_network_result world_netmethod_add_map(struct pok_world* world,
     struct pok_netobj_readinfo* info)
 {
     /* this method is very simple: we try to netread a new map object and
-       register it; then we add it to the world */
+       register it; then we add it to the world; a netmethod must not modify
+       the current state of the object until the operation is finished */
     enum pok_network_result result;
     struct pok_map* map;
 

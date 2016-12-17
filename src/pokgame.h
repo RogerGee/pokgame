@@ -12,17 +12,20 @@
 #include "menu.h"
 #include "protocol.h"
 
-/* pok_game_context: flag current game state */
+/* pok_game_context: flag current game state; the order of elements in this
+   enumeration is important */
 enum pok_game_context
 {
     pok_game_intro_context, /* the game is processing the intro screen */
     pok_game_pause_context, /* the game is doing nothing */
     pok_game_world_context,  /* the game is handling map logic */
     pok_game_warp_fadeout_context, /* the game is handling a warp fadeout */
-    pok_game_warp_fadeout_cave_context, /* the game is handling a cave exit warp */
+    pok_game_warp_fadeout_cave_enter_context, /* the game is handling a cave enter warp */
+    pok_game_warp_fadeout_cave_exit_context, /* the game is handling a cave exit warp */
     pok_game_warp_latent_fadeout_context, /* the game is handling a latent warp fadeout */
     pok_game_warp_latent_fadeout_door_context, /* the game is handling a latent door exit warp */
-    pok_game_warp_latent_fadeout_cave_context, /* the game is handling a latent cave exit warp */
+    pok_game_warp_latent_fadeout_cave_enter_context, /* the game is handling a latent cave enter warp */
+    pok_game_warp_latent_fadeout_cave_exit_context, /* the game is handling a latent cave exit warp */
     pok_game_warp_fadein_context, /* the game is handling a warp fadein */
     pok_game_warp_spin_context, /* the game is handling the initial spin warp sequence */
     pok_game_warp_spinup_context, /* the game is handling a spin warp (player moving up) */
@@ -141,6 +144,8 @@ struct pok_game_info
     /* menu structures */
     struct pok_message_menu messageMenu;
     struct pok_input_menu inputMenu;
+    struct pok_selection_menu selectMenu; /* generic select menu; size is fixed */
+    struct pok_selection_menu yesnoMenu;
 };
 
 /* main pokgame procedures (the other procedure is graphics which is handled by the graphics subsystem) */

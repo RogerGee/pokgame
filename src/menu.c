@@ -11,6 +11,8 @@
 #define DEFAULT_TEXT_UPDATE_TICKS 30
 #define COLOR_ESCAPE_CHAR '\033'
 #define MESSAGE_MENU_TEXT_SIZE 2.0
+#define MESSAGE_MENU_ROWS 3
+#define SELECT_MENU_TEXT_SIZE  1.0
 
 const GLfloat* MENU_COLORS[] = {
     (const GLfloat[]){1.0, 1.0, 1.0}, /* white */
@@ -657,6 +659,14 @@ static void update_render_position_bypage(struct pok_text_input* ti)
            that always has a positive sign by flooring the quotient; we subtract this remainder from the edit line
            to find the new display line */
         ti->base.curline = ti->line - (dif - ((dif / ti->base.region.rows) - (dif < 0)) * ti->base.region.rows);
+
+        /* update color buffer progress counter; to do this, we must compute the
+           start position of the current line; we cannot use 'curcount' since it
+           is not updated by the input text context */
+        ti->base.cprogress = 0;
+        for (int32_t i = 0;i < ti->base.curline;++i)
+            ti->base.cprogress += strlen(ti->base.lines[i]);
+        pok_message("cprog: %d",ti->base.cprogress);
     }
 }
 static bool_t move_cursor_up(struct pok_text_input* ti)
@@ -950,8 +960,8 @@ void pok_message_menu_init(struct pok_message_menu* menu,const struct pok_graphi
     menu->base.padding = sys->dimension / 2;
     menu->base.fillColor = pok_menu_color_white;
     menu->base.borderColor = pok_menu_color_black;
-    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
-    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
+    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * MESSAGE_MENU_ROWS };
+    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - MESSAGE_MENU_ROWS) };
     textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
     textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
     pok_text_context_init(&menu->text,&textRegion);
@@ -1002,8 +1012,8 @@ void pok_input_menu_init(struct pok_input_menu* menu,const struct pok_graphics_s
     menu->base.padding = sys->dimension / 2;
     menu->base.fillColor = pok_menu_color_white;
     menu->base.borderColor = pok_menu_color_black;
-    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * 3 };
-    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - 3) };
+    menu->base.size = (struct pok_size){ sys->windowSize.columns * sys->dimension, sys->dimension * MESSAGE_MENU_ROWS };
+    menu->base.pos = (struct pok_location){ 0, sys->dimension * (sys->windowSize.rows - MESSAGE_MENU_ROWS) };
     textRegion.columns = (menu->base.size.columns - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_WIDTH * MESSAGE_MENU_TEXT_SIZE);
     textRegion.rows = (menu->base.size.rows - menu->base.padding * 2) / (uint16_t)(POK_GLYPH_HEIGHT * MESSAGE_MENU_TEXT_SIZE);
     pok_text_input_init(&menu->input,&textRegion);
@@ -1049,4 +1059,121 @@ void pok_input_menu_render(struct pok_input_menu* menu)
 {
     pok_menu_base_render(&menu->base); /* render background before input text */
     pok_text_input_render(&menu->input);
+}
+
+/* pok_selection_menu */
+void pok_selection_menu_init(struct pok_selection_menu* menu,uint32_t ndisplay,
+    uint32_t clipWidth,const struct pok_graphics_subsystem* sys)
+{
+    uint32_t w, h;
+    struct pok_size region;
+    struct pok_text_context* text;
+
+    menu->base.active = FALSE;
+    menu->base.focused = FALSE;
+    menu->base.padding = sys->dimension / 2;
+    menu->base.fillColor = pok_menu_color_white;
+    menu->base.borderColor = pok_menu_color_black;
+    text = &menu->text;
+
+    /* determine a size into which we can (at maximum) fit the selection menu;
+       we allow the menu to float within this space; then, based on the number
+       of items to display and the specified clipping width, determine the
+       actual menu size */
+    menu->clipWidth = ((uint32_t)sys->wwidth > clipWidth) ? clipWidth : (uint32_t)sys->wwidth;
+    menu->clipHeight = sys->wheight - MESSAGE_MENU_ROWS*sys->dimension;
+    w = menu->clipWidth;
+    h = ndisplay*POK_GLYPH_HEIGHT*SELECT_MENU_TEXT_SIZE + sys->dimension;
+    menu->base.size = (struct pok_size){ w, h };
+
+    /* position the menu; float left by default */
+    pok_selection_menu_float(menu,-1);
+
+    /* setup the text context; the text region size needs to be dimensionalized
+       along glyph boundaries */
+    region.columns = (w - sys->dimension) / (POK_GLYPH_WIDTH * SELECT_MENU_TEXT_SIZE);
+    region.rows = ndisplay;
+    pok_text_context_init(text,&region);
+    text->textSize = SELECT_MENU_TEXT_SIZE;
+    text->defaultColor = pok_menu_color_black;
+}
+void pok_selection_menu_delete(struct pok_selection_menu* menu)
+{
+    pok_text_context_delete(&menu->text);
+}
+void pok_selection_menu_float(struct pok_selection_menu* menu,int vfloat)
+{
+    /* this function positions the menu in the available space based on the
+       float parameter */
+    uint32_t x, y, w, h;
+
+    /* grab dimensions of the menu */
+    w = menu->base.size.columns;
+    h = menu->base.size.rows;
+
+    /* determine location; 'vfloat' determine where the menu floats (left,
+       center or right) */
+    x = (vfloat < 0) ? 0
+        : ((vfloat == 0) ? (menu->clipWidth/2 - w/2)
+            : menu->clipWidth - w);
+    y = menu->clipHeight - h;
+
+    menu->base.pos = (struct pok_location){ x, y };
+}
+void pok_selection_menu_add_item(struct pok_selection_menu* menu,const char* item)
+{
+    /* insert a single line of text into the text context to represent the menu
+       item; we must copy the source text and append a newline */
+    char buf[1024];
+    size_t len;
+    struct text_position pos;
+
+    /* copy line into buffer; truncate the string if it is too long */
+    len = strlen(item);
+    if (len > menu->text.region.columns)
+        len = menu->text.region.columns;
+    strncpy(buf,item,len);
+
+    /* filter any newlines that pre-exist in the buffer; then terminate the
+       buffer with a newline and 0-byte */
+    for (size_t i = 0;i < len;++i)
+        if (buf[i] == '\n' || buf[i] == '\r')
+            buf[i] = ' ';
+    buf[len] = '\n';
+    buf[len+1] = 0;
+
+    /* determine the insert position by specifying the end of the text-context's
+       line buffer */
+    pos.pos = 0;
+    pos.line = menu->text.linecnt;
+
+    /* insert text into the text context and free the temp buffer */
+    insert_text(&menu->text,buf,&pos);
+}
+void pok_selection_menu_add_list(struct pok_selection_menu* menu,const char* items[])
+{
+    /* the array of strings should be terminated with a NULL pointer */
+    const char** piter = items;
+    while (*piter) {
+        pok_selection_menu_add_item(menu,*piter);
+        piter += 1;
+    }
+}
+void pok_selection_menu_activate(struct pok_selection_menu* menu)
+{
+}
+void pok_selection_menu_deactivate(struct pok_selection_menu* menu)
+{
+}
+void pok_selection_menu_ctrl_key(struct pok_selection_menu* menu,enum pok_input_key key)
+{
+}
+void pok_selection_menu_render(struct pok_selection_menu* menu)
+{
+}
+
+/* pok_yesno_menu */
+void pok_yesno_menu_init(struct pok_selection_menu* menu)
+{
+    
 }

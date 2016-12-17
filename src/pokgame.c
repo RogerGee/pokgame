@@ -188,10 +188,19 @@ void pok_intermsg_discard(struct pok_intermsg* im)
 static void pok_game_render_menus(const struct pok_graphics_subsystem* sys,struct pok_game_info* game)
 {
     /* this function is a high-level entry to rendering the game's menus */
+
+    /* only one of these should be rendered at a time */
     if (game->messageMenu.base.active)
         pok_message_menu_render(&game->messageMenu);
     else if (game->inputMenu.base.active)
         pok_input_menu_render(&game->inputMenu);
+
+    /* these could be rendered in combination with the above menus and
+       themselves */
+    if (game->selectMenu.base.active)
+        pok_selection_menu_render(&game->selectMenu);
+    if (game->yesnoMenu.base.active)
+        pok_selection_menu_render(&game->yesnoMenu);
 
     (void)sys;
 }
@@ -268,10 +277,14 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     pok_intermsg_setup(&game->ioInterMsg,pok_uninitialized_intermsg,0);
     pok_message_menu_init(&game->messageMenu,sys);
     pok_input_menu_init(&game->inputMenu,sys);
+    pok_selection_menu_init(&game->selectMenu,5,sys->dimension*5,sys);
+    pok_yesno_menu_init(&game->yesnoMenu);
     return game;
 }
 void pok_game_free(struct pok_game_info* game)
 {
+    pok_selection_menu_delete(&game->yesnoMenu);
+    pok_selection_menu_delete(&game->selectMenu);
     pok_input_menu_delete(&game->inputMenu);
     pok_message_menu_delete(&game->messageMenu);
     pok_intermsg_discard(&game->updateInterMsg);
@@ -389,9 +402,40 @@ void pok_game_activate_menu(struct pok_game_info* game,enum pok_menu_kind menuKi
             game->inputMenu.base.active = TRUE;
         }
     }
+
+    else if (menuKind == pok_selection_menu) {
+        /* 'assignText' should be a string of items separated by newlines */
+        if (assignText != NULL) {
+            int i = 0;
+            char* p = assignText->buf + i;
+            while (TRUE) {
+                if (assignText->buf[i] == '\n') {
+                    assignText->buf[i++] = 0;
+                    pok_selection_menu_add_item(&game->selectMenu,p);
+                    p = assignText->buf + i;
+                    continue;
+                }
+                if (assignText->buf[i] == 0) {
+                    pok_selection_menu_add_item(&game->selectMenu,p);
+                    break;
+                }
+                i += 1;
+            }
+        }
+
+        pok_selection_menu_activate(&game->selectMenu);
+    }
+    else if (menuKind == pok_yesno_menu) {
+        /* we ignore assignText for this menu since its contents remain
+         * static */
+
+        pok_selection_menu_activate(&game->yesnoMenu);
+    }
 }
 void pok_game_deactivate_menus(struct pok_game_info* game)
 {
     pok_message_menu_deactivate(&game->messageMenu);
     pok_input_menu_deactivate(&game->inputMenu);
+    pok_selection_menu_deactivate(&game->selectMenu);
+    pok_selection_menu_deactivate(&game->yesnoMenu);
 }

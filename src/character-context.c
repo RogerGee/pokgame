@@ -122,10 +122,8 @@ void pok_character_context_set_update(struct pok_character_context* context,
             }
         }
         /* 'context->update' will act as a counter that determines when
-           the animation frames change; it is set to +1 the granularity
-           so that we can wait one cycle before applying the animation
-           frame */
-        context->update = context->granularity + 1;
+           the animation frames change */
+        context->update = context->granularity;
     }
     else if (effect == pok_character_jump_effect) {
         context->character->direction = direction;

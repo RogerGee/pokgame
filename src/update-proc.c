@@ -306,15 +306,18 @@ void player_move_logic(struct pok_game_info* info,enum pok_direction direction)
                    we can update the player and the map at the same time without a race */
                 pok_graphics_subsystem_lock(info->sys);
 
+                /* lock the map render context so that it is not updated by anyone except this
+                   procedure; note: 'get_effect_from_terrain()' expects mapRC to be locked */
+                pok_game_modify_enter(info->mapRC);
+
                 /* determine player update effect based on map terrain; this check occurs before the map is updated */
                 if (info->playerEffect == pok_character_normal_effect)
                     effect = get_effect_from_terrain(info->mapRC,info->tman,direction);
                 skip = effect == pok_character_jump_effect;
 
-                /* update map context */
-                pok_game_modify_enter(info->mapRC);
-                /* test to see if the current tile has a latent warp; if so, this would change the
-                   map and animate it to 1 tile offset the warp location; this will setup a transition */
+                /* update map context: test to see if the current tile has a latent warp; if so, this
+                   would change the map and animate it to 1 tile offset the warp location; this will
+                   setup a transition */
                 if ( !latent_warp_logic(info,direction) ) {
                     /* attempt to update the map focus; the map render context will
                        handle impassable tile collisions */
@@ -371,8 +374,8 @@ void player_move_logic(struct pok_game_info* info,enum pok_direction direction)
                         TRUE );
                     pok_game_modify_exit(info->playerContext);
                 }
-                pok_game_modify_exit(info->mapRC);
 
+                pok_game_modify_exit(info->mapRC);
                 pok_graphics_subsystem_unlock(info->sys);
             }
         }
@@ -418,57 +421,73 @@ bool_t map_warp_change(struct pok_game_info* info)
 
 void fadeout_logic(struct pok_game_info* info)
 {
+    uint8_t kind;
     if ( pok_fadeout_effect_update(&info->fadeout,info->updateTimeout.elapsed) ) {
         if (info->gameContext == pok_game_intro_context)
             /* the intro context is just a fadeout that leads to the world context */
             info->gameContext = pok_game_world_context;
-        else if (info->gameContext == pok_game_warp_fadeout_context || info->gameContext == pok_game_warp_fadeout_cave_context) {
-            /* we just finished a fadeout for a warp; now finish the transition by setting a fadein effect; set the fadein
-               effect first so that we avoid a race condition */
-            info->fadeout.delay = WARP_FADEIN_DELAY;
+        else if (info->gameContext >= pok_game_warp_fadeout_context
+            && info->gameContext <= pok_game_warp_fadeout_cave_exit_context)
+        {
+            /* we just finished a fadeout for a warp; now finish the transition
+               by setting a fadein effect; we need to set the fadein effect
+               first so that we avoid a race condition */
+
+            /* first choose what kind of fadein we are doing based on context */
             if (info->gameContext == pok_game_warp_fadeout_context) {
-                pok_fadeout_effect_set_update(
-                    &info->fadeout,
-                    info->sys,
-                    WARP_FADEIN_TIME,
-                    pok_fadeout_black_screen,
-                    TRUE /* this causes the effect to fade-in */);
+                kind = pok_fadeout_black_screen;
             }
-            else {
-                pok_fadeout_effect_set_update(
-                    &info->fadeout,
-                    info->sys,
-                    WARP_FADEIN_TIME/2,
-                    pok_fadeout_to_center,
-                    TRUE /* this causes the effect to fade-in */);
+            else if (info->gameContext == pok_game_warp_fadeout_cave_enter_context) {
+                /* do a normal fadein when entering a cave */
+                kind = pok_fadeout_black_screen;
             }
+            else /* cave exit */ {
+                /* do a fade-away from center when exiting a cave*/
+                kind = pok_fadeout_to_center;
+            }
+
+            /* set the fadein update based on selected parameters */
+            info->fadeout.delay = WARP_FADEIN_DELAY;
+            pok_fadeout_effect_set_update(
+                &info->fadeout,
+                info->sys,
+                WARP_FADEIN_TIME,
+                kind,
+                TRUE /* this causes the effect to fade-in */);
+
             /* complete the map warp: silently fail if the map couldn't be
                loaded (note: the IO process could display a message) */
             map_warp_change(info);
             info->mapTrans = NULL;
             info->gameContext = pok_game_warp_fadein_context;
         }
-        else if (info->gameContext == pok_game_warp_latent_fadeout_context || info->gameContext == pok_game_warp_latent_fadeout_cave_context
-            || info->gameContext == pok_game_warp_latent_fadeout_door_context) {
-            /* we just finished a fadeout for a latent warp; now finish the transition by setting a fadein effect; set
-               the fadein effect first to avoid a race condition */
-            info->fadeout.delay = WARP_FADEIN_DELAY;
-            if (info->gameContext == pok_game_warp_latent_fadeout_cave_context) {
-                pok_fadeout_effect_set_update(
-                    &info->fadeout,
-                    info->sys,
-                    WARP_FADEIN_TIME/2,
-                    pok_fadeout_to_center,
-                    TRUE);
+        else if (info->gameContext >= pok_game_warp_latent_fadeout_context
+            && info->gameContext <= pok_game_warp_latent_fadeout_cave_exit_context)
+        {
+            /* we just finished a fadeout for a latent warp; now finish the
+               transition by setting a fadein effect; we need to set the fadein
+               effect first to avoid a race condition */
+
+            /* first select parameters based on context */
+            if (info->gameContext == pok_game_warp_latent_fadeout_context
+                || info->gameContext == pok_game_warp_latent_fadeout_door_context)
+            {
+                kind = pok_fadeout_black_screen;
             }
             else {
-                pok_fadeout_effect_set_update(
-                    &info->fadeout,
-                    info->sys,
-                    WARP_FADEIN_TIME,
-                    pok_fadeout_black_screen,
-                    TRUE);
+                kind = (info->gameContext == pok_game_warp_latent_fadeout_cave_exit_context)
+                    ? pok_fadeout_to_center : pok_fadeout_black_screen;
             }
+
+            /* set fadeout effect based on parameters */
+            info->fadeout.delay = WARP_FADEIN_DELAY;
+            pok_fadeout_effect_set_update(
+                &info->fadeout,
+                info->sys,
+                WARP_FADEIN_TIME,
+                kind,
+                TRUE);
+
             /* complete the map warp: we fail silently if the map wasn't
                switched (note: the IO process may display a message) */
             if (map_warp_change(info)) {
@@ -511,6 +530,7 @@ void fadeout_logic(struct pok_game_info* info)
 void daycycle_logic(struct pok_game_info* info)
 {
     /* daycycle only effects maps explicitly marked as overworld */
+    pok_game_lock(info->mapRC);
     if (info->mapRC->map->flags & pok_map_flag_overworld) {
         /* update the map; this only does anything if the effect is set to
            update from the system clock */
@@ -520,6 +540,7 @@ void daycycle_logic(struct pok_game_info* info)
         /* reset the daycycle to day, which does no filtering */
         info->daycycle.kind = pok_daycycle_time_day;
     }
+    pok_game_unlock(info->mapRC);
 }
 
 void map_terrain_logic(struct pok_game_info* info)
@@ -534,7 +555,11 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
        player must first walk onto the tile, then walk in the specified direction */
     struct pok_tile_data* tdata;
     enum pok_tile_warp_kind kind;
+
+    /* we can safely grab the tile data since we assume the map render context
+       is locked when this procedure is called */
     tdata = &info->mapRC->chunk->data[info->mapRC->relpos.row][info->mapRC->relpos.column].data;
+
     kind = tdata->warpKind;
     if ((((kind == pok_tile_warp_latent_up || kind == pok_tile_warp_latent_cave_up || kind == pok_tile_warp_latent_door_up)
             && direction == pok_direction_up)
@@ -544,28 +569,19 @@ bool_t latent_warp_logic(struct pok_game_info* info,enum pok_direction direction
             && direction == pok_direction_left)
         || ((kind == pok_tile_warp_latent_right || kind == pok_tile_warp_latent_cave_right || kind == pok_tile_warp_latent_door_right)
             && direction == pok_direction_right)) && direction == info->player->direction) {
-        /* set warp effect (latent warps always fadeout) */
-        if (kind >= pok_tile_warp_latent_cave_up) {
-            pok_fadeout_effect_set_update(
-                &info->fadeout,
-                info->sys,
-                WARP_FADEOUT_TIME,
-                pok_fadeout_to_center,
-                FALSE );
-        }
-        else {
-            pok_fadeout_effect_set_update(
-                &info->fadeout,
-                info->sys,
-                WARP_FADEOUT_TIME,
-                pok_fadeout_black_screen,
-                FALSE );
-        }
+        /* set warp effect (latent warps always fadeout); they are used for
+           exiting a map into the overworld */
+        pok_fadeout_effect_set_update(
+            &info->fadeout,
+            info->sys,
+            WARP_FADEOUT_TIME,
+            pok_fadeout_black_screen,
+            FALSE );
         /* save current game context and set new game context; test to see if
            this is a cave warp or not to control the fade operation */
         pok_game_context_push(info);
         info->gameContext = kind >= pok_tile_warp_latent_cave_up
-            ? pok_game_warp_latent_fadeout_cave_context : (kind >= pok_tile_warp_latent_door_up
+            ? pok_game_warp_latent_fadeout_cave_exit_context : (kind >= pok_tile_warp_latent_door_up
                 ? pok_game_warp_latent_fadeout_door_context : pok_game_warp_latent_fadeout_context);
         /* cache a reference to the tile data; it will be used to change the map render context
            after the transition has finished */
@@ -581,9 +597,13 @@ bool_t warp_logic(struct pok_game_info* info)
 {
     /* check to see if the current location has a non-latent warp */
     struct pok_tile_data* tdata;
+
+    /* we can safely grab the tile data since we assume the map render context
+       is locked when this procedure is called */
     tdata = &info->mapRC->chunk->data[info->mapRC->relpos.row][info->mapRC->relpos.column].data;
-    if (tdata->warpKind != pok_tile_warp_none && (tdata->warpKind < pok_tile_warp_latent_up
-            || tdata->warpKind > pok_tile_warp_latent_cave_right)) {
+
+    if (tdata->warpKind != pok_tile_warp_none &&
+        (tdata->warpKind < pok_tile_warp_latent_up || tdata->warpKind > pok_tile_warp_latent_cave_right)) {
         /* set warp effect and change game context depending on warp kind; the old game context
            must be saved so that we can restore it after the warp fade in */
         if (tdata->warpKind == pok_tile_warp_instant) {
@@ -594,20 +614,22 @@ bool_t warp_logic(struct pok_game_info* info)
         else if (tdata->warpKind == pok_tile_warp_cave_exit) {
             pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_black_screen,FALSE);
             pok_game_context_push(info);
-            info->gameContext = pok_game_warp_fadeout_cave_context;
+            info->gameContext = pok_game_warp_fadeout_cave_exit_context;
         }
         else if (tdata->warpKind == pok_tile_warp_cave_enter) {
             pok_fadeout_effect_set_update(&info->fadeout,info->sys,WARP_FADEOUT_TIME,pok_fadeout_to_center,FALSE);
             pok_game_context_push(info);
-            info->gameContext = pok_game_warp_fadeout_cave_context;
+            info->gameContext = pok_game_warp_fadeout_cave_enter_context;
         }
         else if (tdata->warpKind == pok_tile_warp_spin) {
             /* set initial spin rate */
+            pok_game_modify_enter(info->playerContext);
             pok_character_context_set_update(info->playerContext,
                 pok_direction_down,
                 pok_character_spin_effect,
                 MAP_SCROLL_TIME,
                 FALSE );
+            pok_game_modify_exit(info->playerContext);
             info->gameContext = pok_game_warp_spin_context;
         }
         else
@@ -663,6 +685,9 @@ void intermsg_logic(struct pok_game_info* info)
 enum pok_character_effect get_effect_from_terrain(struct pok_map_render_context* mapRC,
     struct pok_tile_manager* tman,enum pok_direction direction)
 {
+    /* this function checks the current map location and determines if a
+       character effect should be applied; it assumes the map-render context is
+       locked for reading */
     uint16_t i;
     uint16_t tileid;
     struct pok_tile* tile;
@@ -708,11 +733,13 @@ static void warp_spin_logic(struct pok_game_info* info)
         }
 
         /* continue the spin animation; quicken the spin rate */
+        pok_game_modify_enter(context);
         pok_character_context_set_update(context,
             pok_direction_down,
             pok_character_spin_effect,
             tu,
             FALSE );
+        pok_game_modify_exit(context);
     }
 }
 
@@ -724,6 +751,7 @@ static void warp_spinup_logic(struct pok_game_info* info)
     int t;
     struct pok_character_context* context = info->playerContext;
     const struct pok_graphics_subsystem* sys = info->sys;
+    pok_game_modify_enter(context);
 
     /* if the context is not updating, start another spin cycle */
     if (!context->update) {
@@ -752,6 +780,7 @@ static void warp_spinup_logic(struct pok_game_info* info)
         pok_game_context_push(info);
         info->gameContext = pok_game_warp_fadeout_context;
     }
+    pok_game_modify_exit(context);
 }
 
 static void warp_spindown_logic(struct pok_game_info* info)
@@ -760,6 +789,7 @@ static void warp_spindown_logic(struct pok_game_info* info)
     int t;
     struct pok_character_context* context = info->playerContext;
     const struct pok_graphics_subsystem* sys = info->sys;
+    pok_game_modify_enter(context);
 
     /* if the context is not updating, start another spin cycle */
     if (!context->update) {
@@ -782,6 +812,7 @@ static void warp_spindown_logic(struct pok_game_info* info)
         context->offset[1] = 0;
         info->gameContext = pok_game_world_context;
     }
+    pok_game_modify_exit(context);
 }
 
 void warp_transition_logic(struct pok_game_info* info)

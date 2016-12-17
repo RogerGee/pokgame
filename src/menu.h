@@ -92,8 +92,8 @@ struct pok_menu
     struct pok_location pos;      /* position of menu in screen pixels */
 };
 
-/* pok_message_menu: represents a simple text display menu that appears at the bottom
-   of the window in the standard way */
+/* pok_message_menu: represents a simple text display menu that always appears
+   at the bottom of the window in the standard way */
 struct pok_message_menu
 {
     struct pok_menu base;
@@ -119,17 +119,31 @@ void pok_input_menu_activate(struct pok_input_menu* menu,const char* prompt);
 void pok_input_menu_deactivate(struct pok_input_menu* menu);
 void pok_input_menu_render(struct pok_input_menu* menu);
 
-/* pok_selection_menu: represents a menu where each text line is a selection choice; the
-   menu automatically sizes according to the longest text string item */
+/* pok_selection_menu: represents a menu where each text line is a selection
+   choice; the menu automatically sizes according to the longest text string
+   item; the user gets to choose the menu's location on the screen */
 struct pok_selection_menu
 {
     struct pok_menu base;
     struct pok_text_context text;
+    uint32_t clipWidth;
+    uint32_t clipHeight;
     int32_t sel;
 };
+void pok_selection_menu_init(struct pok_selection_menu* menu,uint32_t ndisplay,
+    uint32_t clipWidth,const struct pok_graphics_subsystem* sys);
+void pok_selection_menu_delete(struct pok_selection_menu* menu);
+void pok_selection_menu_float(struct pok_selection_menu* menu,int vfloat);
+void pok_selection_menu_add_item(struct pok_selection_menu* menu,const char* item);
+void pok_selection_menu_add_list(struct pok_selection_menu* menu,const char* items[]); /* NULL-terminated list */
+void pok_selection_menu_activate(struct pok_selection_menu* menu);
+void pok_selection_menu_deactivate(struct pok_selection_menu* menu);
+void pok_selection_menu_ctrl_key(struct pok_selection_menu* menu,enum pok_input_key key);
+void pok_selection_menu_render(struct pok_selection_menu* menu);
 
-/* pok_yesno_menu: a subclass of 'pok_selection_menu' that is automatically configured to
-   contain 'Yes' and 'No' selections */
-typedef struct pok_selection_menu pok_yesno_menu_t;
+/* pok_yesno_menu: a subclass of 'pok_selection_menu' that is automatically
+   configured to contain 'Yes' and 'No' selections; the 'pok_selection_menu_*'
+   functions should be called on it (except '*_init()') */
+void pok_yesno_menu_init(struct pok_selection_menu* menu);
 
 #endif

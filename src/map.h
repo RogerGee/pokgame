@@ -72,7 +72,7 @@ bool_t pok_map_open(struct pok_map* map,struct pok_data_source* dsrc);
 bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_t columns,uint32_t rows);
 bool_t pok_map_fromfile_space(struct pok_map* map,const char* filename);
 bool_t pok_map_fromfile_csv(struct pok_map* map,const char* filename);
-struct pok_map_chunk* pok_map_get_chunk(struct pok_map* map,const struct pok_point* pos);
+struct pok_map_chunk* pok_map_get_chunk(const struct pok_map* map,const struct pok_point* pos);
 enum pok_network_result pok_map_netwrite(struct pok_map* map,
     struct pok_data_source* dsrc,
     struct pok_netobj_writeinfo* info);
