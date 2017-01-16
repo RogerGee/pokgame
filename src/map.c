@@ -178,7 +178,6 @@ static void pok_map_chunk_free(struct pok_map_chunk* chunk,uint16_t rows)
         if (adj != NULL) {
             adj->adjacent[pok_direction_opposite(dir)] = chunk;
         }
-        dir += 1;
     }
 }
 static void pok_map_chunk_setstate(struct pok_map_chunk* chunk,bool_t state)
@@ -577,10 +576,10 @@ bool_t pok_map_load_simple(struct pok_map* map,const uint16_t tiledata[],uint32_
         chunk_insert_hint_init(&hint,mapArea.columns,mapArea.rows);
         td[0] = tiledata;
         for (i = 0;i < mapArea.rows;++i) {
-            struct pok_size size;
+            struct pok_size size = {0,0};
             td[1] = td[0];
             for (j = 0;j < mapArea.columns;++j) {
-                uint16_t k, l, m, n, o;
+                uint16_t k, l = 0, m, n, o;
                 struct pok_point position;
                 struct pok_map_chunk* chunk;
                 position.X = i;

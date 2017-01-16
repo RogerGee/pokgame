@@ -67,9 +67,10 @@ static struct pok_game_info* default_io_proc(struct pok_game_info* game);
 static void load_portal_entries(struct pok_map* portalMap);
 static void save_portal_entries(struct pok_map* portalMap);
 static void open_portal_doorway(struct pok_map_chunk* A,struct pok_map_chunk* B,enum pok_direction AtoB);
+static void open_portal_doorways(struct pok_point pos,struct pok_map_chunk* src);
 static int test_player_near_doorway(const struct pok_character* player,const struct pok_map_chunk* chunk);
 static struct pok_game_info* portal_hub(struct pok_game_info* game);
-static void build_new_portal(const struct pok_point* adjpos,enum pok_direction direction);
+static struct pok_map_chunk* build_new_portal(const struct pok_point* adjpos,enum pok_direction direction);
 
 /* helpers */
 static void* pok_malloc(size_t amt);
@@ -182,39 +183,63 @@ struct pok_game_info* default_io_proc(struct pok_game_info* game)
     return version;
 }
 
-static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_point pos)
+static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_point pos,struct pok_string* buf)
 {
-    /* each entry in the portal file consists of a state value (1-byte) and
-       a zero-terminated url string (which can be empty); their position
-       relative to the origin chunk is defined recursively */
+    /* Each entry in the portal file consists of a state value (1-byte) and a
+     * zero-terminated url string (which can be empty). The position relative to
+     * the origin chunk is defined recursively.
+     */
 
     int i;
     byte_t b;
+    struct pok_point test;
     struct portal* portal;
     struct pok_map_chunk* newChunk;
 
     for (i = 0;i < 4;++i) {
+        /* If a portal exists at the given location, then we skip reading any
+         * information since the portal is already considered discovered.
+         */
+        test = pos;
+        pok_direction_add_to_point(i,&test);
+        portal = treemap_lookup(&globals.portals,&test);
+        if (portal != NULL) {
+            continue;
+        }
+
+        /* Read a byte from the data source. */
         if (!pok_data_stream_read_byte(globals.ds,&b)) {
-            if (!pok_exception_peek_ex(pok_ex_net,pok_ex_net_endofcomms))
+            if (!pok_exception_peek_ex(pok_ex_net,pok_ex_net_endofcomms)) {
                 pok_error_fromstack(pok_error_warning);
+            }
             break;
         }
 
-        /* if the byte was non-zero, then an entry exists in this position */
+        /* If the byte was non-zero, then an entry exists in this position. */
         if (b) {
+            size_t n;
+
             /* read entry from data source */
             portal = pok_malloc(sizeof(struct portal));
-            if (!pok_data_stream_read_byte(globals.ds,&b) ||
-                !pok_data_stream_read_string(globals.ds,portal->url,sizeof(portal->url)))
+            if (!pok_data_stream_read_byte(globals.ds,&b)
+                || !pok_data_stream_read_string_ex(globals.ds,buf))
             {
                 free(portal);
-                if (!pok_exception_peek_ex(pok_ex_net,pok_ex_net_endofcomms))
+                if (!pok_exception_peek_ex(pok_ex_net,pok_ex_net_endofcomms)) {
                     pok_error_fromstack(pok_error_warning);
+                }
                 break;
             }
+
+            n = buf->len + 1;
+            if (n > sizeof(portal->url)) {
+                n = sizeof(portal->url);
+            }
+            strncpy(portal->url,buf->buf,n);
             portal->state = b;
             portal->discov = FALSE;
             portal->flags = 0;
+            pok_string_clear(buf);
 
             /* create new map chunk */
             N( newChunk = pok_map_add_chunk(globals.portalMap,
@@ -223,17 +248,16 @@ static void load_portal_entry_recursive(struct pok_map_chunk* chunk,struct pok_p
                     DEFAULT_MAP_CHUNK,
                     DEFAULT_MAP_CHUNK_SIZE.columns * DEFAULT_MAP_CHUNK_SIZE.rows) );
 
-            /* open doors between current and new chunk */
-            open_portal_doorway(chunk,newChunk,i);
-
-            /* add portal entry to map */
-            portal->pos = pos;
+            /* Add portal entry to collection. */
+            portal->pos = test;
             portal->chunk = newChunk;
-            pok_direction_add_to_point(i,&portal->pos);
             treemap_insert(&globals.portals,portal);
 
-            /* recursively load adjacencies */
-            load_portal_entry_recursive(newChunk,portal->pos);
+            /* Open doors between current and new chunk. */
+            open_portal_doorways(test,newChunk);
+
+            /* Recursively load adjacencies. */
+            load_portal_entry_recursive(newChunk,portal->pos,buf);
         }
     }
 }
@@ -242,7 +266,10 @@ void load_portal_entries(struct pok_map* portalMap)
 {
     struct portal* portal;
     struct pok_data_source* input;
+    struct pok_string buf;
+
     treemap_init(&globals.portals,(key_comparator)pok_point_compar,free);
+    globals.portalMap = portalMap;
 
     /* create portal for default version world */
     portal = pok_malloc(sizeof(struct portal));
@@ -268,8 +295,10 @@ void load_portal_entries(struct pok_map* portalMap)
         /* load globals for recursive call, then recursively load entries from
            input file */
         globals.ds = input;
-        load_portal_entry_recursive(portalMap->origin,portalMap->originPos);
+        pok_string_init(&buf);
+        load_portal_entry_recursive(portalMap->origin,portalMap->originPos,&buf);
         pok_data_source_free(input);
+        pok_string_delete(&buf);
     }
 
     globals.portalModif = FALSE;
@@ -285,14 +314,16 @@ static void save_portal_entry_recursive(struct pok_point pos)
         test = pos;
         pok_direction_add_to_point(i,&test);
         portal = treemap_lookup(&globals.portals,&test);
-        if (portal == NULL)
+        if (portal == NULL) {
             /* zero byte means no entry in given direction */
             pok_data_stream_write_byte(globals.ds,0);
+        }
         else if (!portal->discov) { /* only process if not visited */
             /* write entry */
             pok_data_stream_write_byte(globals.ds,1);
             pok_data_stream_write_byte(globals.ds,portal->state);
             pok_data_stream_write_string(globals.ds,portal->url);
+            pok_data_stream_write_byte(globals.ds,0);
             portal->discov = TRUE;
 
             /* recursively write adjacencies */
@@ -314,8 +345,9 @@ void save_portal_entries(struct pok_map* portalMap)
             pok_error_fromstack(pok_error_warning);
         }
         else {
-            /* load globals for recursive call, then recursively load entries from
-               input file */
+            /* Load globals for recursive call. Then recursively save entries to
+             * the output file.
+             */
             globals.ds = output;
             globals.portalMap = portalMap;
             save_portal_entry_recursive(portalMap->originPos);
@@ -331,6 +363,22 @@ void open_portal_doorway(struct pok_map_chunk* A,struct pok_map_chunk* B,enum po
     doorB = DEFAULT_MAP_DOOR_LOCATIONS + pok_direction_opposite(AtoB);
     A->data[doorA->row][doorA->column].data.tileid = DEFAULT_MAP_PASSABLE_TILE;
     B->data[doorB->row][doorB->column].data.tileid = DEFAULT_MAP_PASSABLE_TILE;
+}
+
+void open_portal_doorways(struct pok_point pos,struct pok_map_chunk* src)
+{
+    int i;
+    struct portal* portal;
+    struct pok_point cpy = pos;
+
+    for (i = 0;i < 4;++i) {
+        pok_direction_add_to_point(i,&pos);
+        portal = treemap_lookup(&globals.portals,&pos);
+        if (portal != NULL) {
+            open_portal_doorway(src,portal->chunk,i);
+        }
+        pos = cpy;
+    }
 }
 
 int test_player_near_doorway(const struct pok_character* player,const struct pok_map_chunk* portalChunk)
@@ -417,20 +465,28 @@ struct pok_game_info* portal_hub(struct pok_game_info* game)
             /* handle building new portals; no more than one of the
                'portal_build*' flags should be set */
             for (int i = 0;i <= pok_direction_right;++i) {
-                enum portal_flags f = (i << 1);
+                enum portal_flags f = (1 << i);
                 if (portal->flags & f) {
-                    build_new_portal(&portal->pos,i);
+                    struct pok_point pnt;
+                    struct pok_map_chunk* newChunk;
+                    newChunk = build_new_portal(&portal->pos,i);
 
-                    /* realign the map render context to account for the
-                       addition; we need to lock it out in case the update
-                       process is using it; however we do not need to perform
-                       mutual exclusion against the render process because of
-                       how the render context is designed */
+                    /* Open the doorways to the new portal. */
+                    pnt = portal->pos;
+                    pok_direction_add_to_point(i,&pnt);
+                    open_portal_doorways(pnt,newChunk);
+
+                    /* Realign the map render context to account for the
+                     * additional chunks. We need to lock the context out in
+                     * case the update process is using it. However we do not
+                     * need to perform mutual exclusion against the render
+                     * process because of how the render context is designed.
+                     */
                     pok_game_modify_enter(game->mapRC);
                     pok_map_render_context_align(game->mapRC);
                     pok_game_modify_exit(game->mapRC);
 
-                    /* unset flag bit */
+                    /* Unset flag bit. */
                     portal->flags &= ~f;
                 }
             }
@@ -441,13 +497,14 @@ struct pok_game_info* portal_hub(struct pok_game_info* game)
     return NULL;
 }
 
-void build_new_portal(const struct pok_point* adjpos,enum pok_direction direction)
+struct pok_map_chunk* build_new_portal(const struct pok_point* adjpos,enum pok_direction direction)
 {
     /* this function creates a new portal chunk in the default (a.k.a. portal)
        map; the position specified is an existing portal adjacent to the new
        one; the new portal should be created at a position in the specified
        'direction' from the adjacent position */
 
+    struct pok_point pos;
     struct portal* portal;
     struct pok_map_chunk* chunk;
 
@@ -458,9 +515,13 @@ void build_new_portal(const struct pok_point* adjpos,enum pok_direction directio
         direction,
         DEFAULT_MAP_CHUNK,DEFAULT_MAP_CHUNK_SIZE.columns*DEFAULT_MAP_CHUNK_SIZE.rows) );
 
+    /* Adjust position to reflect new portal location. */
+    pos = *adjpos;
+    pok_direction_add_to_point(direction,&pos);
+
     /* create the portal entry object */
     portal = pok_malloc(sizeof(struct portal));
-    portal->pos = *adjpos;
+    portal->pos = pos;
     portal->url[0] = 0;
     portal->state = portal_state_unconfig;
     portal->discov = FALSE;
@@ -468,6 +529,9 @@ void build_new_portal(const struct pok_point* adjpos,enum pok_direction directio
 
     /* insert the portal into the collection */
     treemap_insert(&globals.portals,portal);
+
+    globals.portalModif = TRUE;
+    return chunk;
 }
 
 /* helper function implementations */

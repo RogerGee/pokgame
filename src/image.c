@@ -587,6 +587,7 @@ static void write_data(png_structp pngptr,png_bytep data,png_size_t length)
 }
 static void flush_data(png_structp png_ptr)
 {
+    (void)png_ptr;
 }
 
 struct pok_image* pok_image_png_new(const char* file)
@@ -612,6 +613,8 @@ struct pok_image* pok_image_png_new(const char* file)
         pok_exception_flag_memory_error();
         return NULL;
     }
+    img->pixels.data = NULL;
+    img->flags = 0;
 
     /* open data source to file */
     dsrc = pok_data_source_new_file(file,pok_filemode_open_existing,pok_iomode_read);
@@ -721,4 +724,6 @@ fail:
 }
 void pok_image_png_save(struct pok_image* img,const char* file)
 {
+    (void)img;
+    (void)file;
 }
