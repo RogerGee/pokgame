@@ -1,0 +1,41 @@
+pokgame
+--------------------------------------------------------------------------------
+This project is an experimental Pokemon game implementation focused on making a
+platform that allows users to build their own game versions. In this design the
+game engine and version are two separate components that are networked
+together. The game engine provides a so-called "default" version that it runs
+locally itself.
+
+Currently the project mostly provides a test world for the core mechanics
+(e.g. walking, jumping, running into things, talking to shrubs, ETC).
+
+The debug build plays a limited default version where you can create portal
+rooms (that go nowhere).
+--------------------------------------------------------------------------------
+Building
+
+Currently builds may be done through using the makefiles or the Visual
+Studio/MSBuild project file. The project builds and runs on GNU/Linux, OS X and
+Windows.
+
+The static assets are not stored in the repository and must be downloaded:
+
+    http://www.rserver.us/downloads/pokgame-1.tar.gz
+
+The following make commands should be used to build on GNU/Linux and OS X:
+
+    make debug      -- build the debug version
+    make test       -- build the test version
+
+The standard 'make' command is not yet supported since the project is still
+experimental.
+
+The following dependencies must be available to the compiler:
+
+    dstructs (linked statically)
+    libpng (depends zlib)
+    OpenGL
+
+On Ubuntu/Debian the runtime dependency packages simplify to:
+
+    libpng12-0, libgl1-mesa-glx
