@@ -278,7 +278,7 @@ struct pok_game_info* pok_game_new(struct pok_graphics_subsystem* sys,struct pok
     pok_message_menu_init(&game->messageMenu,sys);
     pok_input_menu_init(&game->inputMenu,sys);
     pok_selection_menu_init(&game->selectMenu,5,sys->dimension*5,sys);
-    pok_yesno_menu_init(&game->yesnoMenu);
+    pok_yesno_menu_init(&game->yesnoMenu,sys);
     return game;
 }
 void pok_game_free(struct pok_game_info* game)

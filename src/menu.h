@@ -144,6 +144,6 @@ void pok_selection_menu_render(struct pok_selection_menu* menu);
 /* pok_yesno_menu: a subclass of 'pok_selection_menu' that is automatically
    configured to contain 'Yes' and 'No' selections; the 'pok_selection_menu_*'
    functions should be called on it (except '*_init()') */
-void pok_yesno_menu_init(struct pok_selection_menu* menu);
+void pok_yesno_menu_init(struct pok_selection_menu* menu,const struct pok_graphics_subsystem* sys);
 
 #endif

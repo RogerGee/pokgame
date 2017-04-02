@@ -110,10 +110,10 @@ int io_proc(struct pok_graphics_subsystem* sys,struct pok_game_info* game)
 
             pok_game_register(game);              /* register game rendering functions */
             pok_graphics_subsystem_game_render_state(sys,TRUE); /* let render process begin rendering */
-            pok_thread_start(game->updateThread); /* start up update process */
-            result = run_game(game);              /* run the game, engaging the pokgame protocol with a peer */
-            game->control = FALSE;                /* inform update procedure that we are finished */
-            pok_thread_join(game->updateThread);  /* wait for update thread to end */
+
+            /* Run the game, engaging the pokgame protocol with a peer. */
+            result = run_game(game);
+
             pok_graphics_subsystem_game_render_state(sys,FALSE); /* turn off rendering */
             pok_game_unregister(game);            /* unregister rendering routines */
 
@@ -173,6 +173,11 @@ enum pok_io_result run_game(struct pok_game_info* game)
     /* flush any data buffered in data source output buffer */
     pok_data_source_flush(game->versionChannel);
 
+    /* Begin the update thread to control game login. At this point the game
+     * info should be set up and ready to go.
+     */
+    pok_thread_start(game->updateThread);
+
     /* enter a loop to handle the game IO operations; each iteration we check to
        see if we can perform a general exchange operation; the IO device should
        be non-blocking so that we can check the window status each iteration */
@@ -189,11 +194,19 @@ enum pok_io_result run_game(struct pok_game_info* game)
 
     /* reset the window's title bar text back to its title for the default version
        as well as default parameters if we modified them */
-    if (!info.usingDefault)
+    if (!info.usingDefault) {
         /* this sets the title bar to 'default' as well */
         pok_graphics_subsystem_default(game->sys);
-    else
+    }
+    else {
         pok_graphics_subsystem_assign_title(game->sys,"default");
+    }
+
+    /* Inform update procedure that we are finished. Then wait for the update
+     * thread to end.
+     */
+    game->control = FALSE;
+    pok_thread_join(game->updateThread);
 
     pok_netobj_readinfo_delete(&info.readInfo);
     pok_string_delete(&info.string);
@@ -447,7 +460,7 @@ bool_t seq_player_character(struct pok_game_info* game,struct pok_io_info* info)
         return FALSE;
     }
 
-    /* netwrite player character object */    
+    /* netwrite player character object */
     return write_netobj_sync(game,POK_NETOBJ(game->player),(netwrite_func_t)pok_character_netwrite);
 }
 

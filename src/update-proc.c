@@ -12,7 +12,7 @@
 
 #define MAP_GRANULARITY            8 /* granularity of map scroll update and player move update */
 #define MAP_GRANULARITY_FAST       4 /* granularity of map scroll update/player update when fast */
-#define MAP_SCROLL_TIME          240 /* number of ticks for complete map scroll update */
+#define MAP_SCROLL_TIME          210 /* number of ticks for complete map scroll update */
 #define MAP_SCROLL_TIME_FAST     120 /* number of ticks for complete fast map scroll update */
 
 #define MAP_TICKS_NORMAL MAP_SCROLL_TIME / MAP_GRANULARITY

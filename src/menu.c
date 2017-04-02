@@ -1173,7 +1173,8 @@ void pok_selection_menu_render(struct pok_selection_menu* menu)
 }
 
 /* pok_yesno_menu */
-void pok_yesno_menu_init(struct pok_selection_menu* menu)
+void pok_yesno_menu_init(struct pok_selection_menu* menu,const struct pok_graphics_subsystem* sys)
 {
-    
+    pok_selection_menu_init(menu,2,sys->dimension * 2,sys);
+
 }
