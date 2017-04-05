@@ -18,9 +18,9 @@ struct pok_string* pok_get_content_root_path()
 #ifndef POKGAME_DEBUG
     pok_string_assign(path,[[[[NSFileManager defaultManager]
                       URLForDirectory:NSApplicationSupportDirectory
-                          domainMask:NSUserDomainMask
+                          inDomain:NSUserDomainMask
                               appropriateForURL:nil
-                                create:NO
+                                create:YES
                                     error:nil] path] UTF8String]);
     pok_string_concat_char(path,'/');
 #endif

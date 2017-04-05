@@ -27,7 +27,7 @@ OBJECT_DIRECTORY_TEST = tobj
 
 # options
 INCPATH = -Iinclude
-LIBPATH = -Llib
+LIBPATH = -L.
 OUT = -o
 MACROS = -DPOKGAME_OSX -DPOKGAME_POSIX
 LIB = -framework Cocoa -framework OpenGL
@@ -49,7 +49,7 @@ else
 LIB := $(LIB) -lpokgame
 #MACROS_RELEASE =
 COMPILE = clang -c $(INCPATH) $(MACROS)#$(MACROS_RELEASE)
-COMPILE_SHARED = $(COMPILE) #TODO: OS X shared library flags...
+COMPILE_SHARED = $(COMPILE)
 LINK = clang $(LIBPATH)
 OBJDIR = $(OBJECT_DIRECTORY)
 BINARY = $(PROGRAM_NAME)
@@ -108,7 +108,7 @@ test: $(OBJDIR) $(DEBUG_BINARY)
 $(BINARY): $(OBJECTS)
 	$(LINK) $(OUT)$(BINARY) $(OBJECTS) $(LIB)
 $(LIBRARY_REALNAME): $(OBJECTS_LIB)
-	echo unimplemented
+	clang -o libpokgame.dylib -dynamiclib -undefined dynamic_lookup $(OBJECTS_LIB) $(LIBRARY_LIB)
 #gcc -shared -Wl,-soname,$(LIBRARY_SONAME) -o $(LIBRARY_REALNAME) $(OBJECTS_LIB) $(LIBRARY_LIB)
 $(DEBUG_BINARY): $(OBJECTS) $(OBJECTS_LIB)
 	$(LINK) $(OUT)$(DEBUG_BINARY) $(OBJECTS) $(OBJECTS_LIB) $(LIB) $(LIBRARY_LIB)

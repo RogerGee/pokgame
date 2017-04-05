@@ -5,7 +5,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <signal.h>
+#ifdef __APPLE__
+#include <sys/wait.h>
+#else
 #include <wait.h>
+#endif
 #include <pthread.h>
 #include <errno.h>
 #include <ctype.h>
