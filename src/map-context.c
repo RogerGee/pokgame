@@ -393,17 +393,18 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
      * context->info[N]->chunk is not NULL.
      */
 
-    int i, d[2];
+    int i, d[2], f[2];
     uint16_t u, v;
     const int32_t ZERO = - (int32_t)sys->dimension * 2;
 
+    /* Reset the chunks. */
     for (i = 0;i < 4;++i) {
         context->info[i].chunk = NULL;
     }
 
     /* Compute initial chunk render info. We offset so that we render a "border"
      * around the viewing space for potential animations. This border is twice
-     * the dimension so that we can offset at most 2 tiles in any direction.
+     * the dimension so that we can offset by at most 2 tiles in any direction.
      */
     context->info[0].px = ZERO;
     context->info[0].py = ZERO;
@@ -412,11 +413,11 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
     context->info[0].chunkPos = context->chunkpos;
     context->info[0].chunk = context->chunk;
 
-    /* Let 'd' hold the information of the diagonal chunk to consider given the
+    /* Let 'd' hold the position of the diagonal chunk to consider given the
      * layout of the other chunks.
      */
-    d[0] = context->focus[0];
-    d[1] = context->focus[1];
+    d[0] = f[0] = context->focus[0];
+    d[1] = f[1] = context->focus[1];
 
     /*** Handle chunks left or right ***/
 
@@ -437,15 +438,20 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
         context->info[0].across -= u;
         context->info[0].loc.column = 0;
 
-        /* Set available dimensions for adjacent chunk. The 'py', 'down' and
-         * 'loc.row' members are to be set later.
+        /* Offset diagonal position to the immediate left. */
+        d[0] -= 1;
+
+        /* Set available dimensions for adjacent chunk. We need to set these
+         * even if the chunk is NULL so that they can be used for a potential
+         * diagonal chunk. The 'py', 'down' and 'loc.row' members are to be set
+         * later.
          */
         context->info[1].px = ZERO;
         context->info[1].across = u;
         context->info[1].loc.column = context->map->chunkSize.columns - u;
-        context->info[1].chunkPos = context->info[0].chunkPos; --context->info[1].chunkPos.X;
-        context->info[1].chunk = context->viewingChunks[context->focus[0]-1][context->focus[1]]; /* immediate left */
-        --d[0];
+        context->info[1].chunkPos = context->info[0].chunkPos;
+        context->info[1].chunkPos.X -= 1;
+        context->info[1].chunk = context->viewingChunks[f[0] - 1][f[1]];
     }
     else {
         /* Adjust column start bound for first chunk. */
@@ -465,15 +471,20 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
             /* Adjust first chunk bounds accordingly. */
             context->info[0].across -= v;
 
-            /* Set available dimensions for adjacent chunk and grab it; The
-             * 'py', 'down' and 'loc.row' members are to be set later.
+            /* Offset diagonal position to the immediate right. */
+            d[0] += 1;
+
+            /* Set available dimensions for adjacent chunk and grab it. We need
+             * to set these even if the chunk is NULL so that they can be used
+             * for a potential diagonal chunk. The 'py', 'down' and 'loc.row'
+             * members are to be set later.
              */
             context->info[1].px = context->info[0].px + sys->dimension * context->info[0].across;
             context->info[1].across = v;
             context->info[1].loc.column = 0;
-            context->info[1].chunkPos = context->info[0].chunkPos; ++context->info[1].chunkPos.X;
-            context->info[1].chunk = context->viewingChunks[context->focus[0]+1][context->focus[1]]; /* immediate right */
-            ++d[0];
+            context->info[1].chunkPos = context->info[0].chunkPos;
+            context->info[1].chunkPos.X += 1;
+            context->info[1].chunk = context->viewingChunks[f[0] + 1][f[1]];
         }
     }
 
@@ -489,28 +500,32 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
          */
         u = -i;
 
-        /* Adjust the curretn chunk bounds to account for the north chunk we're
+        /* Adjust the current chunk bounds to account for the north chunk we're
          * bringing into the picture.
          */
         context->info[0].py += sys->dimension * u;
         context->info[0].down -= u;
         context->info[0].loc.row = 0;
 
-        /* Set dimensions for adjacent chunk. Some members to be set at a later
-         * time.
+        /* Offset diagonal position straight up. */
+        d[1] -= 1;
+
+        /* Set dimensions for adjacent chunk. We need to set these even if the
+         * chunk is NULL so that they can be used for a potential diagonal
+         * chunk. Some members to be set at a later time.
          */
         context->info[2].py = ZERO;
         context->info[2].down = u;
         context->info[2].loc.row = context->map->chunkSize.rows - u;
-        context->info[2].chunkPos = context->info[0].chunkPos; --context->info[2].chunkPos.Y;
-        context->info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]-1]; /* straight up */
-        --d[1];
+        context->info[2].chunkPos = context->info[0].chunkPos;
+        context->info[2].chunkPos.Y -= 1;
+        context->info[2].chunk = context->viewingChunks[f[0]][f[1] - 1];
     }
     else {
         context->info[0].loc.row = i;
         u = context->map->chunkSize.rows - context->relpos.row - 1; /* how many rows below in chunk? */
         if (u < sys->_playerLocationInv.row+2) {
-            /* Viewing area exceeds chunk bounds below Note: viewing area can
+            /* Viewing area exceeds chunk bounds below. Note: viewing area can
              * only exceed below given it did not exceed above.
              */
 
@@ -520,14 +535,19 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
             /* Adjust first chunk bounds accordingly. */
             context->info[0].down -= v;
 
-            /* Set available dimensions for adjacent chunk. Some members will be
-             * set at a later time. */
+            /* Offset diagonal position straight down. */
+            d[1] += 1;
+
+            /* Set dimensions for adjacent chunk. We need to set these even if
+             * the chunk is NULL so that they can be used for a potential
+             * diagonal chunk. Some members to be set at a later time.
+             */
             context->info[2].py = context->info[0].py + sys->dimension * context->info[0].down;
             context->info[2].down = v;
             context->info[2].loc.row = 0;
-            context->info[2].chunkPos = context->info[0].chunkPos; ++context->info[2].chunkPos.Y;
-            context->info[2].chunk = context->viewingChunks[context->focus[0]][context->focus[1]+1]; /* straight down */
-            ++d[1];
+            context->info[2].chunkPos = context->info[0].chunkPos;
+            context->info[2].chunkPos.Y += 1;
+            context->info[2].chunk = context->viewingChunks[f[0]][f[1] + 1];
         }
     }
 
@@ -545,18 +565,23 @@ void compute_chunk_render_info(struct pok_map_render_context* context,
         context->info[2].loc.column = context->info[0].loc.column;
     }
 
-    /* We need to pull for a diagonal chunk. Chunk 3 will be vertically
-     * identical to chunk 1 and horizontally identical to chunk 2.
+    /* We need to pull for a diagonal chunk if the offset from focus changed in
+     * both directions (and if a chunk actually exists there).
      */
-    context->info[3].px = context->info[1].px;
-    context->info[3].across = context->info[1].across;
-    context->info[3].loc.column = context->info[1].loc.column;
-    context->info[3].py = context->info[2].py;
-    context->info[3].down = context->info[2].down;
-    context->info[3].loc.row = context->info[2].loc.row;
-    context->info[3].chunkPos.X = context->info[0].chunkPos.X + d[0];
-    context->info[3].chunkPos.Y = context->info[1].chunkPos.Y + d[1];
-    context->info[3].chunk = context->viewingChunks[d[0]][d[1]];
+    if (d[0] != f[0] && d[1] != f[1] && context->viewingChunks[d[0]][d[1]] != NULL) {
+        /* Chunk 3 will be vertically identical to chunk 1 and horizontally
+         * identical to chunk 2.
+         */
+        context->info[3].px = context->info[1].px;
+        context->info[3].across = context->info[1].across;
+        context->info[3].loc.column = context->info[1].loc.column;
+        context->info[3].py = context->info[2].py;
+        context->info[3].down = context->info[2].down;
+        context->info[3].loc.row = context->info[2].loc.row;
+        context->info[3].chunkPos.X = context->info[0].chunkPos.X + d[0];
+        context->info[3].chunkPos.Y = context->info[0].chunkPos.Y + d[1];
+        context->info[3].chunk = context->viewingChunks[d[0]][d[1]];
+    }
 
     /* Correct chunk sizes to make sure we're within bounds. */
     for (i = 0;i < 4;++i) {
@@ -576,13 +601,17 @@ void pok_map_render(const struct pok_graphics_subsystem* sys,struct pok_map_rend
 {
     int i;
     if (context->changed) {
-        /* compute dimensions of draw spaces (only if the context was changed; this flag helps
-           provide thread safety as well; another thread may change the map or position, then flag
-           'context->changed' to make the changes go into effect) */
+        /* Compute dimensions of draw spaces if the context was changed. This
+         * flag helps provide thread safety as well since another thread may
+         * change the context before toggling 'context->changed' to make the
+         * changes go into effect).
+         */
         compute_chunk_render_info(context,sys);
         context->changed = FALSE;
     }
-    /* draw each of the (possible) 4 chunks; make sure to perform scroll offset */
+    /* Draw each of the (possible) 4 chunks, and make sure to perform scroll
+     * offset.
+     */
     for (i = 0;i < 4;++i) {
         if (context->info[i].chunk != NULL) {
             uint16_t h, row = context->info[i].loc.row;
