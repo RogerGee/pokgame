@@ -11,8 +11,8 @@ if '%1'=='' echo Specify a test .c file on command line
 if '%1'=='' goto end
 
 if not exist Release md Release
-set POK=%CD%
-set SRC=%CD%\src
+set POK="%CD%"
+set SRC="%CD%"\src
 cd Release
 
 cl /Fepokgame-test.exe ^
@@ -21,29 +21,37 @@ cl /Fepokgame-test.exe ^
     %POK%\%1 ^
     %SRC%\character-context.c ^
     %SRC%\character.c ^
+    %SRC%\config-win32.c ^
+    %SRC%\default.c ^
     %SRC%\effect.c ^
     %SRC%\error.c ^
+    %SRC%\gamelock.c ^
     %SRC%\graphics.c ^
     %SRC%\image.c ^
+    %SRC%\io-proc.c ^
     %SRC%\map-context.c ^
     %SRC%\map.c ^
+    %SRC%\menu.c ^
     %SRC%\net.c ^
     %SRC%\netobj.c ^
     %SRC%\parser.c ^
     %SRC%\pok-util.c ^
     %SRC%\pokgame.c ^
+    %SRC%\primatives.c ^
     %SRC%\spriteman.c ^
+    %SRC%\standard1.c ^
     %SRC%\tile.c ^
     %SRC%\tileman.c ^
     %SRC%\types.c ^
     %SRC%\update-proc.c ^
+    %SRC%\user.c ^
     Kernel32.lib ^
     User32.lib ^
     GDI32.lib ^
     OpenGL32.lib ^
     WS2_32.lib ^
-    msvcrt.lib ^
     dstructs.lib ^
+    png.lib ^
     /link ^
     /SUBSYSTEM:WINDOWS ^
     /ENTRY:main ^

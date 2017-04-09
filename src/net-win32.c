@@ -658,7 +658,7 @@ struct pok_thread
 static DWORD WINAPI thread_entry(struct pok_thread* thread)
 {
     thread->retval = thread->entryPoint(thread->param);
-    return MININT32;
+    return (DWORD)thread->retval;
 }
 
 struct pok_thread* pok_thread_new(pok_thread_entry entryPoint, void* parameter)
@@ -688,7 +688,7 @@ void pok_thread_start(struct pok_thread* thread)
     thread->hThread = CreateThread(
         NULL,
         0,
-        thread_entry,
+        (LPTHREAD_START_ROUTINE)thread_entry,
         thread,
         0,
         NULL);

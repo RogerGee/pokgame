@@ -21,6 +21,7 @@ game/
 default/
 
 *.obj
+*.exe
 pokgame.vcxproj.filters
 pokgame.vcxproj.user
 Debug/
