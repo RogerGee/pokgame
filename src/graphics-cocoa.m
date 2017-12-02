@@ -163,7 +163,7 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
     return pok_input_key_unknown;
 }
 
-@interface PokGameWindowDelegate : NSObject
+@interface PokGameWindowDelegate : NSObject<NSApplicationDelegate>
 
 @property (readonly) BOOL receivedClose;
 
@@ -315,7 +315,8 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
     /* setup the application delegate */
-    [NSApp setDelegate:[[PokGameAppDelegate alloc] init]];
+    id delegate = [[PokGameAppDelegate alloc] init];
+    [NSApp setDelegate:delegate];
 
     /* start the application event loop; the delegate will terminate it
      once it starts; we will opt to process events manually elsewhere */
@@ -328,7 +329,7 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
     while (YES) {
         NSEvent* event;
 
-        event = [NSApp nextEventMatchingMask:NSAnyEventMask
+        event = [NSApp nextEventMatchingMask:NSEventMaskAny
                            untilDate:[NSDate distantPast]
                               inMode:NSDefaultRunLoopMode
                              dequeue:YES];
@@ -350,9 +351,9 @@ enum pok_input_key CocoaKeyCodeToKeyFlag(UInt16 keyCode)
 
     /* create window object */
     window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,sys->wwidth,sys->wheight)
-                                            styleMask:NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask
-                                                backing:NSBackingStoreBuffered
-                                                    defer:NO];
+                                         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
+                                           backing:NSBackingStoreBuffered
+                                             defer:NO];
     [window setTitle:[NSString stringWithCString:sys->title.buf encoding:NSASCIIStringEncoding]];
 
     /* create delegate to handle window events */

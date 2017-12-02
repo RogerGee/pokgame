@@ -4,12 +4,12 @@
 #include <unistd.h>
 
 #ifdef POKGAME_OSX
-#include <sys/time.h>
+/*#include <sys/time.h>*/
 #include <dispatch/dispatch.h>
-#define CLOCK_MONOTONIC 0
+/* #define CLOCK_MONOTONIC 0*/
 
 /* clock_gettime is not implemented on OSX */
-int clock_gettime(int id,struct timespec* t) {
+/*int clock_gettime(int id,struct timespec* t) {
     struct timeval now;
     int rv = gettimeofday(&now,NULL);
     if (rv) return rv;
@@ -17,7 +17,7 @@ int clock_gettime(int id,struct timespec* t) {
     t->tv_nsec = now.tv_usec * 1000;
     return 0;
     (void)id;
-}
+}*/
 
 /* OSX doesn't implement POSIX semaphores completely so we wrap other semaphore calls */
 typedef struct {
